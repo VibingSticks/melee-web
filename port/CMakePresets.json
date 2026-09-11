@@ -1,0 +1,32 @@
+{
+  "version": 6,
+  "configurePresets": [
+    {
+      "name": "host-tests",
+      "binaryDir": "${sourceDir}/build/host-tests",
+      "generator": "Ninja",
+      "cacheVariables": { "PORT_BUILD_TESTS": "ON", "CMAKE_BUILD_TYPE": "Debug" }
+    },
+    {
+      "name": "web-debug",
+      "binaryDir": "${sourceDir}/build/web-debug",
+      "generator": "Ninja",
+      "toolchainFile": "$env{EMSDK}/upstream/emscripten/cmake/Modules/Platform/Emscripten.cmake",
+      "cacheVariables": { "CMAKE_BUILD_TYPE": "Debug" }
+    },
+    {
+      "name": "web-release",
+      "inherits": "web-debug",
+      "binaryDir": "${sourceDir}/build/web-release",
+      "cacheVariables": { "CMAKE_BUILD_TYPE": "Release" }
+    }
+  ],
+  "buildPresets": [
+    { "name": "host-tests", "configurePreset": "host-tests" },
+    { "name": "web-debug", "configurePreset": "web-debug" },
+    { "name": "web-release", "configurePreset": "web-release" }
+  ],
+  "testPresets": [
+    { "name": "host-tests", "configurePreset": "host-tests", "output": { "outputOnFailure": true } }
+  ]
+}

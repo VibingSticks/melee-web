@@ -1,0 +1,8 @@
+extern/emsdk/
+extern/aurora/
+build/
+tools/env.sh
+*.iso
+*.gcm
+tests/browser/node_modules/
+tests/browser/test-results/

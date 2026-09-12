@@ -81,7 +81,16 @@ typedef struct CardState {
 /* 3B2674 */ s32 hsd_803B2674(CardState* state);
 /* 3B26CC */ s32 fn_803B26CC(CardState* state, s32 file_id, s32 seq_num,
                              s32 version, void (*callback)(s32, s32));
+#ifdef TARGET_PC
+/* One contiguous work area (hsd_4D11.c): context, then the 0x80-entry command
+ * ring at +0x10, then the 0x300-byte request queue at +0x1210. */
+extern u8 port_card_work[0x1510];
+#define hsd_804D1138 (port_card_work)
+#define hsd_804D1148 (*(u32 (*)[0x80][0x9]) (port_card_work + 0x10))
+#define hsd_804D2348 (*(__baselib_UnkType003*) (port_card_work + 0x1210))
+#else
 /* 4D1138 */ extern u8 hsd_804D1138[0x10];
+#endif
 /* 4D2E70 */ extern u8 hsd_804D2E70[2084];
 /* 4D7990 */ extern s32 hsd_804D7990;
 /* 4D7994 */ extern s32 hsd_804D7994;

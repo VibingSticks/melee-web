@@ -38,6 +38,10 @@ void port_walk_ctx_free(port_walk_ctx* ctx);
  * Returns 0, or -1 on a strict-mode violation (ctx->error says which). */
 int port_walk(port_walk_ctx* ctx, const port_type* type, void* obj);
 
+/* Coverage: call `fn` for every (object, type) the walk visited. */
+void port_walk_visited_foreach(const port_walk_ctx* ctx, void (*fn)(void* user, const uint8_t* obj, const port_type* type),
+                               void* user);
+
 /* Exposed for tests: repack one bitfield storage unit in place. */
 void port_repack_bits(uint8_t* unit, uint8_t storage_bytes, const uint8_t* widths, uint8_t nwidths);
 

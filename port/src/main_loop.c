@@ -22,6 +22,7 @@
 #include "dvd_web/dvd_web.h"
 #include "os_shim/os_alarm.h"
 #include "port.h"
+#include "pad_web.h"
 #include "port_game.h"
 #include "vi_shim.h"
 
@@ -123,6 +124,11 @@ void port_yield(void)
 
 void port_vblank(void)
 {
+    static bool s_keyboard_bound;
+    if (!s_keyboard_bound) { /* after the game's PADInit, which resets Aurora's bindings */
+        s_keyboard_bound = true;
+        port_pad_install_keyboard();
+    }
     if (g_frame_active) {
         aurora_end_frame();
         g_frame_active = false;

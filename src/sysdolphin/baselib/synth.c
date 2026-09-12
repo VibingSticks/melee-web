@@ -1207,6 +1207,16 @@ void HSD_SynthResetStreamCounters(int result, int length, void* buf, bool b)
     HSD_Synth_804D7778 = 0;
 }
 
+
+#ifdef TARGET_PC
+#define DEVCOM_CB_8038AD74 HSD_Synth_8038AD74_devcom
+#define DEVCOM_CB_8038B120 HSD_Synth_8038B120_devcom
+#define DEVCOM_CB_FIRSTHAKO HSD_SynthPStreamFirstHakoHeaderCallback_devcom
+#else
+#define DEVCOM_CB_8038AD74 ((HSD_DevComCallback) (Event) HSD_Synth_8038AD74)
+#define DEVCOM_CB_8038B120 ((HSD_DevComCallback) HSD_Synth_8038B120)
+#define DEVCOM_CB_FIRSTHAKO ((HSD_DevComCallback) HSD_SynthPStreamFirstHakoHeaderCallback)
+#endif
 void HSD_Synth_8038AD74(u32 offset, uintptr_t src)
 {
     HSD_DevComRequest(HSD_Synth_804D7764, src,
@@ -1214,6 +1224,17 @@ void HSD_Synth_8038AD74(u32 offset, uintptr_t src)
                       lbl_804C4540[HSD_Synth_804D7768].x0, 0x23, 0,
                       HSD_SynthResetStreamCounters, 0);
 }
+
+#ifdef TARGET_PC
+/* DevCom calls back with four arguments; wasm rejects the game's casts of
+ * narrower functions at the indirect call, so give each its own adapter. */
+static void HSD_Synth_8038AD74_devcom(int dcreq, int args, void* buf, bool cancelflag)
+{
+    (void) buf;
+    (void) cancelflag;
+    HSD_Synth_8038AD74((u32) dcreq, (uintptr_t) args);
+}
+#endif
 
 static inline void HSD_Synth_8038ADD0_inline(u32 pos)
 {
@@ -1238,7 +1259,7 @@ static inline void HSD_Synth_8038ADD0_inline(u32 pos)
                 HSD_DevComRequest(
                     HSD_Synth_804D7764, src,
                     (uintptr_t) &lbl_804C4540[HSD_Synth_804D7768], 0x20, 0x21,
-                    0, (HSD_DevComCallback) (Event) HSD_Synth_8038AD74,
+                    0, DEVCOM_CB_8038AD74,
                     (struct HSD_SynthStreamHeader*) (src + 0x20));
             }
         }
@@ -1357,13 +1378,35 @@ void HSD_Synth_8038B120(void)
     }
 }
 
+#ifdef TARGET_PC
+static void HSD_Synth_8038B120_devcom(int dcreq, int args, void* buf, bool cancelflag)
+{
+    (void) dcreq;
+    (void) args;
+    (void) buf;
+    (void) cancelflag;
+    HSD_Synth_8038B120();
+}
+#endif
+
 void HSD_SynthPStreamFirstHakoHeaderCallback(void)
 {
     HSD_DevComRequest(HSD_Synth_804D7764, 0xA0,
                       HSD_Synth_804D7780 + (HSD_Synth_804D7768 << 16),
                       lbl_804C4540[HSD_Synth_804D7768].x0, 0x23, 0,
-                      (HSD_DevComCallback) HSD_Synth_8038B120, 0);
+                      DEVCOM_CB_8038B120, 0);
 }
+
+#ifdef TARGET_PC
+static void HSD_SynthPStreamFirstHakoHeaderCallback_devcom(int dcreq, int args, void* buf, bool cancelflag)
+{
+    (void) dcreq;
+    (void) args;
+    (void) buf;
+    (void) cancelflag;
+    HSD_SynthPStreamFirstHakoHeaderCallback();
+}
+#endif
 
 void HSD_SynthPStreamHeaderCallback(int arg0, int arg1, void* arg2,
                                     bool cancelflag)
@@ -1391,7 +1434,7 @@ void HSD_SynthPStreamHeaderCallback(int arg0, int arg1, void* arg2,
         HSD_DevComRequest(
             HSD_Synth_804D7764, 0x80,
             (uintptr_t) &lbl_804C4540[HSD_Synth_804D7768], 0x20, 0x21, 0,
-            (HSD_DevComCallback) HSD_SynthPStreamFirstHakoHeaderCallback,
+            DEVCOM_CB_FIRSTHAKO,
             NULL);
     } else {
         HSD_Synth_804D7778 = 0;

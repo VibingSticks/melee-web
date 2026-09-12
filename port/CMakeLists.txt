@@ -36,7 +36,7 @@ if (EMSCRIPTEN)
         src/os_shim/os_alarm.c
         src/dvd_web/fst.c
         src/dvd_web/dvd_web.c
-        src/vi_shim.c
+        src/vi_shim.c src/pad_web.c
         src/gx_shim.c
         src/ax_hle/ax_stub.c
         src/game_stubs.c

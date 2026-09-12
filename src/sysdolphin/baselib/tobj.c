@@ -13,6 +13,10 @@
 #include <dolphin/gx.h>
 #include <dolphin/mtx.h>
 
+#ifdef TARGET_PC
+#include <port_game.h>
+#endif
+
 #define FLT_EPSILON 1.00000001335e-10F
 
 static void MakeTextureMtx(HSD_TObj* tobj);
@@ -1233,6 +1237,11 @@ void HSD_TObjSetup(HSD_TObj* tobj)
             break;
 
         default:
+#ifdef TARGET_PC
+            port_log("HSD_TObjLoad: image %p has format %#x (%ux%u mip %u) tobj %p id %d", (void*) imagedesc,
+                     (unsigned) imagedesc->format, imagedesc->width, imagedesc->height, (unsigned) imagedesc->mipmap,
+                     (void*) tobj, (int) tobj->id);
+#endif
             HSD_ASSERT(0x677, 0);
         }
 

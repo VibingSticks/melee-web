@@ -1,5 +1,5 @@
 // Open the hosted build in Chrome, feed it a disc image, and print the console.
-// Usage: node boot_probe.mjs <build-dir> <disc.iso> [seconds] [--headed] [--query=gpu=compat] [--browser=chromium|firefox] [--stack-after=N] [--trace-after=N]
+// Usage: node boot_probe.mjs <build-dir> <disc.iso> [seconds] [--headed] [--query=gpu=compat] [--browser=chromium|firefox] [--stack-after=N] [--trace-after=N] [--press=START@3,A@4.5]
 // Firefox has no WebGPU on Linux, so it exercises the automatic WebGL2 fallback.
 // Serves <build-dir> on a local port for the run.
 import { createRequire } from 'node:module';
@@ -18,6 +18,13 @@ const stackAfter = Number(process.argv.find(a => a.startsWith('--stack-after='))
 // --trace-after=N: at N seconds, sample the renderer with Chrome's tracing service for 3 s
 // (works while the main thread is busy) and print the hottest wasm functions.
 const traceAfter = Number(process.argv.find(a => a.startsWith('--trace-after='))?.slice(14) ?? 0);
+// --press=START@3,A@4.5,...: press controller-1 buttons (through the port's virtual pad) at those seconds.
+const BUTTONS = { LEFT: 1, RIGHT: 2, DOWN: 4, UP: 8, Z: 16, R: 32, L: 64, A: 256, B: 512, X: 1024, Y: 2048, START: 4096 };
+const presses = (process.argv.find(a => a.startsWith('--press='))?.slice(8) ?? '').split(',').filter(Boolean).map(p => {
+  const [name, at] = p.split('@');
+  const bits = name.split('+').reduce((m, n) => m | (BUTTONS[n.toUpperCase()] ?? 0), 0);
+  return { name, bits, at: Number(at) };
+});
 import { readFileSync, unlinkSync } from 'node:fs';
 const browserName = process.argv.find(a => a.startsWith('--browser='))?.slice(10) ?? 'chromium';
 if (!['chromium', 'firefox'].includes(browserName)) throw new Error(`unknown browser ${browserName}`);
@@ -50,6 +57,15 @@ try {
     await cdp.send('Debugger.enable');
   }
   await page.setInputFiles('#disc', path.resolve(disc));
+  for (const p of presses) {
+    setTimeout(() => {
+      logs.push(`[${Date.now() - t0}ms][press] ${p.name}`);
+      page.evaluate(([bits]) => {
+        Module._port_pad_virtual(0, bits, 0, 0, 0, 0, 0, 0);
+        setTimeout(() => Module._port_pad_virtual_clear(0), 150);
+      }, [p.bits]).catch(e => logs.push('[press] failed: ' + e.message));
+    }, p.at * 1000);
+  }
   if (traceAfter > 0 && browserName === 'chromium') {
     await page.waitForTimeout(traceAfter * 1000);
     const tracePath = '/tmp/melee-boot-trace.json';

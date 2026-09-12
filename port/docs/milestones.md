@@ -3,8 +3,8 @@
 Manual acceptance list from spec §10. Tick with date and browser.
 
 - [x] M1 Link: wasm links; first `OSReport` appears in the console (2026-09-11, Chrome 151, synthetic disc)
-- [ ] M2 Title: title screen renders with correct textures
-- [ ] M3 Menus: main menu, VS mode, character select; gamepad on all four ports; first sound; music
+- [x] M2 Title: title screen renders with correct textures (2026-09-12, Chrome 151, real GALE01 disc; the intro movie is skipped until the THP decoder is ported)
+- [ ] M3 Menus: main menu, VS mode, character select; gamepad on all four ports; first sound; music *(main menu renders and takes keyboard input, 2026-09-12; no audio yet)*
 - [ ] M4 Match: two humans, Final Destination, full match with audio
 - [ ] M5 Saves: save created, page reloaded, save present; export/import round-trip
 - [ ] M6 Single-file: `melee-offline.html` boots from `file://` on Chrome, Firefox, Safari

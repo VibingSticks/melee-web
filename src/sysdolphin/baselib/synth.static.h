@@ -80,7 +80,12 @@ static struct {
     /* 04 */ s32 x4;
     /* 08 */ s32 x8;
     /* 0C */ char pad[0x14];
+#ifdef TARGET_PC
+/* DVD destination: 32-byte aligned by placement on the GameCube */
+} lbl_804C4540[3] ATTRIBUTE_ALIGN(32);
+#else
 } lbl_804C4540[3];
+#endif
 
 /* 4D7720 */ static int HSD_Synth_804D7720;
 /* 4D7724 */ static int hsd_SynthSFXBankNum;

@@ -111,12 +111,26 @@ class Gen:
             sys.stderr.write(f"gen_schema: {msg}\n")
 
     # --- naming ----------------------------------------------------------
+    def names_for(self, decl):
+        """Every header name (struct tag, typedef) of a record definition."""
+        usr = decl.get_usr()
+        return [name for name, d in self.by_name.items() if d.get_usr() == usr]
+
     def record_name(self, decl, hint):
-        """C identifier for a record: its tag or typedef name, or a synthesized one."""
-        for name, d in self.by_name.items():
-            if d.get_usr() == decl.get_usr():
-                return name
-        return hint
+        """C identifier for a record: its typedef name if it has one (HSD_TObjDesc rather
+        than the tag _HSD_TObjDesc), else its tag, else a synthesized one."""
+        names = self.names_for(decl)
+        if not names:
+            return hint
+        return sorted(names, key=lambda n: (n.startswith("_"), len(n)))[0]
+
+    def annotations_for(self, decl, name):
+        """Annotations may be keyed by any of the record's names."""
+        for n in [name] + self.names_for(decl):
+            a = self.ann.get(n)
+            if a:
+                return a
+        return {}
 
     def helper(self, name):
         if name not in self.helpers:
@@ -163,7 +177,7 @@ class Gen:
     # --- emission --------------------------------------------------------
     def emit(self, decl, name):
         size = decl.type.get_size()
-        a = self.ann.get(name, {}) or {}
+        a = self.annotations_for(decl, name)
         if a.get("__opaque__"):
             self.order.append(f'const port_type port_T_{name} = {{ "{name}", {size}, NULL, 0 }};')
             return
@@ -348,6 +362,9 @@ def main():
     args = ["-xc", "-std=gnu99", "-DTARGET_PC", "-DLINT", "--target=wasm32-unknown-emscripten"] + resource_dir_args() + a.clang_arg
     for h in a.header:
         g.collect(idx.parse(h, args=args, options=cindex.TranslationUnit.PARSE_SKIP_FUNCTION_BODIES))
+    for key in ann:
+        if key not in g.by_name and not key.startswith("port_"):
+            g.warn(f"annotations.yml: '{key}' is not a type in the headers")
     for t in filter(None, a.types.split(",")):
         g.need_name(t)
     root_refs = []

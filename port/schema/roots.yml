@@ -16,3 +16,5 @@
 - { prefix: MemCardBanner_, type: opaque }   # LbMcGame: raw banner texels
 - { prefix: MemCardIcon, type: opaque }      # LbMcGame: icon pointer table and texels
 - { prefix: SIS_, type: opaque }             # sislib text tables: kerning bytes and glyph texels
+- { suffix: _camanim, type: HSD_CameraAnim }
+- { suffix: _lightanim, type: HSD_LightAnim }

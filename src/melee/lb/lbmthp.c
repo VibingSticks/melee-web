@@ -14,6 +14,10 @@
 #include <sysdolphin/baselib/tobj.h>
 #include <sysdolphin/baselib/video.h>
 
+#ifdef TARGET_PC
+#include <port_game.h>
+#endif
+
 /* Struct used by fn_8001EBF0 for THP decode component init */
 typedef struct THPDecComp {
     /* 0x00 */ u8 pad0[0x08];
@@ -90,7 +94,13 @@ struct lbl_803BAFE8_t {
 }; /* size = 0x18 */
 
 /* 01F294 */ static s32 fn_8001F294(void);
+#ifdef TARGET_PC
+/* the movie header is DVD-read straight into this struct, which needs the
+ * 32-byte alignment its original placement gave it */
+/* 4333E0 */ static THPDecComp MoviePlayer ATTRIBUTE_ALIGN(32);
+#else
 /* 4333E0 */ static THPDecComp MoviePlayer;
+#endif
 
 static void fn_8001E910(int arg0, int arg1, void* arg2, int cancelflag)
 {
@@ -526,6 +536,19 @@ void lbMthp_8001F410(const char* filename, u32* rate_table, void* buf,
 
     HSD_ASSERT(833, !MoviePlayer.power);
     MoviePlayer.power = 1;
+#ifdef TARGET_PC
+    /* THP decoding is not ported yet (plan Task 22): report the movie as
+     * finished at once with nothing to draw, so movie scenes end normally. */
+    (void) memoryRequired;
+    MoviePlayer.rate_table = rate_table;
+    MoviePlayer.unk_140 = NULL;
+    MoviePlayer.unk_68 = loop;
+    MoviePlayer.unk_144 = 1;
+    MoviePlayer.unk_148 = 0;
+    MoviePlayer.unk_70 = 0;
+    port_log("movie '%s' skipped: THP decoder not ported", filename);
+    return;
+#endif
     fn_8001EB14(&MoviePlayer, filename);
     MoviePlayer.rate_table = rate_table;
     memoryRequired = fn_8001EBF0(&MoviePlayer);

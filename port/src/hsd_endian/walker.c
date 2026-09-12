@@ -424,13 +424,24 @@ static int walk_obj(port_walk_ctx* c, const port_type* t, uint8_t* obj)
     if (added <= 0) {
         return added == 0 ? 0 : fail(c, "out of memory");
     }
-    for (uint32_t i = 0; i < t->nfields; i++) {
-        const port_type* saved = c->cur_type;
-        c->cur_type = t;
-        int r = walk_field(c, &t->fields[i], obj);
-        c->cur_type = saved;
-        if (r != 0) {
-            return -1;
+    /* Two passes: scalars first, then everything that follows pointers or
+     * reads a sibling (array lengths, union discriminators). A count declared
+     * after the array it sizes is then already native when it is read. */
+    for (int pass = 0; pass < 2; pass++) {
+        for (uint32_t i = 0; i < t->nfields; i++) {
+            const port_field* f = &t->fields[i];
+            int scalar = f->kind == F_U8 || f->kind == F_U16 || f->kind == F_U32 || f->kind == F_U64 || f->kind == F_F32
+                         || f->kind == F_F64 || f->kind == F_BITS || f->kind == F_OPAQUE;
+            if (scalar != (pass == 0)) {
+                continue;
+            }
+            const port_type* saved = c->cur_type;
+            c->cur_type = t;
+            int r = walk_field(c, f, obj);
+            c->cur_type = saved;
+            if (r != 0) {
+                return -1;
+            }
         }
     }
     return 0;
@@ -439,4 +450,17 @@ static int walk_obj(port_walk_ctx* c, const port_type* t, uint8_t* obj)
 int port_walk(port_walk_ctx* c, const port_type* t, void* obj)
 {
     return walk_obj(c, t, obj);
+}
+
+void port_walk_visited_foreach(const port_walk_ctx* c, void (*fn)(void*, const uint8_t*, const port_type*), void* user)
+{
+    const vset* s = c->visited;
+    if (s == NULL) {
+        return;
+    }
+    for (uint32_t i = 0; i < s->cap; i++) {
+        if (s->slots[i].addr != 0) {
+            fn(user, (const uint8_t*) s->slots[i].addr, s->slots[i].type);
+        }
+    }
 }

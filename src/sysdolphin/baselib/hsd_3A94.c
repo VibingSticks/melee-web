@@ -106,8 +106,10 @@ typedef struct CardQueueEntry {
 
 /* 3A949C */ static void hsd_803A949C(s32 chan, s32 arg1);
 /* 3ACB74 */ static s32 fn_803ACB74(s32 seq_a, s32 seq_b);
+#ifndef TARGET_PC
 /* 4D1148 */ extern u32 hsd_804D1148[0x80][0x9];
 /* 4D2348 */ extern __baselib_UnkType003 hsd_804D2348;
+#endif
 /* 4D7980 */ extern volatile s32 hsd_804D7980;
 /* 4D7984 */ extern volatile s32 hsd_804D7984;
 /* 4D7988 */ extern s32 hsd_804D7988;

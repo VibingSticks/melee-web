@@ -19,7 +19,7 @@ set(AURORA_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../../extern/aurora)
 add_subdirectory(${AURORA_DIR} aurora EXCLUDE_FROM_ALL)
 
 add_executable(simple ${CMAKE_CURRENT_SOURCE_DIR}/simple_web.c)  # examples/simple.c + per-frame emscripten_sleep
-target_link_libraries(simple PRIVATE aurora::core aurora::gx aurora::main aurora::vi)
+target_link_libraries(simple PRIVATE aurora::core aurora::gx aurora::main aurora::vi aurora::mtx)
 target_link_options(simple PRIVATE
     -sASYNCIFY
     -sALLOW_MEMORY_GROWTH=1

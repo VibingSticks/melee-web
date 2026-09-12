@@ -85,6 +85,8 @@ process.exit(failed ? 1 : 0);
 
 ### Task 2: Profile flags and capability probing
 
+> **Done 2026-09-11.** `AuroraConfig.forceCompatProfile` + `AURORA_COMPAT_*` bits in `aurora.h`; `gpu.cpp` probes `maxImmediateSize`, `maxStorageBuffersPerShaderStage` and `maxComputeWorkgroupsPerDimension`, adjusts the required limits, logs `Compatibility profile: …` and stores the bits in `g_graphicsConfig.profile`; `ShaderConfig.noImmediates/noStorage`; depth peek stays off under `NO_COMPUTE`. The page passes `?gpu=noimm|nostorage|nocompute|compat` through `Module.forceCompatProfile`.
+
 **Files:**
 - Modify (Aurora): `include/aurora/aurora.h` (`AuroraConfig.forceCompatProfile: uint32_t` bitmask), `lib/webgpu/gpu.cpp` (probe adapter limits; only add `maxImmediateSize` to `requiredLimits` when the adapter's limit is ≥ 64; set `g_graphicsConfig.profile` bits `PROFILE_NO_IMMEDIATES`, `PROFILE_NO_STORAGE`, `PROFILE_NO_COMPUTE`), `lib/gx/gx.hpp` (`ShaderConfig` gains `noImmediates:1`, `noStorage:1`, part of the pipeline hash), `lib/gfx/frame.cpp` (`depth_peek::initialize()` skipped under `PROFILE_NO_COMPUTE`; `GXPeekZ` returns `0xFFFFFF`).
 - Modify: `port/src/main_loop.c` (read `Module.forceCompatProfile` via an exported setter called from `boot.js`).
@@ -94,6 +96,8 @@ process.exit(failed ? 1 : 0);
 - [ ] **Step 3:** Regenerate the patch; commit.
 
 ### Task 3: Immediates → uniform block
+
+> **Done 2026-09-11.** Under `noImmediates` the shader has no `var<immediate>`; `DrawImmediateData` is appended (16-aligned, `@align(16)`) to the `Uniform` block, `build_uniform` takes the immediates, the draw cache rebuilds the uniform when they change, the pipeline layout has `immediateSize = 0` and `render()` skips `SetImmediates`. `MaxUniformSize` is 4096. Verified: spike `simple` draws a GX triangle identically with and without `?gpu=noimm` on Chrome; the game boot probe is unchanged under `?gpu=noimm`. Pixel comparison with real game data is still pending (M2).
 
 **Files:**
 - Modify (Aurora): `lib/gx/shader.cpp` (when `noImmediates`: no `var<immediate> imm`; `struct Uniform` ends with `imm_vtx_start: u32, imm_current_pnmtx: u32, imm_array_start0..2: vec4u`; every `imm.x` reference emitted as `ubuf.imm_x`), `lib/gx/shader_info.cpp` (`build_uniform` appends `DrawImmediateData` when `noImmediates`; `MaxUniformSize` grows by 64), `lib/gx/gx.cpp` (`immediateSize = 0` in the pipeline layout when `noImmediates`), `lib/gx/pipeline.cpp` (skip `SetImmediates` when `noImmediates`), `lib/gx/command_processor.cpp` (`DirtyImmediates` implies `DirtyUniform` under the profile).

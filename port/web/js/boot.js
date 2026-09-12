@@ -42,9 +42,13 @@ picker.addEventListener('change', async () => {
 
 function startGame(disc, fst) {
   return new Promise((resolve, reject) => {
+    // Renderer profile overrides for testing (see docs/superpowers/specs/2026-09-11-webgl2-fallback-design.md).
+    const gpuFlag = new URLSearchParams(location.search).get('gpu');
+    const forceCompatProfile = { compat: 7, noimm: 1, nostorage: 2, nocompute: 4 }[gpuFlag] ?? 0;
     window.Module = {
       canvas,
       discSource: disc,
+      forceCompatProfile,
       noInitialRun: true,
       print: (t) => { console.log(t); appendLog(t); },
       printErr: (t) => { console.error(t); appendLog(t); },

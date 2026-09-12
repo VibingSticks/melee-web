@@ -128,6 +128,32 @@ index 2efc47b..eada7dc 100644
        EXCLUDE_FROM_ALL
      )
      FetchContent_MakeAvailable(imgui)
+diff --git a/include/aurora/aurora.h b/include/aurora/aurora.h
+index 50caa5a..9ed4656 100644
+--- a/include/aurora/aurora.h
++++ b/include/aurora/aurora.h
+@@ -116,8 +116,21 @@ typedef struct {
+    * This can be set to 0 to disable allocating this region.
+    */
+   uint32_t mem2Size;
++
++  /*
++   * Bitmask of AURORA_COMPAT_* to force renderer compatibility switches that
++   * are otherwise chosen from the adapter's limits. 0 = automatic.
++   */
++  uint32_t forceCompatProfile;
+ } AuroraConfig;
+ 
++/* Renderer compatibility profile bits (see AuroraConfig.forceCompatProfile). */
++enum {
++  AURORA_COMPAT_NO_IMMEDIATES = 1, /* per-draw data goes in the uniform block instead of immediates */
++  AURORA_COMPAT_NO_STORAGE = 2,    /* vertex data is pulled from rgba32uint textures instead of storage buffers */
++  AURORA_COMPAT_NO_COMPUTE = 4,    /* no compute passes (depth peek disabled) */
++};
++
+ typedef struct {
+   AuroraBackend backend;
+   const char* userPath;
 diff --git a/include/dolphin/card.h b/include/dolphin/card.h
 index 4d39d1e..e992544 100644
 --- a/include/dolphin/card.h
@@ -306,6 +332,20 @@ index 2a963a5..59bfcdf 100644
  }
  #endif
  
+diff --git a/lib/gfx/depth_peek.cpp b/lib/gfx/depth_peek.cpp
+index 08f7743..62a3592 100644
+--- a/lib/gfx/depth_peek.cpp
++++ b/lib/gfx/depth_peek.cpp
+@@ -306,7 +306,8 @@ void complete_slot(size_t slotIdx, wgpu::MapAsyncStatus status, wgpu::StringView
+ } // namespace
+ 
+ void initialize() {
+-  if (!webgpu::g_hasCoreFeatures) {
++  // Needs a compute pass; disabled under the no-compute compat profile (WebGL2).
++  if (!webgpu::g_hasCoreFeatures || (webgpu::g_graphicsConfig.profile & AURORA_COMPAT_NO_COMPUTE) != 0) {
+     return;
+   }
+   g_bindGroupLayout = create_bind_group_layout("Depth Peek Bind Group Layout");
 diff --git a/lib/gfx/frame.cpp b/lib/gfx/frame.cpp
 index e47b223..f6f08a9 100644
 --- a/lib/gfx/frame.cpp
@@ -420,6 +460,33 @@ index a05b95d..4b299ef 100644
    uint8_t* const dst = blob.data();
    uint64_t o = 0;
    const auto append = [&](const ByteBuffer& d) noexcept -> bool {
+diff --git a/lib/gx/command_processor.cpp b/lib/gx/command_processor.cpp
+index 615c64d..288a634 100644
+--- a/lib/gx/command_processor.cpp
++++ b/lib/gx/command_processor.cpp
+@@ -158,6 +158,7 @@ struct DrawCache {
+   bool hasPipeline = false;
+   gfx::Range uniformRange{};
+   GXVtxFmt lastDrawFmt = GX_MAX_VTXFMT;
++  DrawImmediateData lastImmediates{};
+ };
+ DrawCache sDrawCache;
+ 
+@@ -387,9 +388,13 @@ static void push_gx_draw(GXPrimitive prim, GXVtxFmt fmt, u16 vtxCount, gfx::Rang
+     }
+   }
+ 
++  if (cache.shaderInfo.includesImmediates && std::memcmp(&immediates, &cache.lastImmediates, sizeof immediates) != 0) {
++    state.dirty |= DirtyUniform; // the per-draw data is part of the uniform block
++    cache.lastImmediates = immediates;
++  }
+   const bool uniformValid = (state.dirty & DirtyUniform) == 0 && cache.uniformRange.size != 0;
+   if (!uniformValid) {
+-    cache.uniformRange = build_uniform(cache.shaderInfo);
++    cache.uniformRange = build_uniform(cache.shaderInfo, &immediates);
+     state.dirty &= ~DirtyUniform;
+   }
+ 
 diff --git a/lib/gx/fifo.cpp b/lib/gx/fifo.cpp
 index e63feb0..68139a0 100644
 --- a/lib/gx/fifo.cpp
@@ -436,6 +503,275 @@ index e63feb0..68139a0 100644
  constexpr uint32_t kDrawBatchSize = 1;
  
  bool sFrameActive = false;
+diff --git a/lib/gx/gx.cpp b/lib/gx/gx.cpp
+index b12b327..f083ba5 100644
+--- a/lib/gx/gx.cpp
++++ b/lib/gx/gx.cpp
+@@ -366,6 +366,8 @@ void populate_pipeline_config(PipelineConfig& config, GXPrimitive primitive, GXV
+ 
+   const auto& vtxFmt = g_gxState.vtxFmts[fmt];
+   config.shaderConfig = {};
++  config.shaderConfig.noImmediates = (webgpu::g_graphicsConfig.profile & AURORA_COMPAT_NO_IMMEDIATES) != 0;
++  config.shaderConfig.noStorage = (webgpu::g_graphicsConfig.profile & AURORA_COMPAT_NO_STORAGE) != 0;
+   config.shaderConfig.fogType = g_gxState.fog.type;
+   config.shaderConfig.fogRangeEnabled = g_gxState.fog.rangeEnabled;
+   u8 vtxOffset = 0;
+@@ -572,7 +574,7 @@ void initialize() noexcept {
+         .label = "GX Pipeline Layout",
+         .bindGroupLayoutCount = layouts.size(),
+         .bindGroupLayouts = layouts.data(),
+-        .immediateSize = sizeof(DrawImmediateData),
++        .immediateSize = (webgpu::g_graphicsConfig.profile & AURORA_COMPAT_NO_IMMEDIATES) != 0 ? 0u : sizeof(DrawImmediateData),
+     };
+     sPipelineLayout = g_device.CreatePipelineLayout(&desc);
+   }
+diff --git a/lib/gx/gx.hpp b/lib/gx/gx.hpp
+index 1e26a6a..d764aa7 100644
+--- a/lib/gx/gx.hpp
++++ b/lib/gx/gx.hpp
+@@ -66,7 +66,7 @@ constexpr u32 MaxIndTexMtxs = 3;
+ constexpr u32 MaxVtxFmt = GX_MAX_VTXFMT;
+ constexpr u32 MaxPnMtx = (GX_PNMTX9 / 3) + 1;
+ constexpr u32 MaxIndexAttr = 12; // VA_POS -> VA_TEX7
+-constexpr u32 MaxUniformSize = 3840;
++constexpr u32 MaxUniformSize = 4096; // 3840 + a 16-aligned DrawImmediateData under the compat profile
+ constexpr u32 XfRegCount = 0x58; // 0x1000-0x1057
+ 
+ enum DirtyFlag : u8 {
+@@ -490,7 +490,9 @@ struct ShaderConfig {
+   u8 vtxStride = 0;
+   u8 lineMode : 2 = 0; // 1 = GX_LINES, 2 = GX_LINESTRIP, 3 = GX_POINTS
+   u8 fogRangeEnabled : 1 = false;
+-  u8 pad1 : 5 = 0;
++  u8 noImmediates : 1 = false; // per-draw data lives in the uniform block
++  u8 noStorage : 1 = false;    // vertex data comes from rgba32uint textures
++  u8 pad1 : 3 = 0;
+   u8 pad2 = 0;
+   std::array<AttrConfig, MaxVtxAttr> attrs;
+   std::array<TevSwap, MaxTevSwap> tevSwapTable;
+@@ -525,6 +527,7 @@ struct ShaderInfo {
+   std::bitset<MaxTextures> sampledIndTextures;
+   std::bitset<MaxIndTexMtxs> usedIndTexMtxs;
+   u32 uniformSize = 0;
++  bool includesImmediates : 1 = false;
+   bool usesFog : 1 = false;
+   bool lightingEnabled : 1 = false;
+   u8 lineMode : 2 = 0;
+diff --git a/lib/gx/pipeline.cpp b/lib/gx/pipeline.cpp
+index 0c3631c..346bc04 100644
+--- a/lib/gx/pipeline.cpp
++++ b/lib/gx/pipeline.cpp
+@@ -4,6 +4,7 @@
+ #include "../gfx/resources.hpp"
+ #include "../gfx/pipeline_cache.hpp"
+ #include "../gfx/resource_cache.hpp"
++#include "../webgpu/gpu.hpp"
+ 
+ #include "gx_fmt.hpp"
+ #include "shader_info.hpp"
+@@ -27,7 +28,9 @@ void render(const DrawData& data, const wgpu::RenderPassEncoder& pass) {
+   }
+ 
+   const auto& resources = gfx::detail::resources();
+-  pass.SetImmediates(0, &data.immediateData, sizeof(data.immediateData));
++  if ((webgpu::g_graphicsConfig.profile & AURORA_COMPAT_NO_IMMEDIATES) == 0) {
++    pass.SetImmediates(0, &data.immediateData, sizeof(data.immediateData));
++  }
+   const std::array offsets{data.uniformRange.offset};
+   pass.SetBindGroup(1, resources.uniformBindGroup, offsets.size(), offsets.data());
+   if (data.bindGroups.textureBindGroup) {
+diff --git a/lib/gx/shader.cpp b/lib/gx/shader.cpp
+index 31f5901..a1e25c4 100644
+--- a/lib/gx/shader.cpp
++++ b/lib/gx/shader.cpp
+@@ -524,7 +524,7 @@ std::string vtx_attr(const ShaderConfig& config, GXAttr attr) {
+   const auto type = config.attrs[attr].attrType;
+   if (type == GX_NONE) {
+     if (attr == GX_VA_PNMTXIDX) {
+-      return "imm.current_pnmtx";
++      return config.noImmediates ? "ubuf.imm_current_pnmtx"s : "imm.current_pnmtx"s;
+     }
+     if (attr == GX_VA_NRM) {
+       // Default normal
+@@ -631,25 +631,29 @@ struct AttrAddress {
+ };
+ 
+ // Immediates cannot contain arrays, so array_start is packed as three vec4u.
+-std::string imm_array_start(GXAttr attr) noexcept {
++// Under the compat profile the per-draw data lives in the uniform block.
++const char* imm_prefix(bool noImmediates) noexcept { return noImmediates ? "ubuf.imm_" : "imm."; }
++
++std::string imm_array_start(GXAttr attr, bool noImmediates) noexcept {
+   const u32 idx = attr - GX_VA_POS;
+-  return fmt::format("imm.array_start{}.{}", idx / 4, "xyzw"[idx % 4]);
++  return fmt::format("{}array_start{}.{}", imm_prefix(noImmediates), idx / 4, "xyzw"[idx % 4]);
+ }
+ 
+-auto attr_address(const AttrConfig& mapping, GXAttr attr, std::string_view vidx, u32 vtxStride, u32 dlExtra, u32 within)
+-    -> AttrAddress {
++auto attr_address(const AttrConfig& mapping, GXAttr attr, std::string_view vidx, u32 vtxStride, u32 dlExtra, u32 within,
++                  bool noImmediates) -> AttrAddress {
+   const u32 dlOffset = mapping.offset + dlExtra;
++  const char* imm = imm_prefix(noImmediates);
+   if (mapping.attrType == GX_INDEX8) {
+-    return {fmt::format("{} + raw_fetch_u8_1(&vbuf, imm.vtx_start + {} * {}u + {}u) * {}u + {}u", imm_array_start(attr),
+-                        vidx, vtxStride, dlOffset, mapping.stride, within),
++    return {fmt::format("{} + raw_fetch_u8_1(&vbuf, {}vtx_start + {} * {}u + {}u) * {}u + {}u",
++                        imm_array_start(attr, noImmediates), imm, vidx, vtxStride, dlOffset, mapping.stride, within),
+             "abuf"sv, mapping.le};
+   }
+   if (mapping.attrType == GX_INDEX16) {
+-    return {fmt::format("{} + raw_fetch_u16_1(&vbuf, imm.vtx_start + {} * {}u + {}u, false) * {}u + {}u",
+-                        imm_array_start(attr), vidx, vtxStride, dlOffset, mapping.stride, within),
++    return {fmt::format("{} + raw_fetch_u16_1(&vbuf, {}vtx_start + {} * {}u + {}u, false) * {}u + {}u",
++                        imm_array_start(attr, noImmediates), imm, vidx, vtxStride, dlOffset, mapping.stride, within),
+             "abuf"sv, mapping.le};
+   }
+-  return {fmt::format("imm.vtx_start + {} * {}u + {}u", vidx, vtxStride, dlOffset + within), "vbuf"sv, false};
++  return {fmt::format("{}vtx_start + {} * {}u + {}u", imm, vidx, vtxStride, dlOffset + within), "vbuf"sv, false};
+ }
+ 
+ auto attr_load(const ShaderConfig& config, GXAttr attr, std::string_view vidx) -> std::string {
+@@ -657,7 +661,7 @@ auto attr_load(const ShaderConfig& config, GXAttr attr, std::string_view vidx) -
+   if (mapping.attrType == GX_NONE) {
+     return vtx_attr(config, attr);
+   }
+-  const auto [offs, buf, le] = attr_address(mapping, attr, vidx, config.vtxStride, 0u, 0u);
++  const auto [offs, buf, le] = attr_address(mapping, attr, vidx, config.vtxStride, 0u, 0u, config.noImmediates);
+   switch (attr) {
+   case GX_VA_PNMTXIDX:
+     return fmt::format("(raw_fetch_u8_1(&{}, {}) / 3u)", buf, offs);
+@@ -729,7 +733,7 @@ auto attr_load_nbt_slice(const ShaderConfig& config, NbtSlice slice, std::string
+     }
+   }
+   const u32 within = sliceIdx * 3u * compsize;
+-  const auto [offs, buf, le] = attr_address(mapping, GX_VA_NRM, vidx, config.vtxStride, dlExtra, within);
++  const auto [offs, buf, le] = attr_address(mapping, GX_VA_NRM, vidx, config.vtxStride, dlExtra, within, config.noImmediates);
+   auto sliceMapping = mapping;
+   sliceMapping.cnt = 3;
+   return fetch_attr(sliceMapping, buf, offs, le);
+@@ -957,7 +961,7 @@ std::string build_shader_source(const ShaderConfig& config) noexcept {
+     }
+     vidxAttr = "in_vidx"sv;
+   } else if (config.attrs[GX_VA_PNMTXIDX].attrType == GX_NONE) {
+-    vtxXfrAttrsPre += "\n    let in_pnmtxidx = imm.current_pnmtx;";
++    vtxXfrAttrsPre += fmt::format("\n    let in_pnmtxidx = {}current_pnmtx;", imm_prefix(config.noImmediates));
+   }
+ 
+   // Load vertex attributes
+@@ -1582,6 +1586,26 @@ std::string build_shader_source(const ShaderConfig& config) noexcept {
+     fragmentFn += "\n    prev = vec4f(in.nrm, prev.a);";
+   }
+ 
++    std::string immediateDecl;
++  if (config.noImmediates) {
++    // Per-draw data appended to the uniform block (mirrors DrawImmediateData, 16-byte aligned).
++    uniBufAttrs += "\n    @align(16) imm_vtx_start: u32,"
++                   "\n    imm_current_pnmtx: u32,"
++                   "\n    imm_array_start0: vec4u,"
++                   "\n    imm_array_start1: vec4u,"
++                   "\n    imm_array_start2: vec4u,";
++  } else {
++    immediateDecl = R"""(
++struct Immediate {
++    vtx_start: u32,
++    current_pnmtx: u32,
++    array_start0: vec4u,
++    array_start1: vec4u,
++    array_start2: vec4u,
++};
++var<immediate> imm: Immediate;
++)""";
++  }
+   const auto shaderSource = fmt::format(R"""(
+ fn bswap32(v: u32, le: bool) -> u32 {{
+   if (le) {{
+@@ -1910,16 +1934,7 @@ fn tev_overflow_vec4f(in: vec4f) -> vec4f {{
+ }}
+ 
+ {8}
+-
+-struct Immediate {{
+-    vtx_start: u32,
+-    current_pnmtx: u32,
+-    array_start0: vec4u,
+-    array_start1: vec4u,
+-    array_start2: vec4u,
+-}};
+-var<immediate> imm: Immediate;
+-
++{9}
+ struct Uniform {{
+     render_viewport_size: vec2f,
+     logical_viewport_size: vec2f,{0}
+@@ -1949,7 +1964,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {{{6}{5}
+ }}
+ )""",
+                                         uniBufAttrs, texBindings, vtxOutAttrs, vtxInAttrs, vtxXfrAttrs, fragmentFn,
+-                                        fragmentFnPre, vtxXfrAttrsPre, uniformPre);
++                                        fragmentFnPre, vtxXfrAttrsPre, uniformPre, immediateDecl);
+   if (EnableDebugPrints) {
+     Log.info("Generated shader (hash {:x}): {}", hash, shaderSource);
+   }
+diff --git a/lib/gx/shader_info.cpp b/lib/gx/shader_info.cpp
+index c74bd6d..8f2283c 100644
+--- a/lib/gx/shader_info.cpp
++++ b/lib/gx/shader_info.cpp
+@@ -362,6 +362,10 @@ ShaderInfo build_shader_info(const ShaderConfig& config) noexcept {
+     info.uniformSize += MaxIndTexMtxs * sizeof(Mat2x4<float>);
+   }
+   info.uniformSize += info.sampledTextures.count() * sizeof(Vec4<float>);
++  if (config.noImmediates) {
++    info.includesImmediates = true;
++    info.uniformSize = ((info.uniformSize + 15u) & ~15u) + sizeof(DrawImmediateData);
++  }
+   info.uniformSize = gfx::align_uniform(info.uniformSize);
+   if (info.uniformSize > MaxUniformSize) {
+     Log.fatal("Uniform size exceeds maximum: {} > {}", info.uniformSize, MaxUniformSize);
+@@ -369,7 +373,7 @@ ShaderInfo build_shader_info(const ShaderConfig& config) noexcept {
+   return info;
+ }
+ 
+-static void fill_uniform(ByteBuffer& buf, const ShaderInfo& info) noexcept {
++static void fill_uniform(ByteBuffer& buf, const ShaderInfo& info, const DrawImmediateData* imm) noexcept {
+   buf.reserve_extra(info.uniformSize);
+ 
+   buf.append<f32>(g_gxState.renderViewport.width);
+@@ -492,11 +496,20 @@ static void fill_uniform(ByteBuffer& buf, const ShaderInfo& info) noexcept {
+   }
+ }
+ 
+-gfx::Range build_uniform(const ShaderInfo& info) noexcept {
++gfx::Range build_uniform(const ShaderInfo& info, const DrawImmediateData* imm) noexcept {
+   ZoneScoped;
+   static ByteBuffer buf;
+   buf.clear();
+-  fill_uniform(buf, info);
++  fill_uniform(buf, info, imm);
++  if (info.includesImmediates) {
++    static constexpr std::array<u8, 16> zeros{};
++    const size_t pad = ((buf.size() + 15u) & ~size_t{15}) - buf.size();
++    if (pad != 0) {
++      buf.append(zeros.data(), pad);
++    }
++    static constexpr DrawImmediateData none{};
++    buf.append(imm != nullptr ? imm : &none, sizeof(DrawImmediateData));
++  }
+   return gfx::push_uniform(buf.data(), buf.size());
+ }
+ } // namespace aurora::gx
+diff --git a/lib/gx/shader_info.hpp b/lib/gx/shader_info.hpp
+index 24d431b..c060f61 100644
+--- a/lib/gx/shader_info.hpp
++++ b/lib/gx/shader_info.hpp
+@@ -4,6 +4,6 @@
+ 
+ namespace aurora::gx {
+ ShaderInfo build_shader_info(const ShaderConfig& config) noexcept;
+-gfx::Range build_uniform(const ShaderInfo& info) noexcept;
++gfx::Range build_uniform(const ShaderInfo& info, const DrawImmediateData* imm) noexcept;
+ u8 color_channel(GXChannelID id) noexcept;
+ }; // namespace aurora::gx
 diff --git a/lib/gx/texture.hpp b/lib/gx/texture.hpp
 index 29c9a48..e5486c4 100644
 --- a/lib/gx/texture.hpp
@@ -466,10 +802,15 @@ index 787bb2d..b969dec 100644
  namespace aurora::rmlui {
  
 diff --git a/lib/webgpu/gpu.cpp b/lib/webgpu/gpu.cpp
-index 592b8ab..03cdb12 100644
+index 592b8ab..07d9574 100644
 --- a/lib/webgpu/gpu.cpp
 +++ b/lib/webgpu/gpu.cpp
-@@ -73,6 +73,7 @@ static std::atomic_bool g_vsyncEnabled = true;
+@@ -69,10 +69,12 @@ bool g_bcTexturesSupported = false;
+ bool g_astcTexturesSupported = false;
+ bool g_textureComponentSwizzleSupported = false;
+ static std::atomic_bool g_initialized = false;
++static uint32_t sSelectedProfile = 0;
+ static std::atomic_bool g_vsyncEnabled = true;
  
  namespace {
  
@@ -477,7 +818,7 @@ index 592b8ab..03cdb12 100644
  AuroraLogLevel wgpu_log_level(wgpu::LoggingType type) {
    switch (type) {
    case wgpu::LoggingType::Verbose:
-@@ -91,6 +92,7 @@ AuroraLogLevel wgpu_log_level(wgpu::LoggingType type) {
+@@ -91,6 +93,7 @@ AuroraLogLevel wgpu_log_level(wgpu::LoggingType type) {
  void wgpu_log(wgpu::LoggingType type, wgpu::StringView message) {
    Log.report(wgpu_log_level(type), "WebGPU message: {}", message);
  }
@@ -485,7 +826,52 @@ index 592b8ab..03cdb12 100644
  
  struct ResampleUniformBlock {
    uint32_t samplerMode = 0;
-@@ -1006,7 +1008,9 @@ bool initialize(AuroraBackend auroraBackend, bool allowCpu) {
+@@ -852,9 +855,27 @@ bool initialize(AuroraBackend auroraBackend, bool allowCpu) {
+   {
+     wgpu::Limits supportedLimits{};
+     g_adapter.GetLimits(&supportedLimits);
++    // Compatibility profile: capabilities this adapter lacks, plus anything forced by the app.
++    uint32_t profile = g_config.forceCompatProfile;
++    sSelectedProfile = 0;
++    if (supportedLimits.maxImmediateSize == WGPU_LIMIT_U32_UNDEFINED ||
++        supportedLimits.maxImmediateSize < sizeof(gx::DrawImmediateData)) {
++      profile |= AURORA_COMPAT_NO_IMMEDIATES;
++    }
++    if (supportedLimits.maxStorageBuffersPerShaderStage == 0) {
++      profile |= AURORA_COMPAT_NO_STORAGE;
++    }
++    if (supportedLimits.maxComputeWorkgroupsPerDimension == 0) {
++      profile |= AURORA_COMPAT_NO_COMPUTE;
++    }
++    sSelectedProfile = profile;
++    const bool noImmediates = (profile & AURORA_COMPAT_NO_IMMEDIATES) != 0;
++    const bool noStorage = (profile & AURORA_COMPAT_NO_STORAGE) != 0;
++    Log.info("Compatibility profile: immediates={} storageBuffers={} compute={}", !noImmediates, !noStorage,
++             (profile & AURORA_COMPAT_NO_COMPUTE) == 0);
+     wgpu::CompatibilityModeLimits compatibilityModeLimits{wgpu::CompatibilityModeLimits::Init{
+-        .maxStorageBuffersInVertexStage = 2,
+-        .maxStorageBuffersInFragmentStage = 2,
++        .maxStorageBuffersInVertexStage = noStorage ? 0u : 2u,
++        .maxStorageBuffersInFragmentStage = noStorage ? 0u : 2u,
+     }};
+     const wgpu::Limits requiredLimits{
+         .nextInChain = &compatibilityModeLimits,
+@@ -867,12 +888,12 @@ bool initialize(AuroraBackend auroraBackend, bool allowCpu) {
+                                                                             : supportedLimits.maxTextureDimension3D,
+         .maxTextureArrayLayers = supportedLimits.maxTextureArrayLayers == 0 ? WGPU_LIMIT_U32_UNDEFINED
+                                                                             : supportedLimits.maxTextureArrayLayers,
+-        .maxStorageBuffersPerShaderStage = 2,
++        .maxStorageBuffersPerShaderStage = noStorage ? 0u : 2u,
+         .minUniformBufferOffsetAlignment =
+             supportedLimits.minUniformBufferOffsetAlignment < 64 ? 64 : supportedLimits.minUniformBufferOffsetAlignment,
+         .minStorageBufferOffsetAlignment =
+             supportedLimits.minStorageBufferOffsetAlignment < 16 ? 16 : supportedLimits.minStorageBufferOffsetAlignment,
+-        .maxImmediateSize = sizeof(gx::DrawImmediateData),
++        .maxImmediateSize = noImmediates ? WGPU_LIMIT_U32_UNDEFINED : sizeof(gx::DrawImmediateData),
+     };
+     Log.info(
+         "Using limits:"
+@@ -1006,7 +1027,9 @@ bool initialize(AuroraBackend auroraBackend, bool allowCpu) {
      if (!g_device) {
        return false;
      }
@@ -495,3 +881,23 @@ index 592b8ab..03cdb12 100644
    }
    g_queue = g_device.GetQueue();
  
+@@ -1041,6 +1064,7 @@ bool initialize(AuroraBackend auroraBackend, bool allowCpu) {
+       .depthFormat = wgpu::TextureFormat::Depth32Float,
+       .msaaSamples = g_config.msaa,
+       .textureAnisotropy = g_config.maxTextureAnisotropy,
++      .profile = sSelectedProfile,
+   };
+   create_copy_pipeline();
+   create_resample_pipeline();
+diff --git a/lib/webgpu/gpu.hpp b/lib/webgpu/gpu.hpp
+index 3943da0..4d03154 100644
+--- a/lib/webgpu/gpu.hpp
++++ b/lib/webgpu/gpu.hpp
+@@ -16,6 +16,7 @@ struct GraphicsConfig {
+   wgpu::TextureFormat depthFormat;
+   uint32_t msaaSamples;
+   uint16_t textureAnisotropy;
++  uint32_t profile; /* AURORA_COMPAT_* bits in effect */
+ };
+ struct TextureWithSampler {
+   wgpu::Texture texture;

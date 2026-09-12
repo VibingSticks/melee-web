@@ -4,6 +4,12 @@
 
 #include <dolphin/os.h>
 
+#ifdef TARGET_PC
+#include <stdlib.h>
+#include <hsd_endian/archive_swap.h>
+#endif
+
+#ifndef TARGET_PC
 static inline void Locate(HSD_Archive* archive)
 {
     u32 i;
@@ -14,6 +20,7 @@ static inline void Locate(HSD_Archive* archive)
         *ptr += (u32) archive->data;
     }
 }
+#endif
 
 s32 HSD_ArchiveParse(HSD_Archive* archive, u8* src, size_t file_size)
 {
@@ -25,6 +32,17 @@ s32 HSD_ArchiveParse(HSD_Archive* archive, u8* src, size_t file_size)
 
     memset(archive, 0, sizeof(HSD_Archive));
     archive->flags |= 1;
+#ifdef TARGET_PC
+    /* The file is big-endian: convert the header and tables in place and
+     * relocate every pointer slot (port/src/hsd_endian). */
+    port_archive_hdr port_hdr;
+    uint32_t* port_reloc_set = NULL;
+    uint32_t port_reloc_count = 0;
+    if (port_archive_fixup(src, file_size, &port_hdr, &port_reloc_set, &port_reloc_count) < 0) {
+        OSReport("HSD_ArchiveParse: malformed archive (%u bytes)\n", (unsigned) file_size);
+        return -1;
+    }
+#endif
     memcpy(archive, src, sizeof(HSD_ArchiveHeader));
 
     if (archive->header.file_size != file_size) {
@@ -62,7 +80,13 @@ s32 HSD_ArchiveParse(HSD_Archive* archive, u8* src, size_t file_size)
     }
 
     archive->top_ptr = (void*) src;
+#ifdef TARGET_PC
+    /* Pointers were relocated by port_archive_fixup; now convert the scalars. */
+    port_archive_swap_roots(archive, port_reloc_set, port_reloc_count);
+    free(port_reloc_set);
+#else
     Locate(archive);
+#endif
 
     return 0;
 }
@@ -115,7 +139,12 @@ void HSD_ArchiveLocateExtern(HSD_Archive* archive, const char* symbols,
     }
 
     while (offset != -1U && offset < archive->header.data_size) {
+#ifdef TARGET_PC
+        /* the chain of reference sites is big-endian file data */
+        next = port_archive_read_be32((u8*) archive->data + offset);
+#else
         next = *(uintptr_t*) ((uintptr_t) archive->data + offset);
+#endif
         *(u32*) ((uintptr_t) archive->data + offset) = (uintptr_t) addr;
         offset = next;
     }

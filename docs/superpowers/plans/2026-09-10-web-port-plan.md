@@ -1046,6 +1046,8 @@ git commit -m "port: main loop adapter, JS bridge, first wasm link (M1)"
 
 ### Task 11: Archive header, relocation and symbol-table swap
 
+> **Done 2026-09-11.** `port/src/hsd_endian/archive_swap.{c,h}` (compiled in the game library), test `port/tests/archive_swap_test.c`; `HSD_ArchiveParse` calls `port_archive_fixup` under `TARGET_PC` and skips `Locate()`; `HSD_ArchiveLocateExtern` reads its in-data offset chain as big-endian. Deviations: the fixup is idempotent (a native header is detected and only the relocation set is rebuilt, returning 1) so a re-parse cannot double-relocate; `port_archive_swap_roots` is a no-op until Task 14 (`PORT_HAVE_SWAP_ROOTS` guard).
+
 **Files:**
 - Create: `port/src/hsd_endian/archive_swap.h`, `port/src/hsd_endian/archive_swap.c`
 - Test: `port/tests/archive_swap_test.c`
@@ -1138,6 +1140,8 @@ git commit -m "port: archive header/relocation fixup for little-endian hosts"
 ```
 
 ### Task 12: Schema descriptors and the graph walker
+
+> **Done 2026-09-11.** `port/src/hsd_endian/{schema.h,walker.c,walker.h}` (in `melee_port`), test `port/tests/walker_test.c`. Deviations: the visited set is an open-addressing hash from the start; pointer slots are read as 4-byte values and resolved relative to the archive base (exact on wasm32, and it lets the same code run in 64-bit host tests); `port_walk_ctx` records the first strict-mode violation in `error`; `port_repack_bits` is exported for direct tests and preserves unused padding bits.
 
 **Files:**
 - Create: `port/src/hsd_endian/schema.h`, `port/src/hsd_endian/walker.h`, `port/src/hsd_endian/walker.c`

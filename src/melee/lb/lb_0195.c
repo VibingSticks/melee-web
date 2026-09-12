@@ -67,6 +67,15 @@ void fn_800195FC(void)
     lbSnap_8001D2BC();
 }
 
+#ifdef TARGET_PC
+static void fn_800195FC_alarm(OSAlarm* alarm, OSContext* context)
+{
+    (void) alarm;
+    (void) context;
+    fn_800195FC();
+}
+#endif
+
 void lb_80019628(void)
 {
     int i;
@@ -117,8 +126,15 @@ void lb_80019628(void)
         OSCancelAlarm(&lb_804329F0.alarm);
     }
     OSCreateAlarm(&lb_804329F0.alarm);
+#ifdef TARGET_PC
+    /* wasm checks the callee's signature at indirect calls: no casting a
+     * void(void) function to an OSAlarmHandler */
+    OSSetPeriodicAlarm(&lb_804329F0.alarm, lb_804329F0.x40, lb_804329F0.x40,
+                       fn_800195FC_alarm);
+#else
     OSSetPeriodicAlarm(&lb_804329F0.alarm, lb_804329F0.x40, lb_804329F0.x40,
                        (OSAlarmHandler) fn_800195FC);
+#endif
     lb_804329F0.x48 = 1;
 }
 

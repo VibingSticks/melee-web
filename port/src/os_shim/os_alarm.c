@@ -1,6 +1,9 @@
 #include "os_alarm.h"
 
 #include <stddef.h>
+#include <stdlib.h>
+
+#include "../port.h"
 
 /* Intrusive doubly linked list sorted by fire time; head fires first. */
 static OSAlarm* g_head;
@@ -25,9 +28,14 @@ static void insert_alarm(OSAlarm* a)
 {
     OSAlarm* prev = NULL;
     OSAlarm* cur = g_head;
+    unsigned steps = 0;
     while (cur != NULL && cur->fire <= a->fire) {
         prev = cur;
         cur = cur->next;
+        if (++steps > 4096) {
+            port_log("os_alarm: queue is cyclic (inserting handler %p)", (void*) a->handler);
+            abort();
+        }
     }
     a->prev = prev;
     a->next = cur;
@@ -48,6 +56,12 @@ void OSInitAlarm(void)
 
 void OSCreateAlarm(OSAlarm* a)
 {
+    /* The game re-creates alarms that are still queued (lbmemory's 3 ms
+     * alarm, the pad alarm); zeroing the links of a queued alarm would leave
+     * its neighbours pointing at it and turn the list into a cycle. */
+    if (is_linked(a)) {
+        unlink_alarm(a);
+    }
     a->handler = NULL;
     a->tag = 0;
     a->fire = 0;
@@ -109,21 +123,30 @@ OSTime port_alarm_now(void)
 
 void port_alarm_tick(OSTime now)
 {
+    /* Two phases: first take every alarm that is due *now* off the queue, then
+     * run their handlers. An alarm a handler (re)arms with an immediate or zero
+     * delay therefore fires on the next tick, as it would on the hardware's
+     * next decrementer interrupt, instead of keeping this loop busy forever. */
+    OSAlarm* due[32];
+    unsigned n = 0;
     g_now = now;
-    while (g_head != NULL && g_head->fire <= now) {
+    while (g_head != NULL && g_head->fire <= now && n < 32) {
         OSAlarm* a = g_head;
-        OSAlarmHandler handler = a->handler;
         unlink_alarm(a);
         if (a->period > 0) {
             /* Skip periods that were missed entirely (long stall) so the
-             * handler does not fire many times in one tick. */
-            do {
-                a->fire += a->period;
-            } while (a->fire <= now);
+             * handler does not fire many times in one tick. Arithmetic, not a
+             * loop: the game arms some periodic alarms with a tiny absolute
+             * start, which could be billions of periods behind. */
+            OSTime behind = now - a->fire;
+            a->fire += (behind / a->period + 1) * a->period;
             insert_alarm(a);
         }
-        if (handler != NULL) {
-            handler(a, NULL);
+        due[n++] = a;
+    }
+    for (unsigned i = 0; i < n; i++) {
+        if (due[i]->handler != NULL) {
+            due[i]->handler(due[i], NULL);
         }
     }
 }

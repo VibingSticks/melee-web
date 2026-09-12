@@ -139,7 +139,8 @@ s32 DVDReadPrio(DVDFileInfo* fi, void* addr, s32 length, s32 offset, s32 prio)
     return fi->cb.state == DVD_STATE_END ? (s32) fi->cb.transferredSize : DVD_RESULT_FATAL_ERROR;
 }
 
-void ARQPumpCallbacks(void); /* Aurora AR.cpp (port patch): deferred ARAM DMA completions */
+void ARQPumpCallbacks(void);  /* Aurora AR.cpp (port patch): deferred ARAM DMA completions */
+void CARDPumpCallbacks(void); /* Aurora card.cpp (port patch): deferred memory-card completions */
 
 void port_dvd_pump(void)
 {
@@ -164,6 +165,7 @@ void port_dvd_pump(void)
             did = 1;
         }
         ARQPumpCallbacks();
+        CARDPumpCallbacks();
         if (!did) {
             break;
         }

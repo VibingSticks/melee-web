@@ -23,4 +23,7 @@ int port_is_aram_address(unsigned long addr);
 /* Browser console, "[melee]" prefix. */
 void port_log(const char* fmt, ...);
 
+/* Aurora (port patch): deliver deferred memory-card operation callbacks. */
+void CARDPumpCallbacks(void);
+
 #endif

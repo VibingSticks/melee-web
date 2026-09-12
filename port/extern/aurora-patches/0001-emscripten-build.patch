@@ -369,6 +369,158 @@ index 0468650..17950b4 100644
    }
  }
  
+diff --git a/lib/dolphin/card.cpp b/lib/dolphin/card.cpp
+index 25f74df..bd85523 100644
+--- a/lib/dolphin/card.cpp
++++ b/lib/dolphin/card.cpp
+@@ -1,3 +1,4 @@
++#include <vector>
+ #include "dolphin/card.h"
+ 
+ #include <filesystem>
+@@ -238,6 +239,36 @@ s32 CARDCheck(const s32 chan) {
+   return static_cast<s32>(card->getError());
+ }
+ 
++// The hardware completes CARD operations from an interrupt. HSD's card task
++// queue (hsd_3A94.c) raises its busy flag *after* the async call returns, so a
++// callback that runs inside the call would be lost and the queue would wait
++// forever. Callbacks are queued and delivered by CARDPumpCallbacks(), which the
++// host calls from its pumps and the game calls before polling the queue.
++namespace {
++struct DeferredCardCallback {
++  CARDCallback cb;
++  s32 chan;
++  s32 result;
++};
++std::vector<DeferredCardCallback> s_deferredCardCallbacks;
++void deferCardCallback(CARDCallback cb, s32 chan, s32 result) {
++  Log.debug("deferring callback {} chan {} result {}", reinterpret_cast<void*>(cb), chan, result);
++  if (cb != nullptr) {
++    s_deferredCardCallbacks.push_back({cb, chan, result});
++  }
++}
++} // namespace
++
++extern "C" void CARDPumpCallbacks() {
++  while (!s_deferredCardCallbacks.empty()) {
++    std::vector<DeferredCardCallback> batch = std::move(s_deferredCardCallbacks);
++    s_deferredCardCallbacks.clear();
++    for (const auto& d : batch) {
++      d.cb(d.chan, d.result);
++    }
++  }
++}
++
+ s32 CARDCheckAsync(const s32 chan, const CARDCallback callback) {
+   if (chan < 0 || chan >= 2) {
+     return CARD_RESULT_FATAL_ERROR;
+@@ -247,7 +278,7 @@ s32 CARDCheckAsync(const s32 chan, const CARDCallback callback) {
+ 
+   const auto& card = GET_CARD(chan);
+   const auto res = static_cast<s32>(card->getError());
+-  callback(chan, res);
++  deferCardCallback(callback, chan, res);
+   return static_cast<s32>(card->getError());
+ }
+ 
+@@ -269,7 +300,7 @@ s32 CARDCheckExAsync(const s32 chan, s32* xferBytes [[maybe_unused]], const CARD
+   }
+   const auto& card = GET_CARD(chan);
+   const auto res = static_cast<s32>(card->getError());
+-  callback(chan, res);
++  deferCardCallback(callback, chan, res);
+   return static_cast<s32>(card->getError());
+ }
+ 
+@@ -298,7 +329,7 @@ s32 CARDCreateAsync(const s32 chan, const char* fileName, const u32 size, CARDFi
+     return CARD_RESULT_FATAL_ERROR;
+   }
+   const auto res = CARDCreate(chan, fileName, size, fileInfo);
+-  callback(chan, res);
++  deferCardCallback(callback, chan, res);
+   return res;
+ }
+ 
+@@ -326,7 +357,7 @@ s32 CARDDeleteAsync(const s32 chan, const char* fileName, const CARDCallback cal
+     return CARD_RESULT_FATAL_ERROR;
+   }
+   const auto res = CARDDelete(chan, fileName);
+-  callback(chan, res);
++  deferCardCallback(callback, chan, res);
+   return res;
+ }
+ 
+@@ -353,7 +384,7 @@ s32 CARDFastDeleteAsync(const s32 chan, const s32 fileNo, const CARDCallback cal
+     return CARD_RESULT_FATAL_ERROR;
+   }
+   const auto res = CARDFastDelete(chan, fileNo);
+-  callback(chan, res);
++  deferCardCallback(callback, chan, res);
+   return res;
+ }
+ 
+@@ -394,7 +425,7 @@ s32 CARDFormatAsync(const s32 chan, const CARDCallback callback) {
+     return CARD_RESULT_FATAL_ERROR;
+   }
+   const auto res = CARDFormat(chan);
+-  callback(chan, res);
++  deferCardCallback(callback, chan, res);
+   return res;
+ }
+ 
+@@ -520,10 +551,14 @@ s32 CARDMount(const s32 chan, void* workArea [[maybe_unused]], CARDCallback deta
+   return CARD_RESULT_READY;
+ }
+ s32 CARDMountAsync(const s32 chan, void* workArea [[maybe_unused]], const CARDCallback detachCallback [[maybe_unused]],
+-                   const CARDCallback attachCallback [[maybe_unused]]) {
++                   const CARDCallback attachCallback) {
+   if (chan < 0 || chan >= 2) {
+     return CARD_RESULT_FATAL_ERROR;
+   }
++  // The SDK reports the mount's completion through the attach callback; HSD's
++  // card queue waits for it. A GCI folder is always "inserted"; a raw card file
++  // that does not exist is no card.
++  deferCardCallback(attachCallback, chan, CARD_READY(chan) ? CARD_RESULT_READY : CARD_RESULT_NOCARD);
+   return CARD_RESULT_READY;
+ }
+ 
+@@ -585,7 +620,7 @@ s32 CARDRenameAsync(const s32 chan, const char* oldName, const char* newName, co
+     return CARD_RESULT_FATAL_ERROR;
+   }
+   const auto res = CARDRename(chan, oldName, newName);
+-  callback(chan, res);
++  deferCardCallback(callback, chan, res);
+   return res;
+ }
+ 
+@@ -642,7 +677,7 @@ s32 CARDSetStatusAsync(const s32 chan, const s32 fileNo, const CARDStat* stat, c
+     return CARD_RESULT_FATAL_ERROR;
+   }
+   const auto res = CARDSetStatus(chan, fileNo, stat);
+-  callback(chan, res);
++  deferCardCallback(callback, chan, res);
+   return res;
+ }
+ 
+@@ -706,7 +741,7 @@ s32 CARDRead(const CARDFileInfo* fileInfo, void* addr, s32 length, const s32 off
+ s32 CARDReadAsync(const CARDFileInfo* fileInfo, void* addr, const s32 length, const s32 offset,
+                   const CARDCallback callback) {
+   const auto res = CARDRead(fileInfo, addr, length, offset);
+-  callback(fileInfo->chan, res);
++  deferCardCallback(callback, fileInfo->chan, res);
+   return res;
+ }
+ 
+@@ -735,7 +770,7 @@ s32 CARDWrite(const CARDFileInfo* fileInfo, const void* addr, const s32 length,
+ s32 CARDWriteAsync(const CARDFileInfo* fileInfo, const void* addr, const s32 length, const s32 offset,
+                    const CARDCallback callback) {
+   const auto res = CARDWrite(fileInfo, addr, length, offset);
+-  callback(fileInfo->chan, res);
++  deferCardCallback(callback, fileInfo->chan, res);
+   return res;
+ }
+ }
 diff --git a/lib/dolphin/os/OSMemory.cpp b/lib/dolphin/os/OSMemory.cpp
 index 2a963a5..59bfcdf 100644
 --- a/lib/dolphin/os/OSMemory.cpp

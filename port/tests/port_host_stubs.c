@@ -20,3 +20,4 @@ void port_request_exit(void) {}
 
 /* Aurora's ARAM queue is not linked into host tests; nothing is ever deferred. */
 void ARQPumpCallbacks(void) {}
+void CARDPumpCallbacks(void) {}

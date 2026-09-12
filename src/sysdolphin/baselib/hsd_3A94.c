@@ -11,6 +11,10 @@
 #include <dolphin/card.h>
 #include <dolphin/os.h>
 
+#ifdef TARGET_PC
+#include <port_game.h>
+#endif
+
 typedef struct {
     u8 x0[0x80 * 0x24];
 } __baselib_UnkType002;
@@ -897,6 +901,9 @@ void hsd_803AAA48(void)
 {
     s32 r;
     s32 chan;
+#ifdef TARGET_PC
+    CARDPumpCallbacks(); /* deliver completed CARD operations before polling */
+#endif
     while (1) {
         CardContext* ctx = (CardContext*) hsd_804D1138;
         CardState** state = &ctx->x4;

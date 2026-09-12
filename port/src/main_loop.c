@@ -13,6 +13,7 @@
 #include <aurora/main.h>
 #include <dolphin/os.h>
 #include <emscripten.h>
+#include <emscripten/heap.h>
 #include <stdarg.h>
 #include <stdbool.h>
 #include <stdio.h>
@@ -97,6 +98,7 @@ static void shutdown_and_exit(void)
 
 static void begin_frame_blocking(void)
 {
+    unsigned waits = 0;
     while (!g_frame_active) {
         handle_events();
         if (g_exit_requested) {
@@ -105,6 +107,9 @@ static void begin_frame_blocking(void)
         if (!g_paused && aurora_begin_frame()) {
             g_frame_active = true;
         } else {
+            if (++waits % 60 == 1) {
+                port_log("waiting for a frame: %s", g_paused ? "paused by the window system" : "aurora_begin_frame failed");
+            }
             emscripten_sleep(16);
         }
     }
@@ -144,6 +149,12 @@ void port_vblank(void)
     port_alarm_tick(OSGetTime());
     port_vi_retrace(); /* pad queue, XFB flip bookkeeping */
     begin_frame_blocking();
+
+    /* Once a second: frame count and wasm heap size, to spot runaway growth. */
+    static unsigned s_frames;
+    if (++s_frames % 60 == 0) {
+        port_log("frame %u heap=%u MB", s_frames, (unsigned) (emscripten_get_heap_size() >> 20));
+    }
 }
 
 int main(int argc, char** argv)

@@ -31,8 +31,7 @@
 | `port/tests/naga/fixtures/*.wgsl` | Aurora's static shaders and a GX-style compat-profile shader |
 | `port/tests/naga/translate_test.mjs` | Translates each fixture and compiles the GLSL in headless Chrome |
 | `port/web/js/gpu-gl2.js` | The WebGPU-subset-over-WebGL2 implementation (`installWebGL2Fallback(canvas, naga)`) |
-| `port/web/js/gpu-gl2/{buffers,textures,pipelines,passes,queue,errors}.js` | Its modules, one WebGPU object family each |
-| `port/tests/browser/gl2_*.spec.mjs` | Polyfill unit tests (map/unmap, copies, render-to-texture orientation, dynamic offsets, state) |
+| `port/tests/browser/gl2_polyfill_test.mjs` + `gl2_polyfill_page.html` | Polyfill unit tests (map/unmap, copies, render-to-texture orientation, dynamic offsets, depth, sampling, blending, canvas) |
 | `port/web/js/boot.js` | Renderer selection (`navigator.gpu` or the fallback), status line |
 | Aurora patch: `lib/gx/shader.cpp`, `lib/gx/shader_info.cpp`, `lib/gx/gx.hpp`, `lib/gx/pipeline.cpp`, `lib/gx/command_processor.cpp`, `lib/gfx/frame.cpp`, `lib/gfx/encoding.cpp`, `lib/gfx/resources.hpp`, `lib/webgpu/gpu.cpp`, `include/aurora/aurora.h` | Compat profile |
 
@@ -123,6 +122,8 @@ process.exit(failed ? 1 : 0);
 
 ### Task 5: Device, buffers, textures, samplers, errors
 
+> **Done 2026-09-11 (Tasks 5–7 together).** Deviation: the polyfill is one 740-line module, `port/web/js/gpu-gl2.js`, rather than the planned `gpu-gl2/*.js` split; the object families are small enough to read in one file and share the GL context, format tables and draw-state cache. Tests live in one page, `port/tests/browser/gl2_polyfill_page.html`, driven by `gl2_polyfill_test.mjs` in headless Chrome (SwiftShader): 7 tests, all pass. Finding: because naga's `ADJUST_COORDINATE_SPACE` flips clip-space Y, WebGPU row *r* is GL framebuffer row *r* of the attached texture, so viewports, scissors and copies are **not** flipped; only front faces are inverted and the final canvas blit flips. Buffers with `MAP_READ`/`MAP_WRITE` live in JS `ArrayBuffer`s; `mapAsync(READ)` on a device buffer pulls with `getBufferSubData`.
+
 **Files:** `port/web/js/gpu-gl2.js`, `gpu-gl2/errors.js`, `gpu-gl2/buffers.js`, `gpu-gl2/textures.js`
 
 **Interfaces:** `installWebGL2Fallback({ canvas, naga }) → { gpu }` sets `navigator.gpu` (configurable property) to an object with `requestAdapter()`, `getPreferredCanvasFormat() → 'rgba8unorm'`, `wgslLanguageFeatures: new Set()`. The adapter reports `features: Set()`, `limits` (`maxStorageBuffersPerShaderStage: 0`, `maxImmediateSize: 0`, `minUniformBufferOffsetAlignment: 256`, `maxUniformBufferBindingSize: gl.MAX_UNIFORM_BLOCK_SIZE`, texture dimension limits from `gl.MAX_TEXTURE_SIZE`, `maxComputeWorkgroupsPerDimension: 0`), `info: { vendor: 'webgl2-fallback', device: gl RENDERER string }`, `isFallbackAdapter: true`.
@@ -132,6 +133,8 @@ process.exit(failed ? 1 : 0);
 
 ### Task 6: Shader modules, pipelines, bind groups
 
+> **Done 2026-09-11** (see Task 5). Programs are cached per (vertex module, entry, fragment module, entry); uniform blocks and combined samplers bind by naga's reflection names; the sampler for a texture binding is read from the bind group named by the reflection's `sampler: [group, binding]` pair (integer textures get a NEAREST default sampler).
+
 **Files:** `gpu-gl2/pipelines.js`
 
 - `createShaderModule({code})` stores WGSL; `createRenderPipeline` translates `vertex.entryPoint` and `fragment.entryPoint` with naga, compiles, links, and resolves each bind group layout entry to a uniform block index (`getUniformBlockIndex` + `uniformBlockBinding`) or a texture unit (`getUniformLocation` on naga's combined sampler name) using the reflection data; caches by (module, entry points, state hash).
@@ -140,6 +143,8 @@ process.exit(failed ? 1 : 0);
 - [ ] Commit.
 
 ### Task 7: Command encoder, render passes, copies, queue, canvas
+
+> **Done 2026-09-11** (see Task 5). The canvas texture is a regular `rgba8unorm` texture (FBO-cached like any other) and `queue.submit` ends with a y-flipping `blitFramebuffer` to framebuffer 0 when a pass or copy touched it. MSAA colour attachments become renderbuffers with `resolveTarget` blits; nothing in Aurora's web build uses them yet.
 
 **Files:** `gpu-gl2/passes.js`, `gpu-gl2/queue.js`
 
@@ -152,6 +157,8 @@ process.exit(failed ? 1 : 0);
 
 ### Task 8: Aurora `simple` under the polyfill
 
+> **Done 2026-09-11.** `shell.html` loads `naga.js`, `gpu-gl2.js` and `naga.wasm` from `port/web/js` (serve `port/` and open `spikes/aurora-web/build/simple.html?renderer=webgl2`); Emscripten's `{{{ SCRIPT }}}` placeholder is neutralised in an HTML comment and `simple.js` is appended by the module loader. First run rendered the blue clear and both GX triangles identically to the WebGPU path, 119 frames in 120 iterations, no WebGL errors, `Compatibility profile: immediates=false storageBuffers=false compute=false`. See `port/docs/spikes.md` G-C.
+
 - [ ] `port/spikes/aurora-web` gains `?renderer=webgl2` handling in `shell.html` (loads `gpu-gl2.js` + `naga.wasm`, installs the fallback before `simple.js`). Expected: blue screen, `[aurora::gpu] Device: webgl2-fallback`, profile line shows all three compat bits. Fix polyfill gaps the log reveals.
 - [ ] Commit.
 
@@ -161,6 +168,6 @@ process.exit(failed ? 1 : 0);
 
 ### Task 9: Boot selection and status
 
-- [ ] `boot.js`: choose renderer (`navigator.gpu` unless `?renderer=webgl2`, fallback when absent), show "Renderer: WebGPU" / "Renderer: WebGL2 (fallback)" in the status bar, load `naga.wasm` lazily. Single-file packer (main plan Task 28) inlines `gpu-gl2.js` and `naga.wasm` (base64) too.
-- [ ] Boot probe with `?renderer=webgl2` reaches the same first `OSReport` as WebGPU; then, with real data, the title screen (M2) and a match (M4) under both renderers; screenshots compared with `maxDiffPixelRatio: 0.02` (texture filtering may differ).
+- [x] `boot.js`: choose renderer (`navigator.gpu` unless `?renderer=webgl2`, fallback when absent), show "Renderer: WebGPU" / "Renderer: WebGL2 (fallback)" in the status bar, load `naga.wasm` lazily. Single-file packer (main plan Task 28) inlines `gpu-gl2.js` and `naga.wasm` (base64) too. *(Done 2026-09-11: `selectRenderer()` also falls back when `requestAdapter()` returns null, e.g. Firefox without a WebGPU adapter; `?renderer=webgpu` refuses to fall back. CMake copies `gpu-gl2.js` and `naga/` next to `melee.js`. The packer part waits for Task 28.)*
+- [x] Boot probe with `?renderer=webgl2` reaches the same first `OSReport` as WebGPU *(done 2026-09-11 with the synthetic disc: identical log up to the SFX-bank stop; `boot_probe.mjs --query=renderer=webgl2`)*; then, with real data, the title screen (M2) and a match (M4) under both renderers; screenshots compared with `maxDiffPixelRatio: 0.02` (texture filtering may differ).
 - [ ] Commit; record measurements in `port/docs/spikes.md` (G1–G5).

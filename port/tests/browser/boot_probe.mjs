@@ -1,5 +1,5 @@
 // Open the hosted build in Chrome, feed it a disc image, and print the console.
-// Usage: node boot_probe.mjs <build-dir> <disc.iso> [seconds] [--headed]
+// Usage: node boot_probe.mjs <build-dir> <disc.iso> [seconds] [--headed] [--query=gpu=compat]
 // Serves <build-dir> on a local port for the run.
 import { createRequire } from 'node:module';
 import { spawn } from 'node:child_process';
@@ -10,6 +10,7 @@ const { chromium } = require('playwright-core');
 const [buildDir, disc, secsArg] = process.argv.slice(2);
 const secs = Number(secsArg ?? 8);
 const headed = process.argv.includes('--headed');
+const query = process.argv.find(a => a.startsWith('--query='))?.slice(8) ?? '';
 const port = 8766;
 
 const server = spawn('python3', ['-m', 'http.server', '-d', path.resolve(buildDir), String(port)], { stdio: 'ignore' });
@@ -27,7 +28,7 @@ const logs = [];
 page.on('console', m => logs.push(`[${Date.now() - t0}ms][${m.type()}] ${m.text()}`));
 page.on('pageerror', e => logs.push(`[${Date.now() - t0}ms][pageerror] ${e.message}\n` + String(e.stack || '').split('\n').slice(0, 40).join('\n')));
 try {
-  await page.goto(`http://localhost:${port}/index.html`, { waitUntil: 'domcontentloaded' });
+  await page.goto(`http://localhost:${port}/index.html${query ? '?' + query : ''}`, { waitUntil: 'domcontentloaded' });
   await page.setInputFiles('#disc', path.resolve(disc));
   await page.waitForTimeout(secs * 1000);
   await page.screenshot({ path: 'boot-probe.png' });

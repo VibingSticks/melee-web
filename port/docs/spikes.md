@@ -119,3 +119,13 @@ GLSL in headless Chrome (SwiftShader).
 ## G-A — Aurora compat profile verified on real WebGPU (2026-09-11)
 
 `port/spikes/aurora-web` now draws two GX triangles (direct attributes, and positions from a `GXSetArray` array via `GX_INDEX8`). With `?gpu=noimm`, `?gpu=nostorage` and `?gpu=compat` the frames are pixel-identical to the default profile and the console shows no WebGPU errors, so immediates-in-uniform and texture-based vertex pulling are behaviourally equivalent. The triangles come out black rather than the material colour in every profile; that is a spike TEV/channel setup detail, not a profile difference, and is left as-is.
+
+## G-C — WebGL2 polyfill runs Aurora and boots the game (2026-09-11)
+
+`port/web/js/gpu-gl2.js` implements the WebGPU surface emdawnwebgpu calls on WebGL2, with naga.wasm translating WGSL at pipeline creation.
+
+- **Unit tests:** `node port/tests/browser/gl2_polyfill_test.mjs` (headless Chrome, SwiftShader) — 7/7 pass: adapter limits, buffer map/copy/readback in both directions, texture row order through `writeTexture`/`copyBufferToTexture`/`copyTextureToBuffer`, render-pass orientation and scissor, uniform block with dynamic offsets (array and typed-array forms), reversed-Z depth test, texture sampling orientation, vertex/index buffers with blending onto the canvas texture.
+- **Spike:** `simple.html?renderer=webgl2` draws the same frame as WebGPU (blue clear, two black GX triangles, right way up) at 119 frames per 120 iterations, no WebGL errors.
+- **Game:** `boot_probe.mjs … --query=renderer=webgl2` boots to the same first `OSReport` and the same synthetic-disc stop as WebGPU; `?gpu=compat` on real WebGPU does too.
+- **Coordinate rule learned the hard way:** naga's `ADJUST_COORDINATE_SPACE` flip makes WebGPU row *r* land on GL row *r* of a texture attachment, so viewports and scissors must not be flipped (only front faces and the final canvas blit). The unit test caught a flipped scissor.
+- **Not measured yet (G2–G5, need real game data):** frame time of the polyfill versus WebGPU, title-screen and match screenshots under both renderers.

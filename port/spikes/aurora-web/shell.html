@@ -32,6 +32,22 @@
     printErr: function (t) { console.error(t); },
   };
 </script>
+<!-- Emscripten requires the placeholder; it is neutralised here and simple.js is loaded below instead.
 {{{ SCRIPT }}}
+-->
+<script type="module">
+  // ?renderer=webgl2 installs the WebGL2 polyfill (port/web/js/gpu-gl2.js) before the wasm starts.
+  const renderer = new URLSearchParams(location.search).get('renderer');
+  if (renderer === 'webgl2') {
+    const { loadNaga } = await import('../../../web/js/naga/naga.js');
+    const { installWebGL2Fallback } = await import('../../../web/js/gpu-gl2.js');
+    const naga = await loadNaga('../../../web/js/naga/naga.wasm');
+    installWebGL2Fallback({ canvas: Module.canvas, naga, force: true });
+    console.log('[shell] WebGL2 fallback installed');
+  }
+  const s = document.createElement('script');
+  s.src = 'simple.js';
+  document.body.appendChild(s);
+</script>
 </body>
 </html>

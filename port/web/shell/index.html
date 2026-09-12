@@ -12,6 +12,7 @@
   #bar label { cursor: pointer; }
   #status { flex: 1; opacity: .85; }
   #status.error { color: #ff7b7b; }
+  #renderer { opacity: .6; font-size: 12px; }
   #canvas { flex: 1; width: 100%; min-height: 0; background: #000; outline: none; }
   #log { height: 120px; margin: 0; padding: 6px 12px; overflow: auto; background: #101014; color: #9a9; font: 12px monospace; white-space: pre; }
 </style>
@@ -21,6 +22,7 @@
   <div id="bar">
     <label>Disc image (GALE01 .iso/.gcm): <input id="disc" type="file" accept=".iso,.gcm,.bin"></label>
     <span id="status">Pick your Melee disc image to start.</span>
+    <span id="renderer" title="Add ?renderer=webgl2 or ?renderer=webgpu to the URL to force one"></span>
   </div>
   <canvas id="canvas" tabindex="-1" oncontextmenu="event.preventDefault()"></canvas>
   <pre id="log"></pre>

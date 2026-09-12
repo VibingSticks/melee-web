@@ -1668,7 +1668,7 @@ Where a `.ssm` file's sample data is big-endian ADPCM, `ax_voice.c` reads the ni
 
 ### M6 — Single-file build
 
-- **Task 28** `pack_single_html.py`: reads `build/web-release/index.html`, inlines `melee.js` (built with `-sSINGLE_FILE`), `boot.js`, `disc_source.js`, `save_store.js`, `audio_sink.js` and the worklet source (as a string wrapped in a Blob URL at runtime), CSS; fails if the regex `<script\s+src=|<link\s+href=|fetch\(` matches the output. Unit test in `port/tests/pack_test.py` with a small fixture page.
+- **Task 28** `pack_single_html.py`: reads `build/web-release/index.html`, inlines `melee.js` (built with `-sSINGLE_FILE`), `boot.js`, `disc_source.js`, `gpu-gl2.js`, `naga/naga.js` and `naga/naga.wasm` (base64, decoded into the `loadNaga` call), `save_store.js`, `audio_sink.js` and the worklet source (as a string wrapped in a Blob URL at runtime), CSS; fails if the regex `<script\s+src=|<link\s+href=|fetch\(` matches the output. Unit test in `port/tests/pack_test.py` with a small fixture page.
 - **Task 29** `file://` validation on Chrome, Firefox, Safari using the S3 decision table; README section "Offline file".
 - **Task 30** CI: GitHub workflow `port.yml` builds `web-release`, runs host tests, packs the offline file, uploads both as artifacts.
 

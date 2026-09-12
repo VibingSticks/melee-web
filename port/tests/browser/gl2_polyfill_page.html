@@ -1,0 +1,267 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>gpu-gl2 polyfill tests</title>
+<canvas id="c" width="64" height="64"></canvas>
+<script type="module">
+import { loadNaga } from '../../web/js/naga/naga.js';
+import { installWebGL2Fallback } from '../../web/js/gpu-gl2.js';
+
+const canvas = document.getElementById('c');
+const results = [];
+const eq = (a, b, what) => { if (a !== b) throw new Error(`${what}: got ${a}, want ${b}`); };
+const eqBytes = (view, want, what) => { for (let i = 0; i < want.length; i++) if (view[i] !== want[i]) throw new Error(`${what}[${i}]: got ${view[i]}, want ${want[i]} (all: ${Array.from(view).slice(0, want.length)})`); };
+
+async function readback(device, texture, w, h) {
+  const buf = device.createBuffer({ size: 256 * h, usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST });
+  const enc = device.createCommandEncoder();
+  enc.copyTextureToBuffer({ texture }, { buffer: buf, bytesPerRow: 256 }, [w, h, 1]);
+  device.queue.submit([enc.finish()]);
+  await buf.mapAsync(GPUMapMode.READ);
+  return new Uint8Array(buf.getMappedRange());
+}
+const px = (bytes, x, y) => Array.from(bytes.subarray(y * 256 + x * 4, y * 256 + x * 4 + 4));
+
+const FULLSCREEN = `
+struct Params { color: vec4<f32>, z: f32 };
+@group(0) @binding(0) var<uniform> params: Params;
+struct VOut { @builtin(position) pos: vec4<f32>, @location(0) uv: vec2<f32> };
+@vertex fn vs_main(@builtin(vertex_index) vi: u32) -> VOut {
+  var p = array<vec2<f32>, 3>(vec2<f32>(-1.0, -1.0), vec2<f32>(3.0, -1.0), vec2<f32>(-1.0, 3.0));
+  var o: VOut;
+  o.pos = vec4<f32>(p[vi], params.z, 1.0);
+  o.uv = vec2<f32>(p[vi].x * 0.5 + 0.5, 1.0 - (p[vi].y * 0.5 + 0.5));
+  return o;
+}
+@fragment fn fs_main(in: VOut) -> @location(0) vec4<f32> { return params.color; }
+`;
+const TOPLEFT = `
+struct VOut { @builtin(position) pos: vec4<f32> };
+@vertex fn vs_main(@builtin(vertex_index) vi: u32) -> VOut {
+  var p = array<vec2<f32>, 3>(vec2<f32>(-1.0, -1.0), vec2<f32>(1.0, 1.0), vec2<f32>(-1.0, 1.0));
+  var o: VOut; o.pos = vec4<f32>(p[vi], 0.5, 1.0); return o;
+}
+@fragment fn fs_main() -> @location(0) vec4<f32> { return vec4<f32>(1.0, 0.0, 0.0, 1.0); }
+`;
+const SAMPLE = `
+@group(0) @binding(0) var tex: texture_2d<f32>;
+@group(0) @binding(1) var smp: sampler;
+struct VOut { @builtin(position) pos: vec4<f32>, @location(0) uv: vec2<f32> };
+@vertex fn vs_main(@builtin(vertex_index) vi: u32) -> VOut {
+  var p = array<vec2<f32>, 3>(vec2<f32>(-1.0, -1.0), vec2<f32>(3.0, -1.0), vec2<f32>(-1.0, 3.0));
+  var o: VOut;
+  o.pos = vec4<f32>(p[vi], 0.0, 1.0);
+  o.uv = vec2<f32>(p[vi].x * 0.5 + 0.5, 1.0 - (p[vi].y * 0.5 + 0.5));
+  return o;
+}
+@fragment fn fs_main(in: VOut) -> @location(0) vec4<f32> { return textureSample(tex, smp, in.uv); }
+`;
+const VERTS = `
+struct VOut { @builtin(position) pos: vec4<f32>, @location(0) color: vec4<f32> };
+@vertex fn vs_main(@location(0) pos: vec2<f32>, @location(1) color: vec4<f32>) -> VOut {
+  var o: VOut; o.pos = vec4<f32>(pos, 0.0, 1.0); o.color = color; return o;
+}
+@fragment fn fs_main(in: VOut) -> @location(0) vec4<f32> { return in.color; }
+`;
+
+const tests = {
+  async 'adapter and device'(device, adapter) {
+    eq(navigator.gpu.isWebGL2Fallback, true, 'fallback installed');
+    eq(adapter.limits.maxStorageBuffersPerShaderStage, 0, 'no storage buffers');
+    eq(adapter.limits.maxImmediateSize, 0, 'no immediates');
+    eq(adapter.limits.minUniformBufferOffsetAlignment >= 256, true, 'ubo alignment');
+    eq(navigator.gpu.getPreferredCanvasFormat(), 'rgba8unorm', 'canvas format');
+    eq(typeof device.queue.submit, 'function', 'queue');
+    eq(await device.popErrorScope().catch(() => 'threw'), null, 'popErrorScope without push');
+  },
+
+  async 'buffer map/copy/readback'(device) {
+    const src = device.createBuffer({ size: 64, usage: GPUBufferUsage.MAP_WRITE | GPUBufferUsage.COPY_SRC });
+    await src.mapAsync(GPUMapMode.WRITE);
+    eq(src.mapState, 'mapped', 'mapState');
+    new Uint8Array(src.getMappedRange()).set([1, 2, 3, 4, 5, 6, 7, 8]);
+    // sub-range mapping folds back at unmap
+    new Uint8Array(src.getMappedRange(8, 4)).set([9, 9, 9, 9]);
+    src.unmap();
+    eq(src.mapState, 'unmapped', 'unmapped');
+    const mid = device.createBuffer({ size: 64, usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC });
+    const dst = device.createBuffer({ size: 64, usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST });
+    const enc = device.createCommandEncoder();
+    enc.copyBufferToBuffer(src, 0, mid, 16, 16);   // host -> device
+    enc.copyBufferToBuffer(mid, 16, dst, 0, 16);   // device -> host
+    device.queue.submit([enc.finish()]);
+    await dst.mapAsync(GPUMapMode.READ);
+    eqBytes(new Uint8Array(dst.getMappedRange()), [1, 2, 3, 4, 5, 6, 7, 8, 9, 9, 9, 9, 0, 0, 0, 0], 'roundtrip');
+    dst.unmap();
+    // writeBuffer + mappedAtCreation
+    const w = device.createBuffer({ size: 16, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_SRC, mappedAtCreation: true });
+    new Uint32Array(w.getMappedRange()).set([7, 8, 9, 10]);
+    w.unmap();
+    device.queue.writeBuffer(w, 4, new Uint32Array([42]), 0, 4);
+    const dst2 = device.createBuffer({ size: 16, usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST });
+    const enc2 = device.createCommandEncoder();
+    enc2.copyBufferToBuffer(w, 0, dst2, 0, 16);
+    device.queue.submit([enc2.finish()]);
+    await dst2.mapAsync(GPUMapMode.READ);
+    eqBytes(new Uint32Array(dst2.getMappedRange()), [7, 42, 9, 10], 'writeBuffer');
+    src.destroy(); mid.destroy(); dst.destroy();
+  },
+
+  async 'texture write and readback keeps row order'(device) {
+    const tex = device.createTexture({ size: [2, 2], format: 'rgba8unorm', usage: GPUTextureUsage.COPY_DST | GPUTextureUsage.COPY_SRC | GPUTextureUsage.TEXTURE_BINDING });
+    eq(tex.width, 2, 'width'); eq(tex.format, 'rgba8unorm', 'format');
+    device.queue.writeTexture({ texture: tex }, new Uint8Array([255, 0, 0, 255, 0, 255, 0, 255, 0, 0, 255, 255, 255, 255, 255, 255]), { bytesPerRow: 8 }, [2, 2, 1]);
+    const b = await readback(device, tex, 2, 2);
+    eqBytes(px(b, 0, 0), [255, 0, 0, 255], 'texel 0,0');
+    eqBytes(px(b, 1, 0), [0, 255, 0, 255], 'texel 1,0');
+    eqBytes(px(b, 0, 1), [0, 0, 255, 255], 'texel 0,1');
+    // copyBufferToTexture with a padded bytesPerRow
+    const staging = device.createBuffer({ size: 512, usage: GPUBufferUsage.MAP_WRITE | GPUBufferUsage.COPY_SRC, mappedAtCreation: true });
+    const m = new Uint8Array(staging.getMappedRange());
+    m.set([9, 9, 9, 255, 8, 8, 8, 255], 0); m.set([7, 7, 7, 255, 6, 6, 6, 255], 256);
+    staging.unmap();
+    const enc = device.createCommandEncoder();
+    enc.copyBufferToTexture({ buffer: staging, bytesPerRow: 256 }, { texture: tex }, [2, 2, 1]);
+    device.queue.submit([enc.finish()]);
+    const b2 = await readback(device, tex, 2, 2);
+    eqBytes(px(b2, 1, 1), [6, 6, 6, 255], 'texel 1,1 after buffer copy');
+    // other formats create without error
+    for (const f of ['r16sint', 'r32uint', 'rgba32uint', 'depth32float', 'depth24plus', 'rgba16float', 'r8unorm']) device.createTexture({ size: [4, 4], format: f, usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT });
+    device.createSampler({ magFilter: 'linear', minFilter: 'linear', mipmapFilter: 'linear', addressModeU: 'repeat', addressModeV: 'mirror-repeat', maxAnisotropy: 4, lodMaxClamp: 4 });
+  },
+
+  async 'render pass orientation: WebGPU top-left stays top-left'(device) {
+    const target = device.createTexture({ size: [64, 64], format: 'rgba8unorm', usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC });
+    const mod = device.createShaderModule({ code: TOPLEFT });
+    const layout = device.createPipelineLayout({ bindGroupLayouts: [] });
+    const pipe = device.createRenderPipeline({ layout, vertex: { module: mod, entryPoint: 'vs_main' }, fragment: { module: mod, entryPoint: 'fs_main', targets: [{ format: 'rgba8unorm' }] }, primitive: { topology: 'triangle-list', cullMode: 'back', frontFace: 'ccw' } });
+    const enc = device.createCommandEncoder();
+    const pass = enc.beginRenderPass({ colorAttachments: [{ view: target.createView(), loadOp: 'clear', clearValue: { r: 0, g: 0, b: 1, a: 1 }, storeOp: 'store' }] });
+    pass.setPipeline(pipe);
+    pass.setViewport(0, 0, 64, 64, 0, 1);
+    pass.setScissorRect(0, 0, 64, 64);
+    pass.draw(3);
+    pass.end();
+    device.queue.submit([enc.finish()]);
+    const b = await readback(device, target, 64, 64);
+    eqBytes(px(b, 2, 2), [255, 0, 0, 255], 'top-left is red (triangle, ccw not culled)');
+    eqBytes(px(b, 61, 61), [0, 0, 255, 255], 'bottom-right is clear color');
+    // scissor in WebGPU coordinates: only the top 8 rows may be drawn
+    const enc2 = device.createCommandEncoder();
+    const pass2 = enc2.beginRenderPass({ colorAttachments: [{ view: target.createView(), loadOp: 'clear', clearValue: [0, 0, 0, 1], storeOp: 'store' }] });
+    pass2.setPipeline(pipe); pass2.setScissorRect(0, 0, 64, 8); pass2.draw(3); pass2.end();
+    device.queue.submit([enc2.finish()]);
+    const b2 = await readback(device, target, 64, 64);
+    eqBytes(px(b2, 2, 2), [255, 0, 0, 255], 'inside scissor');
+    eqBytes(px(b2, 2, 20), [0, 0, 0, 255], 'below scissor untouched');
+  },
+
+  async 'uniform block with dynamic offsets and reversed-Z depth test'(device) {
+    const target = device.createTexture({ size: [16, 16], format: 'rgba8unorm', usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC });
+    const depth = device.createTexture({ size: [16, 16], format: 'depth24plus', usage: GPUTextureUsage.RENDER_ATTACHMENT });
+    const mod = device.createShaderModule({ code: FULLSCREEN });
+    const bgl = device.createBindGroupLayout({ entries: [{ binding: 0, visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT, buffer: { type: 'uniform', hasDynamicOffset: true, minBindingSize: 32 } }] });
+    const pipe = device.createRenderPipeline({
+      layout: device.createPipelineLayout({ bindGroupLayouts: [bgl] }),
+      vertex: { module: mod, entryPoint: 'vs_main' }, fragment: { module: mod, entryPoint: 'fs_main', targets: [{ format: 'rgba8unorm' }] },
+      depthStencil: { format: 'depth24plus', depthCompare: 'greater', depthWriteEnabled: true },
+    });
+    const ubo = device.createBuffer({ size: 768, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+    const f = new Float32Array(192);
+    f.set([1, 0, 0, 1, 0.5], 0);     // red, z .5
+    f.set([0, 1, 0, 1, 0.2], 64);    // green, z .2 (further away in reversed Z)
+    f.set([0, 0, 1, 1, 0.8], 128);   // blue, z .8 (nearer)
+    device.queue.writeBuffer(ubo, 0, f);
+    const bg = device.createBindGroup({ layout: bgl, entries: [{ binding: 0, resource: { buffer: ubo, offset: 0, size: 32 } }] });
+    const enc = device.createCommandEncoder();
+    const pass = enc.beginRenderPass({
+      colorAttachments: [{ view: target.createView(), loadOp: 'clear', clearValue: [0, 0, 0, 1], storeOp: 'store' }],
+      depthStencilAttachment: { view: depth.createView(), depthLoadOp: 'clear', depthClearValue: 0, depthStoreOp: 'store' },
+    });
+    pass.setPipeline(pipe);
+    pass.setBindGroup(0, bg, [0]); pass.draw(3);
+    pass.setBindGroup(0, bg, [256]); pass.draw(3);
+    pass.end();
+    device.queue.submit([enc.finish()]);
+    let b = await readback(device, target, 16, 16);
+    eqBytes(px(b, 8, 8), [255, 0, 0, 255], 'green (further) rejected by greater test');
+    const enc2 = device.createCommandEncoder();
+    const pass2 = enc2.beginRenderPass({
+      colorAttachments: [{ view: target.createView(), loadOp: 'load', storeOp: 'store' }],
+      depthStencilAttachment: { view: depth.createView(), depthLoadOp: 'load', depthStoreOp: 'store' },
+    });
+    pass2.setPipeline(pipe); pass2.setBindGroup(0, bg, new Uint32Array([0, 512]), 1, 1); pass2.draw(3); pass2.end();
+    device.queue.submit([enc2.finish()]);
+    b = await readback(device, target, 16, 16);
+    eqBytes(px(b, 8, 8), [0, 0, 255, 255], 'blue (nearer) passes; typed-array dynamic offsets');
+  },
+
+  async 'texture sampling with sampler bind group'(device) {
+    const tex = device.createTexture({ size: [2, 2], format: 'rgba8unorm', usage: GPUTextureUsage.COPY_DST | GPUTextureUsage.TEXTURE_BINDING });
+    device.queue.writeTexture({ texture: tex }, new Uint8Array([255, 0, 0, 255, 0, 255, 0, 255, 0, 0, 255, 255, 255, 255, 255, 255]), { bytesPerRow: 8 }, [2, 2, 1]);
+    const target = device.createTexture({ size: [64, 64], format: 'rgba8unorm', usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC });
+    const mod = device.createShaderModule({ code: SAMPLE });
+    const bgl = device.createBindGroupLayout({ entries: [{ binding: 0, visibility: GPUShaderStage.FRAGMENT, texture: {} }, { binding: 1, visibility: GPUShaderStage.FRAGMENT, sampler: {} }] });
+    const pipe = device.createRenderPipeline({ layout: device.createPipelineLayout({ bindGroupLayouts: [bgl] }), vertex: { module: mod, entryPoint: 'vs_main' }, fragment: { module: mod, entryPoint: 'fs_main', targets: [{ format: 'rgba8unorm' }] } });
+    const bg = device.createBindGroup({ layout: bgl, entries: [{ binding: 0, resource: tex.createView() }, { binding: 1, resource: device.createSampler({ magFilter: 'nearest', minFilter: 'nearest' }) }] });
+    const enc = device.createCommandEncoder();
+    const pass = enc.beginRenderPass({ colorAttachments: [{ view: target.createView(), loadOp: 'clear', clearValue: [0, 0, 0, 0], storeOp: 'store' }] });
+    pass.setPipeline(pipe); pass.setBindGroup(0, bg); pass.draw(3); pass.end();
+    device.queue.submit([enc.finish()]);
+    const b = await readback(device, target, 64, 64);
+    eqBytes(px(b, 4, 4), [255, 0, 0, 255], 'top-left samples texel 0,0');
+    eqBytes(px(b, 60, 4), [0, 255, 0, 255], 'top-right samples texel 1,0');
+    eqBytes(px(b, 4, 60), [0, 0, 255, 255], 'bottom-left samples texel 0,1');
+  },
+
+  async 'vertex buffers, index buffer, blending, canvas present'(device) {
+    const ctx = canvas.getContext('webgpu');
+    ctx.configure({ device, format: navigator.gpu.getPreferredCanvasFormat(), usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC });
+    const mod = device.createShaderModule({ code: VERTS });
+    const pipe = device.createRenderPipeline({
+      layout: device.createPipelineLayout({ bindGroupLayouts: [] }),
+      vertex: { module: mod, entryPoint: 'vs_main', buffers: [{ arrayStride: 24, attributes: [{ shaderLocation: 0, offset: 0, format: 'float32x2' }, { shaderLocation: 1, offset: 8, format: 'float32x4' }] }] },
+      fragment: { module: mod, entryPoint: 'fs_main', targets: [{ format: 'rgba8unorm', blend: { color: { srcFactor: 'src-alpha', dstFactor: 'one-minus-src-alpha' }, alpha: { srcFactor: 'one', dstFactor: 'zero' } } }] },
+      primitive: { topology: 'triangle-list', stripIndexFormat: undefined },
+    });
+    // full-screen quad, half-transparent green over an opaque red clear -> (128,128,0)
+    const v = new Float32Array([-1, -1, 0, 1, 0, .5, 1, -1, 0, 1, 0, .5, 1, 1, 0, 1, 0, .5, -1, 1, 0, 1, 0, .5]);
+    const vb = device.createBuffer({ size: v.byteLength, usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST });
+    device.queue.writeBuffer(vb, 0, v);
+    const ib = device.createBuffer({ size: 16, usage: GPUBufferUsage.INDEX | GPUBufferUsage.COPY_DST });
+    device.queue.writeBuffer(ib, 0, new Uint16Array([0, 1, 2, 0, 2, 3]));
+    const tex = ctx.getCurrentTexture();
+    eq(tex.width, 64, 'canvas texture size');
+    const enc = device.createCommandEncoder();
+    const pass = enc.beginRenderPass({ colorAttachments: [{ view: tex.createView(), loadOp: 'clear', clearValue: [1, 0, 0, 1], storeOp: 'store' }] });
+    pass.setPipeline(pipe); pass.setVertexBuffer(0, vb); pass.setIndexBuffer(ib, 'uint16'); pass.drawIndexed(6); pass.end();
+    device.queue.submit([enc.finish()]);
+    const b = await readback(device, tex, 64, 64);
+    const p = px(b, 32, 32);
+    if (Math.abs(p[0] - 128) > 2 || Math.abs(p[1] - 128) > 2 || p[2] !== 0) throw new Error(`blend: got ${p}`);
+    await device.queue.onSubmittedWorkDone();
+  },
+};
+
+window.__runTests = async () => {
+  try {
+    const naga = await loadNaga('../../web/js/naga/naga.wasm');
+    installWebGL2Fallback({ canvas, naga, force: true });
+    const adapter = await navigator.gpu.requestAdapter();
+    const device = await adapter.requestDevice();
+    const errors = [];
+    device.onuncapturederror = (ev) => errors.push(ev.error.message);
+    for (const [name, fn] of Object.entries(tests)) {
+      try {
+        await fn(device, adapter);
+        if (errors.length) throw new Error('uncaptured: ' + errors.splice(0).join('; '));
+        results.push({ name, ok: true });
+      } catch (e) {
+        results.push({ name, ok: false, msg: String(e.message || e) });
+      }
+    }
+  } catch (e) {
+    results.push({ name: 'setup', ok: false, msg: String(e.message || e) + '\n' + (e.stack || '') });
+  }
+  return results;
+};
+</script>

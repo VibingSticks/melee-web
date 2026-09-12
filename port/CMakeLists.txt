@@ -51,8 +51,15 @@ if (EMSCRIPTEN)
     set_property(TARGET melee APPEND PROPERTY LINK_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/web/js/imports.js)
 
     # Hosted page next to melee.js
-    foreach (f web/shell/index.html web/js/boot.js web/js/disc_source.js)
+    foreach (f web/shell/index.html web/js/boot.js web/js/disc_source.js web/js/gpu-gl2.js)
         get_filename_component(fn ${f} NAME)
         configure_file(${f} ${CMAKE_BINARY_DIR}/${fn} COPYONLY)
     endforeach ()
+    # WebGL2 fallback translator (built by tools/build_naga.sh; optional).
+    configure_file(web/js/naga/naga.js ${CMAKE_BINARY_DIR}/naga/naga.js COPYONLY)
+    if (EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/web/js/naga/naga.wasm)
+        configure_file(web/js/naga/naga.wasm ${CMAKE_BINARY_DIR}/naga/naga.wasm COPYONLY)
+    else ()
+        message(WARNING "web/js/naga/naga.wasm missing: run tools/build_naga.sh or the WebGL2 fallback will not work")
+    endif ()
 endif ()

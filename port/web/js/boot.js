@@ -1,4 +1,5 @@
-// Page flow: check WebGPU, take the user's disc image, then start the wasm.
+// Page flow: pick a renderer (WebGPU, or the WebGL2 polyfill), take the user's disc image,
+// then start the wasm.
 import { DiscSource } from './disc_source.js';
 
 const $ = (id) => document.getElementById(id);
@@ -19,16 +20,42 @@ function appendLog(text) {
   logEl.scrollTop = logEl.scrollHeight;
 }
 
-if (!navigator.gpu) {
-  status('This browser has no WebGPU. Use a current Chrome, Edge, Safari 26+, or Firefox with WebGPU enabled.', true);
-  picker.disabled = true;
+const params = new URLSearchParams(location.search);
+
+// Renderer selection: WebGPU when the browser gives us an adapter, otherwise the WebGL2
+// polyfill (port/web/js/gpu-gl2.js). ?renderer=webgl2|webgpu forces one.
+// See docs/superpowers/specs/2026-09-11-webgl2-fallback-design.md.
+async function selectRenderer() {
+  const forced = params.get('renderer');
+  let haveWebGPU = false;
+  if (forced !== 'webgl2' && navigator.gpu) {
+    try { haveWebGPU = !!(await navigator.gpu.requestAdapter()); } catch { haveWebGPU = false; }
+  }
+  if (haveWebGPU) return 'webgpu';
+  if (forced === 'webgpu') throw new Error('This browser has no usable WebGPU adapter (?renderer=webgpu was requested).');
+  const probe = document.createElement('canvas').getContext('webgl2');
+  if (!probe) throw new Error('This browser has neither WebGPU nor WebGL2. Use a current Chrome, Edge, Firefox, or Safari.');
+  const [{ loadNaga }, { installWebGL2Fallback }] = await Promise.all([import('./naga/naga.js'), import('./gpu-gl2.js')]);
+  const naga = await loadNaga('naga/naga.wasm');
+  installWebGL2Fallback({ canvas, naga, force: true });
+  return 'webgl2';
 }
+
+const rendererReady = selectRenderer().then((r) => {
+  $('renderer').textContent = r === 'webgpu' ? 'Renderer: WebGPU' : 'Renderer: WebGL2 (fallback)';
+  return r;
+}, (e) => {
+  status(String(e.message || e), true);
+  picker.disabled = true;
+  throw e;
+});
 
 picker.addEventListener('change', async () => {
   const file = picker.files[0];
   if (!file) return;
   picker.disabled = true;
   try {
+    await rendererReady;
     const disc = new DiscSource(file);
     const hdr = await disc.validate();
     const fst = new Uint8Array(await disc.read(hdr.fstOffset, hdr.fstSize));
@@ -43,7 +70,7 @@ picker.addEventListener('change', async () => {
 function startGame(disc, fst) {
   return new Promise((resolve, reject) => {
     // Renderer profile overrides for testing (see docs/superpowers/specs/2026-09-11-webgl2-fallback-design.md).
-    const gpuFlag = new URLSearchParams(location.search).get('gpu');
+    const gpuFlag = params.get('gpu');
     const forceCompatProfile = { compat: 7, noimm: 1, nostorage: 2, nocompute: 4 }[gpuFlag] ?? 0;
     window.Module = {
       canvas,

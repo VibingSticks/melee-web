@@ -9,3 +9,4 @@ tests/browser/test-results/
 *.log
 spikes/*/*.png
 web/js/naga/naga.wasm
+tests/browser/*.png

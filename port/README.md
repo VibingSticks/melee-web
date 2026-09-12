@@ -33,7 +33,7 @@ python3 port/tools/make_test_disc.py port/build/test-disc.iso audio/main.ssm=por
 node port/tests/browser/boot_probe.mjs port/build/web-debug port/build/test-disc.iso 8 --headed
 ```
 
-`boot_probe.mjs` drives Chrome through Playwright, feeds the disc to the page, and prints the console. Use `--headed`: headless Chrome only offers a software WebGPU adapter that Chrome drops after a few frames.
+`boot_probe.mjs` drives Chrome through Playwright, feeds the disc to the page, and prints the console. Use `--headed`: headless Chrome only offers a software WebGPU adapter that Chrome drops after a few frames. `--query=renderer=webgl2` boots under the WebGL2 polyfill and `--query=gpu=compat` forces Aurora's compatibility profile on real WebGPU.
 
 ## Host unit tests
 
@@ -55,6 +55,7 @@ cmake --preset host-tests && cmake --build --preset host-tests && ctest --preset
 | CMake ≥ 3.25, Ninja, Python 3 (+ `libclang`, `pyyaml`) | Build, schema generator, packer | system |
 | [Playwright](https://playwright.dev) | Browser smoke tests | `tests/browser` |
 | [naga](https://github.com/gfx-rs/wgpu/tree/trunk/naga) (Rust, via rustup) | WGSL → GLSL ES 3.00 in the browser for the WebGL2 fallback | `tools/naga-wasm`, built by `tools/build_naga.sh` |
+| `web/js/gpu-gl2.js` (port-only) | The WebGPU subset emdawnwebgpu needs, on WebGL2: used automatically when the browser has no WebGPU adapter, or with `?renderer=webgl2` | this repo; tests in `tests/browser/gl2_polyfill_test.mjs` |
 
 Port-only code (`port/src`) supplies what none of the above provide: the main loop adapter, OS shims, a DVD layer over the user's disc image, load-time big-endian → little-endian conversion of HSD archives, and an AX audio mixer feeding an AudioWorklet.
 

@@ -33,7 +33,14 @@ python3 port/tools/make_test_disc.py port/build/test-disc.iso audio/main.ssm=por
 node port/tests/browser/boot_probe.mjs port/build/web-debug port/build/test-disc.iso 8 --headed
 ```
 
-`boot_probe.mjs` drives Chrome through Playwright, feeds the disc to the page, and prints the console. Use `--headed`: headless Chrome only offers a software WebGPU adapter that Chrome drops after a few frames. `--query=renderer=webgl2` boots under the WebGL2 polyfill and `--query=gpu=compat` forces Aurora's compatibility profile on real WebGPU.
+`boot_probe.mjs` drives the browser through Playwright, feeds the disc to the page, and prints the console. Use `--headed`: headless Chrome only offers a software WebGPU adapter that Chrome drops after a few frames. `--query=renderer=webgl2` boots under the WebGL2 polyfill, `--query=gpu=compat` forces Aurora's compatibility profile on real WebGPU, and `--browser=firefox` runs Playwright's Firefox, which has no WebGPU on Linux and so exercises the automatic fallback.
+
+## WebGL2 fallback tests
+
+```sh
+node port/tests/browser/gl2_polyfill_test.mjs                    # headless Chromium on SwiftShader
+node port/tests/browser/gl2_polyfill_test.mjs --browser=firefox  # real GPU, no WebGPU present
+```
 
 ## Host unit tests
 

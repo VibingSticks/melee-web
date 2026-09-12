@@ -117,13 +117,21 @@ export function installWebGL2Fallback({ canvas, naga, force = false }) {
   const FMT = formatTable(gl);
   const maxAniso = extAniso ? gl.getParameter(extAniso.MAX_TEXTURE_MAX_ANISOTROPY_EXT) : 1;
 
-  // Globals emdawnwebgpu expects to exist.
+  // Globals emdawnwebgpu expects to exist. A browser with no WebGPU at all (Firefox on Linux)
+  // has none of them, so each is defined only when missing rather than as one block: where the
+  // browser does have WebGPU we must keep its own classes, because emdawnwebgpu's error
+  // handling does `instanceof` against the natives.
   const g = globalThis;
-  if (typeof g.GPUValidationError === 'undefined') {
-    g.GPUValidationError = GPUValidationErrorImpl; g.GPUOutOfMemoryError = GPUOutOfMemoryErrorImpl; g.GPUInternalError = GPUInternalErrorImpl;
-    g.GPUUncapturedErrorEvent = GPUUncapturedErrorEventImpl;
-    g.GPUBufferUsage = BufferUsage; g.GPUTextureUsage = TextureUsage; g.GPUShaderStage = ShaderStage; g.GPUMapMode = MapMode; g.GPUColorWrite = ColorWrite;
-  }
+  const define = (name, value) => { if (typeof g[name] === 'undefined') g[name] = value; };
+  define('GPUValidationError', GPUValidationErrorImpl);
+  define('GPUOutOfMemoryError', GPUOutOfMemoryErrorImpl);
+  define('GPUInternalError', GPUInternalErrorImpl);
+  define('GPUUncapturedErrorEvent', GPUUncapturedErrorEventImpl);
+  define('GPUBufferUsage', BufferUsage);
+  define('GPUTextureUsage', TextureUsage);
+  define('GPUShaderStage', ShaderStage);
+  define('GPUMapMode', MapMode);
+  define('GPUColorWrite', ColorWrite);
   const ValidationError = g.GPUValidationError;
 
   const limits = {
@@ -139,7 +147,19 @@ export function installWebGL2Fallback({ canvas, naga, force = false }) {
     maxInterStageShaderVariables: 16, maxColorAttachments: 8, maxColorAttachmentBytesPerSample: 32,
     maxComputeWorkgroupStorageSize: 0, maxComputeInvocationsPerWorkgroup: 0, maxComputeWorkgroupSizeX: 0, maxComputeWorkgroupSizeY: 0,
     maxComputeWorkgroupSizeZ: 0, maxComputeWorkgroupsPerDimension: 0, maxImmediateSize: 0,
+    // Compatibility-mode limits: emdawnwebgpu reads these only when GPUSupportedLimits.prototype
+    // carries the names, which is why the class below declares every key.
+    maxStorageBuffersInVertexStage: 0, maxStorageTexturesInVertexStage: 0,
+    maxStorageBuffersInFragmentStage: 0, maxStorageTexturesInFragmentStage: 0,
   };
+  // emdawnwebgpu feature-detects compatibility-mode limits with
+  // `"maxStorageBuffersInVertexStage" in GPUSupportedLimits.prototype`, referencing the class
+  // as a bare global. Firefox (no WebGPU) does not define it, which throws a ReferenceError
+  // before the adapter is ever returned, so publish a stand-in carrying every limit name.
+  class GPUSupportedLimitsImpl {}
+  for (const name of Object.keys(limits)) GPUSupportedLimitsImpl.prototype[name] = undefined;
+  define('GPUSupportedLimits', GPUSupportedLimitsImpl);
+
   const features = new Set(extFloat ? ['float32-filterable'] : []);
   const info = { vendor: 'webgl2-fallback', architecture: '', device: String(gl.getParameter(gl.RENDERER) || ''), description: 'WebGPU subset on WebGL2 (gpu-gl2.js)' };
 

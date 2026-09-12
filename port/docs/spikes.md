@@ -129,3 +129,13 @@ GLSL in headless Chrome (SwiftShader).
 - **Game:** `boot_probe.mjs … --query=renderer=webgl2` boots to the same first `OSReport` and the same synthetic-disc stop as WebGPU; `?gpu=compat` on real WebGPU does too.
 - **Coordinate rule learned the hard way:** naga's `ADJUST_COORDINATE_SPACE` flip makes WebGPU row *r* land on GL row *r* of a texture attachment, so viewports and scissors must not be flipped (only front faces and the final canvas blit). The unit test caught a flipped scissor.
 - **Not measured yet (G2–G5, need real game data):** frame time of the polyfill versus WebGPU, title-screen and match screenshots under both renderers.
+
+## G-D — Firefox takes the fallback automatically (2026-09-12)
+
+Firefox 155 on this machine exposes no `navigator.gpu` at all and real hardware WebGL2 (NVIDIA GTX 980), which is exactly the case the fallback exists for. Everything was run through Playwright's bundled Firefox; `--browser=firefox` now selects it in both `gl2_polyfill_test.mjs` and `boot_probe.mjs`.
+
+- **Auto-selection works:** the game page with no query parameter picks the polyfill on its own, shows `Renderer: WebGL2 (fallback)`, logs `Driver: WebGPU subset on WebGL2 (gpu-gl2.js)`, and reaches the same synthetic-disc stop as Chrome.
+- **Unit tests:** 7/7 on Firefox as well as Chromium.
+- **Spike:** `simple.html?renderer=webgl2` renders pixel-identically to Chrome, 119 frames per 120 iterations. Without the parameter Firefox aborts in Aurora's init, confirming the fallback is what makes the page work at all.
+- **Bug this caught — `GPUSupportedLimits` must exist.** emdawnwebgpu feature-detects compatibility-mode limits with `"maxStorageBuffersInVertexStage" in GPUSupportedLimits.prototype`, referencing the class as a bare global. Chrome defines it natively so the polyfill worked there by accident; Firefox threw a `ReferenceError` before the adapter was returned. The polyfill now publishes a stand-in class carrying every limit name, reports the four compatibility-mode limits as zero, and defines each `GPU*` global individually only when missing rather than as one all-or-nothing block.
+- **Performance note:** Firefox warns that `getBufferSubData` on a buffer without a `*_READ` usage stalls the pipeline. That is the device-to-host `copyBufferToBuffer` path. Nothing in the game's per-frame work uses it yet (depth peek is off under `NO_COMPUTE`), so it is left alone.

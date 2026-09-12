@@ -6,3 +6,5 @@ tools/env.sh
 *.gcm
 tests/browser/node_modules/
 tests/browser/test-results/
+*.log
+spikes/*/*.png

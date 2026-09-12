@@ -6,7 +6,7 @@
 
 **Architecture:** The unmodified game code (`src/melee`, `src/sysdolphin`) is compiled with Emscripten against Aurora, which provides GX-on-WebGPU, PAD, VI, CARD and ARAM. Port-only code under `port/src` supplies what Aurora lacks (OS shims, a DVD layer over a JS file reader, a load-time big-endian→little-endian archive converter, and an AX audio mixer) and adapts the interrupt-paced main loop to `emscripten_set_main_loop` with Asyncify at the game's blocking points.
 
-**Tech Stack:** C99/C++20, CMake ≥ 3.25 + Ninja, Emscripten (emsdk, ≥ 4.0.10), `emdawnwebgpu` port, SDL3, Aurora (r-burns fork pinned at `e6a6f02ace4146e8a2f648d5c274dbb7dd89665c`), Python 3 + libclang for schema generation, Playwright for browser smoke tests.
+**Tech Stack:** C99/C++20, CMake ≥ 3.25 + Ninja, Emscripten (emsdk 6.0.9 verified), `emdawnwebgpu` remote port v20260910 (tracked in `port/extern/`), SDL3 via Emscripten's `sdl3` port, Aurora (r-burns fork pinned at `e6a6f02ace4146e8a2f648d5c274dbb7dd89665c`), Python 3 + libclang for schema generation, Playwright for browser smoke tests.
 
 **Spec:** `docs/superpowers/specs/2026-09-10-web-port-design.md`
 
@@ -247,6 +247,8 @@ git commit -m "port: add host unit test harness and CMake presets"
 ```
 
 ### Task 3: Spike S1 — Aurora `simple` example under Emscripten
+
+> **Done 2026-09-11 — PASS.** See `port/docs/spikes.md` for measurements and the full list of patch hunks. The steps below are kept for the record; the resulting patch is `port/extern/aurora-patches/0001-emscripten-build.patch` and the spike lives in `port/spikes/aurora-web/`.
 
 **Files:**
 - Create: `port/spikes/aurora-web/CMakeLists.txt`, `port/spikes/aurora-web/shell.html`
@@ -831,15 +833,11 @@ git commit -m "port: DVD layer over an async byte source with frame-pumped callb
 - Modify: `port/cmake/game_sources.cmake` (remove `fog.c pobj.c video.c lb_0195.c lbcardnew.c` from `GAME_EXCLUDE`)
 
 **Interfaces:**
-- Produces: `AURORA_SINGLE_THREADED` CMake option; functions `GXInitFogAdjTable`, `GXSetFogRangeAdj`, `PADSetSamplingRate`, the `VIPadFrameBufferWidth` macro, `GXSetArray` C-compatible 4-argument macro (`#define GXSetArray(a,d,s,st) GXSetArrayEx(a,d,s,st,false)` under `__EMSCRIPTEN__` in `include/dolphin/gx/GXGeometry.h` with the 5-argument function renamed `GXSetArrayEx`), and `CARDReadAsync`/`CARDWriteAsync` completing via a pump called from `port_frame` (they already exist; ensure callbacks fire synchronously or from `aurora_update`).
+- Produces: functions `GXInitFogAdjTable`, `GXSetFogRangeAdj`, `PADSetSamplingRate`, the `VIPadFrameBufferWidth` macro, `GXSetArray` C-compatible 4-argument macro (`#define GXSetArray(a,d,s,st) GXSetArrayEx(a,d,s,st,false)` under `__EMSCRIPTEN__` in `include/dolphin/gx/GXGeometry.h` with the 5-argument function renamed `GXSetArrayEx`), and `CARDReadAsync`/`CARDWriteAsync` completing via a pump called from `port_frame` (they already exist; ensure callbacks fire synchronously or from `aurora_update`).
 
-- [ ] **Step 1: Write the single-threaded option patch**
+- [ ] **Step 1: Confirm the threading patch is already in place**
 
-In `port/extern/aurora`, edit then `git diff > ../aurora-patches/0002-single-threaded-option.patch`:
-- `CMakeLists.txt`: `option(AURORA_SINGLE_THREADED "No worker threads (Emscripten)" OFF)`; when ON, `target_compile_definitions(aurora_core PUBLIC AURORA_SINGLE_THREADED)`.
-- `lib/gfx/pipeline_cache.cpp`: under `#ifdef AURORA_SINGLE_THREADED`, `start_pipeline_thread()` and the cache writer do nothing; `compile_pending()` compiles inline when called from `end_frame`.
-- `lib/gfx/render_worker.cpp`: `start()` returns without setting `g_running` (the existing inline path then handles all work).
-- `lib/dolphin/dvd`: excluded from the build when `AURORA_ENABLE_DVD=OFF` (already), nothing else.
+Spike S1's `0001-emscripten-build.patch` already removes every Aurora thread under `__EMSCRIPTEN__` (render worker, FIFO worker, pipeline compile and cache-writer threads, texture replacement pool) and replaces the DVD thread by not building `lib/dolphin/dvd` at all (`AURORA_ENABLE_DVD=OFF`). No `AURORA_SINGLE_THREADED` option is needed. Verify with `grep -c __EMSCRIPTEN__ port/extern/aurora-patches/0001-emscripten-build.patch` (expected ≥ 8) and move on; `0002-*.patch` is not created.
 
 - [ ] **Step 2: Write the API-gap patch**
 
@@ -982,10 +980,12 @@ export class DiscSource {
 
 - [ ] **Step 4: Write the link flags and executable target**
 
+The WebGPU and SDL3 ports are attached by Aurora's patched CMake (`--use-port=${AURORA_EMDAWNWEBGPU_PORT}` and `--use-port=sdl3`), so they are not repeated here. `AURORA_EMDAWNWEBGPU_PORT` must point at `port/extern/emdawnwebgpu-v20260910.214722.remoteport.py` (the bundled port lacks `SetImmediates`), `BUILD_SHARED_LIBS` must be OFF and `CMAKE_POSITION_INDEPENDENT_CODE` OFF, exactly as `port/spikes/aurora-web/CMakeLists.txt` does.
+
 ```cmake
 # port/cmake/emscripten_link.cmake
 set(PORT_LINK_FLAGS
-  --use-port=emdawnwebgpu -sASYNCIFY -sASYNCIFY_STACK_SIZE=65536
+  -sASYNCIFY -sASYNCIFY_STACK_SIZE=65536
   -sALLOW_MEMORY_GROWTH=1 -sMAXIMUM_MEMORY=1024MB -sINITIAL_MEMORY=256MB
   -sEXPORTED_FUNCTIONS=_main,_port_dvd_init -sEXPORTED_RUNTIME_METHODS=ccall,HEAPU8,HEAPF32
   -sSTACK_SIZE=1MB -sNO_EXIT_RUNTIME=1
@@ -996,7 +996,7 @@ if (PORT_SINGLE_FILE)
 endif ()
 ```
 
-In `port/CMakeLists.txt` under `if (EMSCRIPTEN)`: add Aurora (`AURORA_SINGLE_THREADED ON`, `AURORA_ENABLE_DVD OFF`, `AURORA_ENABLE_THP OFF` for now), `add_executable(melee src/main_loop.c src/js_bridge.c src/os_shim/os_shim.c src/os_shim/os_alarm.c src/dvd_web/dvd_web.c src/dvd_web/fst.c src/ax_hle/ax_stub.c)`, link `melee_game aurora::core aurora::gx aurora::vi aurora::pad aurora::card aurora::main`, apply `PORT_LINK_FLAGS`, and copy `web/shell/index.html` + `web/js/*.js` to the binary dir post-build.
+In `port/CMakeLists.txt` under `if (EMSCRIPTEN)`: add Aurora (`AURORA_ENABLE_DVD OFF`, `AURORA_ENABLE_CARD OFF` until Task 24, `AURORA_CACHE_USE_ZSTD OFF`), `add_executable(melee src/main_loop.c src/js_bridge.c src/os_shim/os_shim.c src/os_shim/os_alarm.c src/dvd_web/dvd_web.c src/dvd_web/fst.c src/ax_hle/ax_stub.c)`, link `melee_game aurora::core aurora::gx aurora::vi aurora::pad aurora::card aurora::main`, apply `PORT_LINK_FLAGS`, and copy `web/shell/index.html` + `web/js/*.js` to the binary dir post-build.
 
 - [ ] **Step 5: Link and fix undefined symbols**
 

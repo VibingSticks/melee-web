@@ -85,7 +85,10 @@ the survey notes summarised here):
   little-endian flag), so GX-consumed data can stay big-endian.
 - **Emscripten's WebGPU path** is the `emdawnwebgpu` port
   (`--use-port=emdawnwebgpu`, Emscripten 4.0.3+), which implements the same
-  `webgpu.h` Aurora targets.
+  `webgpu.h` Aurora targets. Aurora's GX pipeline uses WebGPU *immediates*
+  (`SetImmediates`), which Chrome shipped in 149–150 and which only
+  emdawnwebgpu packages from September 2026 implement, so the port pins a
+  newer remote port than the one bundled with Emscripten (spike S1).
 
 ## 4. Architecture
 
@@ -140,10 +143,10 @@ Emscripten:
   cache descriptor with `#ifndef __EMSCRIPTEN__`; obtain the adapter/device
   through `webgpu.h` futures with `wgpuInstanceWaitAny` (works under
   Asyncify) or from a device the page pre-creates.
-- Threads: build with `AURORA_SINGLE_THREADED` (new option). The render
-  worker already executes inline when not running; the pipeline compile and
-  cache-writer threads get a synchronous path; the DVD reader thread is
-  replaced entirely by `dvd_web`.
+- Threads: every Aurora thread is compiled out under `__EMSCRIPTEN__` (render
+  worker, FIFO worker, pipeline compile and cache-writer threads, texture
+  replacement pool); queued work runs inline. The DVD reader thread is
+  replaced entirely by `dvd_web`. Done in spike S1's patch.
 - Pipeline cache: sqlite off; in-memory only. Persisting compiled pipelines
   is not possible in browsers anyway (the browser caches shader modules).
 - Window/input: SDL3's Emscripten backend, unchanged.
@@ -377,7 +380,7 @@ Each spike is a throwaway with a yes/no outcome, done before Milestone 1.
 
 | # | Risk | Spike |
 |---|---|---|
-| S1 | Aurora does not build or run under Emscripten/emdawnwebgpu | Build Aurora's `simple` example for wasm, blue screen in Chrome |
+| S1 | Aurora does not build or run under Emscripten/emdawnwebgpu | **Done, PASS** (2026-09-11): blue screen at display rate in Chrome 151 on a real GPU; see `port/docs/spikes.md` |
 | S2 | Asyncify size/CPU cost is unacceptable on the full game | Link the full game with Asyncify; measure wasm size and a synthetic frame loop |
 | S3 | The single-file HTML cannot use IndexedDB or Blob-URL worklets on `file://` in Firefox/Safari | 20-line test page; decide which persistence paths are "guaranteed" vs "best effort" |
 | S4 | Bitfield repacking has an unhandled case (fields spanning storage units) | Enumerate all 904 bitfields via libclang; assert none crosses its storage unit under either ABI |

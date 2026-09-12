@@ -52,7 +52,7 @@ Port-only code (`port/src`) supplies what none of the above provide: the main lo
 
 | Path | What |
 |---|---|
-| `src/` | Port-only C: main loop adapter, OS shims, DVD layer, archive endian conversion, AX mixer |
+| `src/` | Port-only C: main loop adapter, OS shims, DVD layer, archive endian conversion, AX mixer. `src/compat/` holds headers that shadow libc for the game library only (`bool` as a 4-byte int, MSL `printf.h`) |
 | `web/` | JS glue and HTML shells |
 | `schema/` | Annotations and root-symbol table for the endian converter |
 | `tools/` | Setup, schema generator, single-file packer |

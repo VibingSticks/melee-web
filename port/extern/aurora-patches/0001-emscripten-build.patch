@@ -128,6 +128,18 @@ index 2efc47b..eada7dc 100644
        EXCLUDE_FROM_ALL
      )
      FetchContent_MakeAvailable(imgui)
+diff --git a/include/dolphin/os.h b/include/dolphin/os.h
+index cfc801b..9ba5229 100644
+--- a/include/dolphin/os.h
++++ b/include/dolphin/os.h
+@@ -2,6 +2,7 @@
+ #define _DOLPHIN_OS_H_
+ 
+ #ifdef __cplusplus
++#include <stdarg.h>
+ #include <cstdio>
+ #else
+ #include <stdio.h>
 diff --git a/lib/aurora.cpp b/lib/aurora.cpp
 index cf4924b..2ce0d0c 100644
 --- a/lib/aurora.cpp

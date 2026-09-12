@@ -28,7 +28,11 @@
 typedef int enum_t;
 
 /// Signed variant of ::size_t
+#ifdef TARGET_PC
+#include <sys/types.h> // the host libc defines ssize_t
+#else
 typedef signed int ssize_t;
+#endif
 
 /// A @c void callback with no arguments.
 typedef void (*Event)(void);

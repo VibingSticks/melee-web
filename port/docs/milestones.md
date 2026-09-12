@@ -13,7 +13,8 @@ Manual acceptance list from spec §10. Tick with date and browser.
 ## Excluded units
 
 Game translation units currently excluded from `port/cmake/game_sources.cmake`,
-with the reason. Every entry here is a to-do.
+with the reason. Every entry here is a to-do. As of 2026-09-11 every other unit
+(969) compiles for wasm32 with the layout asserts enabled.
 
 | Unit | Reason | Re-enabled by |
 |---|---|---|

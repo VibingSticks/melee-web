@@ -299,6 +299,8 @@ git commit -m "port: spike S1 — Aurora simple example runs under Emscripten"
 
 ### Task 4: Spikes S3 and S4 — `file://` capabilities and bitfield audit
 
+> **Done 2026-09-11.** S3: IndexedDB works on `file://` in Chrome and Firefox; Chrome needs the AudioWorklet module from a `data:` URL (blob URLs fail) and has no OPFS on `file://`. S4: 1405 bitfield members, 0 storage-unit crossings. Details in `port/docs/spikes.md`.
+
 **Files:**
 - Create: `port/spikes/file-url/index.html`, `port/tools/check_bitfields.py`
 - Modify: `port/docs/spikes.md`
@@ -373,6 +375,8 @@ git commit -m "port: spikes S3 (file:// capabilities) and S4 (bitfield audit)"
 ## Milestone M1 — Link and boot to the first `OSReport`
 
 ### Task 5: Game static library for wasm
+
+> **Done 2026-09-11.** All 969 units compile with `ASSERT_SIZE`/`ASSERT_OFFSET` active (`LINT`). Deviations from the steps below, now in `port/cmake/game_sources.cmake`: `-std=gnu99` (musl hides `M_PI` under strict c99); `port/src/compat/stdbool.h` shadows clang's so `bool` is a 4-byte `int` exactly as the decomp's `src/MSL/stdbool.h` makes it (a `-Dbool=int` define is overridden by any later `#include <stdbool.h>`); `port/src/compat/printf.h` stands in for the MSL header; `src/Runtime/platform.h` takes `ssize_t` from the host libc under `TARGET_PC`; Aurora's `dolphin/os.h` gained `#include <stdarg.h>` (in patch 0001). Port-only sources under `port/src` must not use the compat directory, because Aurora's C++ side has a 1-byte `bool` in structs such as `AuroraConfig`.
 
 **Files:**
 - Create: `port/cmake/game_sources.cmake`

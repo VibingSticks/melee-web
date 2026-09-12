@@ -3,6 +3,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "../port.h"
+
 /* --- visited set: open addressing on (address, type) --- */
 typedef struct {
     uintptr_t addr;
@@ -119,6 +121,12 @@ static int resolve_ptr(const port_walk_ctx* c, const uint8_t* slot, uint32_t nee
         *out = NULL;
         return 0;
     }
+    if (!in_reloc(c, (uint32_t) (slot - c->base))) {
+        /* Every real pointer in an archive is in the relocation table; a slot that is not
+         * cannot be followed (an over-long array, or a scalar mis-described as a pointer). */
+        *out = NULL;
+        return -2;
+    }
     uint32_t off = v - (uint32_t) (uintptr_t) c->base;
     if (off > c->size || need > c->size - off) {
         *out = NULL;
@@ -201,7 +209,8 @@ static uint32_t read_len(const port_field* f, const uint8_t* obj)
         return v;
     }
     case LEN_FIELD_U8: return obj[f->len];
-    case LEN_NULL_TERM: return 0xFFFFFFFFu;
+    case LEN_NULL_TERM:
+    case LEN_TERM_VALUE: return 0xFFFFFFFFu;
     }
     return 0;
 }
@@ -211,6 +220,12 @@ static int fail(port_walk_ctx* c, const char* what)
     if (c->error == NULL) {
         c->error = what;
     }
+    if (c->nlogged < 16) {
+        c->nlogged++;
+        port_log("hsd_endian: %s at %s.%s+%u", what, c->cur_type != NULL ? c->cur_type->name : "?",
+                 c->cur_field != NULL && c->cur_field->name != NULL ? c->cur_field->name : "?",
+                 c->cur_field != NULL ? (unsigned) c->cur_field->offset : 0u);
+    }
     return c->strict ? -1 : 0;
 }
 
@@ -219,6 +234,7 @@ static int walk_obj(port_walk_ctx* c, const port_type* t, uint8_t* obj);
 static int walk_field(port_walk_ctx* c, const port_field* f, uint8_t* obj)
 {
     uint8_t* p = obj + f->offset;
+    c->cur_field = f;
     switch (f->kind) {
     case F_U8:
     case F_OPAQUE:
@@ -245,12 +261,59 @@ static int walk_field(port_walk_ctx* c, const port_field* f, uint8_t* obj)
             port_repack_bits(p, f->bits_storage, f->bit_widths, f->nbits);
         }
         return 0;
+    case F_WORD: {
+        uint8_t* q;
+        if (!inside(c, p, 4)) {
+            return fail(c, "word outside the archive");
+        }
+        if (!in_reloc(c, (uint32_t) (p - c->base))) {
+            swap32(p);
+            return 0;
+        }
+        if (f->type == NULL) {
+            return 0;
+        }
+        int r = resolve_ptr(c, p, f->type->size, &q);
+        if (r == 0) {
+            return 0;
+        }
+        if (r < 0) {
+            return fail(c, "word pointer outside the archive");
+        }
+        return walk_obj(c, f->type, q);
+    }
     case F_STRUCT:
         return walk_obj(c, f->type, p);
     case F_ARRAY: {
         uint32_t n = read_len(f, obj);
-        if (f->len_kind == LEN_NULL_TERM) {
-            n = 0; /* inline arrays cannot be null-terminated */
+        if (f->len_kind == LEN_NULL_TERM || f->len_kind == LEN_TERM_VALUE) {
+            /* inline terminated array (a root symbol that is a list): count elements first */
+            n = 0;
+            for (;;) {
+                const uint8_t* e = p + n * f->type->size;
+                if (!inside(c, e, f->type->size) || !inside(c, e, 4)) {
+                    break;
+                }
+                uint32_t be = ((uint32_t) e[0] << 24) | ((uint32_t) e[1] << 16) | ((uint32_t) e[2] << 8) | e[3];
+                uint32_t le = ((uint32_t) e[3] << 24) | ((uint32_t) e[2] << 16) | ((uint32_t) e[1] << 8) | e[0];
+                if (f->len_kind == LEN_NULL_TERM ? be == 0 : (be == f->len || le == f->len)) {
+                    if (f->len_kind == LEN_TERM_VALUE && be == f->len && !in_reloc(c, (uint32_t) (e - c->base))) {
+                        swap32((uint8_t*) e);
+                    }
+                    break;
+                }
+                n++;
+            }
+        }
+        if (f->type->nfields == 1 && f->type->fields[0].offset == 0 && f->type->fields[0].kind != F_STRUCT
+            && f->type->fields[0].kind != F_ARRAY) {
+            /* plain array of scalars/pointers/words: no per-element visit bookkeeping */
+            for (uint32_t i = 0; i < n; i++) {
+                if (walk_field(c, &f->type->fields[0], p + i * f->type->size) != 0) {
+                    return -1;
+                }
+            }
+            return 0;
         }
         for (uint32_t i = 0; i < n; i++) {
             if (walk_obj(c, f->type, p + i * f->type->size) != 0) {
@@ -268,6 +331,9 @@ static int walk_field(port_walk_ctx* c, const port_field* f, uint8_t* obj)
         if (r == 0) {
             return 0;
         }
+        if (r == -2) {
+            return fail(c, "pointer descriptor on an unrelocated slot");
+        }
         if (r < 0) {
             return fail(c, "pointer outside the archive");
         }
@@ -278,6 +344,9 @@ static int walk_field(port_walk_ctx* c, const port_field* f, uint8_t* obj)
         int r = resolve_ptr(c, p, 0, &q);
         if (r == 0) {
             return 0;
+        }
+        if (r == -2) {
+            return fail(c, "array pointer descriptor on an unrelocated slot");
         }
         if (r < 0) {
             return fail(c, "array pointer outside the archive");
@@ -295,6 +364,21 @@ static int walk_field(port_walk_ctx* c, const port_field* f, uint8_t* obj)
                     break;
                 }
             }
+            if (f->len_kind == LEN_TERM_VALUE) {
+                /* A list shared by several roots was converted on the first visit, so the
+                 * terminator may already be native: accept either byte order. */
+                uint32_t be = ((uint32_t) e[0] << 24) | ((uint32_t) e[1] << 16) | ((uint32_t) e[2] << 8) | e[3];
+                uint32_t le = ((uint32_t) e[3] << 24) | ((uint32_t) e[2] << 16) | ((uint32_t) e[1] << 8) | e[0];
+                if (be == f->len) {
+                    if (!in_reloc(c, (uint32_t) (e - c->base))) {
+                        swap32(e); /* the terminator is compared natively by the game */
+                    }
+                    break;
+                }
+                if (le == f->len) {
+                    break;
+                }
+            }
             if (walk_obj(c, f->type, e) != 0) {
                 return -1;
             }
@@ -302,8 +386,24 @@ static int walk_field(port_walk_ctx* c, const port_field* f, uint8_t* obj)
         return 0;
     }
     case F_UNION: {
-        uint32_t d;
-        memcpy(&d, obj + f->disc_offset, 4); /* the generator orders the discriminator first */
+        const uint8_t* dp = obj + f->disc_offset;
+        unsigned sz = f->disc_size != 0 ? f->disc_size : 4;
+        uint32_t d = 0;
+        if (!inside(c, dp, sz)) {
+            return fail(c, "union discriminator outside the archive");
+        }
+        if (f->disc_be) { /* not converted yet: it lives inside the union itself */
+            for (unsigned i = 0; i < sz; i++) {
+                d = (d << 8) | dp[i];
+            }
+        } else { /* a sibling that precedes the union, already native */
+            for (unsigned i = 0; i < sz; i++) {
+                d |= (uint32_t) dp[i] << (8 * i);
+            }
+        }
+        if (f->disc_mask != 0) {
+            d &= f->disc_mask;
+        }
         for (uint8_t i = 0; i < f->ncases; i++) {
             if (f->disc_values[i] == d) {
                 return f->disc_types[i] != NULL ? walk_obj(c, f->disc_types[i], p) : 0;
@@ -325,7 +425,11 @@ static int walk_obj(port_walk_ctx* c, const port_type* t, uint8_t* obj)
         return added == 0 ? 0 : fail(c, "out of memory");
     }
     for (uint32_t i = 0; i < t->nfields; i++) {
-        if (walk_field(c, &t->fields[i], obj) != 0) {
+        const port_type* saved = c->cur_type;
+        c->cur_type = t;
+        int r = walk_field(c, &t->fields[i], obj);
+        c->cur_type = saved;
+        if (r != 0) {
             return -1;
         }
     }

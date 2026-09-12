@@ -6,6 +6,10 @@
 #include <dolphin/os.h>
 #include <sysdolphin/baselib/debug.h>
 
+#ifdef TARGET_PC
+#include <port_game.h>
+#endif
+
 typedef enum lbArqState {
     LB_ARQ_STATE_FREE = 0,
     LB_ARQ_STATE_PENDING = 1,
@@ -143,6 +147,9 @@ void lbArq_80014BD0(unsigned int source, void* dest, size_t length,
     if (rp->callback == NULL) {
         OSRestoreInterrupts(intr);
         while (lbArq_80014ABC(rp) != LB_ARQ_STATE_DONE) {
+#ifdef TARGET_PC
+            port_yield(); /* the ARAM DMA completes from the host pump */
+#endif
         }
         intr = OSDisableInterrupts();
         tail = &global->list[rp->state];

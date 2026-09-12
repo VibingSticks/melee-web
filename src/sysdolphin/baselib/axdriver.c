@@ -11,6 +11,10 @@
 #include <dolphin/dvd.h>
 #include <dolphin/os.h>
 
+#ifdef TARGET_PC
+#include <hsd_endian/formats.h>
+#endif
+
 void* AXDriverAlloc(size_t size)
 {
     void* ptr = &AXDriver_804D77D4[axfxallocsize];
@@ -834,6 +838,11 @@ void AXDriver_8038DA70(const char* path, void (*callback)(void))
     }
 
     DVDClose(&fileInfo);
+
+#ifdef TARGET_PC
+    /* the file header is big-endian and indexed as native words below */
+    port_swap_sem_header((u32*) AXDriver_804D7798);
+#endif
 
     AXDriver_804D77A0 = ((s32*) AXDriver_804D7798)[0];
     count = AXDriver_804D77A0;

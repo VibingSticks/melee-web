@@ -103,13 +103,74 @@ int port_archive_fixup(uint8_t* f, uint32_t n, port_archive_hdr* h, uint32_t** r
     return already_native;
 }
 
-#ifndef PORT_HAVE_SWAP_ROOTS
-/* Plan Task 14 provides the real implementation. */
-int port_archive_swap_roots(HSD_Archive* archive, const uint32_t* reloc_set, uint32_t reloc_count)
+/* --- step 2: root dispatch (plan Task 14) --- */
+#include "walker.h"
+#include "../port.h"
+
+/* Longest prefix+suffix match of `sym` in port_roots; NULL when none matches. */
+static const port_root* find_root(const char* sym)
 {
-    (void) archive;
-    (void) reloc_set;
-    (void) reloc_count;
-    return 0;
+    const port_root* best = NULL;
+    size_t best_len = 0;
+    size_t n = strlen(sym);
+    for (const port_root* r = port_roots; r->type != NULL; r++) {
+        size_t lp = r->prefix != NULL ? strlen(r->prefix) : 0;
+        size_t ls = r->suffix != NULL ? strlen(r->suffix) : 0;
+        if (lp + ls > n || lp + ls == 0) {
+            continue;
+        }
+        if (lp != 0 && strncmp(sym, r->prefix, lp) != 0) {
+            continue;
+        }
+        if (ls != 0 && strcmp(sym + n - ls, r->suffix) != 0) {
+            continue;
+        }
+        if (best == NULL || lp + ls > best_len) {
+            best = r;
+            best_len = lp + ls;
+        }
+    }
+    return best;
 }
+
+int port_archive_swap_roots(HSD_Archive* ar, const uint32_t* reloc_set, uint32_t reloc_count)
+{
+    port_walk_ctx c;
+#ifdef PORT_STRICT_SCHEMA
+    const int strict = 1;
+#else
+    const int strict = 0;
 #endif
+    /* HSD_ArchiveParse runs before the loader names the archive: fall back to its first symbol */
+    const char* name = ar->name != NULL ? ar->name
+                       : ar->header.nb_public != 0 ? ar->symbols + ar->public_info[0].symbol : "?";
+    int rc = 0;
+    if (port_walk_ctx_init(&c, ar->data, ar->header.data_size, reloc_set, reloc_count, strict) != 0) {
+        port_log("hsd_endian: out of memory converting %s", name);
+        return -1;
+    }
+    for (uint32_t i = 0; i < ar->header.nb_public; i++) {
+        const char* sym = ar->symbols + ar->public_info[i].symbol;
+        const port_root* root = find_root(sym);
+        if (root == NULL) {
+            port_log("hsd_endian: no schema for root symbol '%s' in %s", sym, name);
+            if (strict) {
+                abort();
+            }
+            continue;
+        }
+        c.error = NULL;
+        if (port_walk(&c, root->type, ar->data + ar->public_info[i].offset) != 0 || c.error != NULL) {
+            port_log("hsd_endian: %s under '%s' (%s) in %s", c.error != NULL ? c.error : "violation", sym,
+                     root->type->name, name);
+            rc = -1;
+            if (strict) {
+                abort();
+            }
+        }
+    }
+    port_walk_ctx_free(&c);
+    port_log("hsd_endian: converted %s (%u roots, %u bytes)", name, (unsigned) ar->header.nb_public,
+             (unsigned) ar->header.data_size);
+    return rc;
+}

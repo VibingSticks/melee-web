@@ -1,0 +1,18 @@
+# Public symbol -> root type; prefix/suffix match, longest total match wins.
+# `array: null_term` means the symbol is itself a NULL-terminated list of `type`.
+- { prefix: lbAudioLoadData, type: port_lbAudioLoadData }
+- { suffix: _joint, type: HSD_Joint }
+- { suffix: _animjoint, type: HSD_AnimJoint }
+- { suffix: _matanim_joint, type: HSD_MatAnimJoint }
+- { suffix: _shapeanim_joint, type: HSD_ShapeAnimJoint }
+- { suffix: _camera, type: HSD_CObjDesc }
+- { suffix: _fog, type: HSD_FogDesc }
+- { suffix: _sobjdesc, type: HSD_SObjDesc }
+- { suffix: _scene_data, type: SceneDesc }
+- { suffix: _scene_lights, type: "LightList*", array: null_term }
+- { suffix: _scene_models, type: "DynamicModelDesc*", array: null_term }
+# Pointer-only or byte-only data: the relocation pass already made it usable.
+- { prefix: lbRumbleData, type: opaque }     # LbBf.dat: {void* seq; u8; u8}[]
+- { prefix: MemCardBanner_, type: opaque }   # LbMcGame: raw banner texels
+- { prefix: MemCardIcon, type: opaque }      # LbMcGame: icon pointer table and texels
+- { prefix: SIS_, type: opaque }             # sislib text tables: kerning bytes and glyph texels

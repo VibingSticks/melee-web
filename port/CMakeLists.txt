@@ -13,6 +13,20 @@ if (PORT_BUILD_TESTS)
 endif ()
 
 if (EMSCRIPTEN)
+    # Endian-conversion schema tables, generated from the game's headers (plan Task 13/14).
+    set(SCHEMA_TABLES ${CMAKE_BINARY_DIR}/schema_tables.c)
+    file(GLOB_RECURSE SCHEMA_HEADERS CONFIGURE_DEPENDS ${GAME_ROOT}/src/sysdolphin/baselib/*.h ${GAME_ROOT}/src/melee/*/types.h)
+    add_custom_command(OUTPUT ${SCHEMA_TABLES}
+        COMMAND python3 ${CMAKE_CURRENT_SOURCE_DIR}/tools/gen_schema.py
+            --header ${CMAKE_CURRENT_SOURCE_DIR}/schema/all_headers.h
+            --annotations ${CMAKE_CURRENT_SOURCE_DIR}/schema/annotations.yml
+            --roots ${CMAKE_CURRENT_SOURCE_DIR}/schema/roots.yml
+            --clang-arg=-I${GAME_ROOT}/src --clang-arg=-isystem${CMAKE_CURRENT_SOURCE_DIR}/extern/aurora/include
+            --clang-arg=-I${PORT_SRC_DIR}/compat --clang-arg=-I${PORT_SRC_DIR} --clang-arg=-I${CMAKE_CURRENT_SOURCE_DIR}/schema
+            --clang-arg=-DVERSION_GALE01 --clang-arg=-DBUILD_VERSION=0 --clang-arg=--sysroot=${EMSCRIPTEN_SYSROOT}
+            ${SCHEMA_TABLES}
+        DEPENDS tools/gen_schema.py schema/all_headers.h schema/mirrors.h schema/annotations.yml schema/roots.yml ${SCHEMA_HEADERS}
+        COMMENT "Generating archive endian schema tables")
     include(cmake/game_sources.cmake)
 
     # Port-only sources. Compiled WITHOUT src/compat so `bool` matches Aurora's

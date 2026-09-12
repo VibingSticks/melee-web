@@ -68,7 +68,13 @@ static inline Handle* new_handle(void* arenaLo, void* arenaHi)
     Handle* h;
     HSD_ASSERT(0x7B, _p(free_heap));
 
+#ifdef TARGET_PC
+    /* "< 0x80000000" means "an ARAM offset" on the GameCube; on the host both
+     * kinds of address are small, so ask the port which one this is. */
+    if (port_is_aram_address((unsigned long) arenaLo) && port_is_aram_address((unsigned long) arenaHi)) {
+#else
     if (((u32) arenaLo < 0x80000000U) && ((u32) arenaHi < 0x80000000U)) {
+#endif
         HSD_ASSERT(0x80, (u32)arenaLo >= (u32)_p(a_arenaLo) && (u32)arenaHi <= (u32)_p(a_arenaHi));
     }
 

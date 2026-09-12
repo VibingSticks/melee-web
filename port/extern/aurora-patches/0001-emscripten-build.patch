@@ -105,6 +105,22 @@ index f8f9461..c2c7009 100644
  
  if (AURORA_ENABLE_RMLUI)
      target_sources(aurora_gx PRIVATE
+diff --git a/cmake/patches/apply-imgui-emdawnwebgpu.cmake b/cmake/patches/apply-imgui-emdawnwebgpu.cmake
+new file mode 100644
+index 0000000..b489792
+--- /dev/null
++++ b/cmake/patches/apply-imgui-emdawnwebgpu.cmake
+@@ -0,0 +1,10 @@
++# Allow imgui's WebGPU backend to use its Dawn code path under Emscripten.
++# emdawnwebgpu implements the Dawn-flavoured webgpu.h, so IMGUI_IMPL_WEBGPU_BACKEND_DAWN is correct there;
++# imgui 1.91.9 predates emdawnwebgpu and rejects the define for Emscripten targets.
++set(_f "${IMGUI_SOURCE_DIR}/backends/imgui_impl_wgpu.cpp")
++file(READ "${_f}" _src)
++string(REPLACE
++  "    #if defined(IMGUI_IMPL_WEBGPU_BACKEND_DAWN) || defined(IMGUI_IMPL_WEBGPU_BACKEND_WGPU)\n    #error neither IMGUI_IMPL_WEBGPU_BACKEND_DAWN nor IMGUI_IMPL_WEBGPU_BACKEND_WGPU may be defined if targeting emscripten!\n    #endif\n"
++  "    // aurora: emdawnwebgpu provides the Dawn-flavoured API on Emscripten; IMGUI_IMPL_WEBGPU_BACKEND_DAWN is allowed.\n"
++  _src "${_src}")
++file(WRITE "${_f}" "${_src}")
 diff --git a/extern/CMakeLists.txt b/extern/CMakeLists.txt
 index 2efc47b..eada7dc 100644
 --- a/extern/CMakeLists.txt
@@ -303,6 +319,56 @@ index 447ead8..3b49f41 100644
    return SetupWindowAndGetSurfaceDescriptorCocoa(window);
  #else
    const auto props = SDL_GetWindowProperties(window);
+diff --git a/lib/dolphin/AR.cpp b/lib/dolphin/AR.cpp
+index 0468650..17950b4 100644
+--- a/lib/dolphin/AR.cpp
++++ b/lib/dolphin/AR.cpp
+@@ -82,6 +82,9 @@ u32 ARGetSize(void) { return aurora::g_config.mem2Size; }
+ #if !defined(_MSC_VER)
+ #pragma mark ARQ
+ #endif
++static ARQRequest* s_arqHead = nullptr;
++static ARQRequest* s_arqTail = nullptr;
++
+ void ARQPostRequest(ARQRequest* request, u32 owner, u32 type, u32 priority, uintptr_t source, uintptr_t dest,
+                     u32 length, ARQCallback callback) {
+   // Emulate ARAM DMA transfers using memcpy.
+@@ -102,9 +105,33 @@ void ARQPostRequest(ARQRequest* request, u32 owner, u32 type, u32 priority, uint
+     }
+   }
+ 
+-  // Immediately invoke the callback (synchronous on PC, no DMA latency)
++  // The hardware completes the DMA later, from an interrupt. Callers (HSD's DevCom in
++  // particular) rely on that: they finish their own bookkeeping after posting and would
++  // corrupt their queues if the callback ran inside this call. Defer it to ARQPumpCallbacks(),
++  // which the host runs from its per-frame / yield pump.
+   if (callback) {
+-    callback(request);
++    request->callback = callback;
++    request->next = nullptr;
++    if (s_arqTail) {
++      s_arqTail->next = request;
++    } else {
++      s_arqHead = request;
++    }
++    s_arqTail = request;
++  }
++}
++
++extern "C" void ARQPumpCallbacks() {
++  while (s_arqHead) {
++    ARQRequest* r = s_arqHead;
++    s_arqHead = r->next;
++    if (!s_arqHead) {
++      s_arqTail = nullptr;
++    }
++    r->next = nullptr;
++    if (r->callback) {
++      r->callback(r);
++    }
+   }
+ }
+ 
 diff --git a/lib/dolphin/os/OSMemory.cpp b/lib/dolphin/os/OSMemory.cpp
 index 2a963a5..59bfcdf 100644
 --- a/lib/dolphin/os/OSMemory.cpp

@@ -11,6 +11,11 @@
 #include <dolphin/ar.h>
 #include <dolphin/os.h>
 
+#ifdef TARGET_PC
+#include <hsd_endian/formats.h>
+#include <port_game.h>
+#endif
+
 /* 389334 */ static int HSD_Synth_80389334(int sfx_id, u8 vol, u8 vol2, u8 pan,
                                            int priority, int itd_flag,
                                            float pitch1, float pitch2,
@@ -77,6 +82,12 @@ static void HSD_SynthSFXSampleLoadCallback(int result, int length, void* addr,
                 hsd_SynthSFXLoadBuf[4U + i];
         }
         HSD_Synth_804D7734 = (u32*) ((u8*) HSD_Synth_804D7730 + (dnw & ~3));
+#ifdef TARGET_PC
+        /* The bank table was DVD-read raw (big-endian); the game indexes it as
+         * native integers from here on. The 0x20-byte file header was already
+         * converted in HSD_SynthSFXHeaderLoadCallback. */
+        port_swap_ssm_table(HSD_Synth_804D7734, hsd_SynthSFXLoadBuf[2]);
+#endif
 
         bankID = HSD_Synth_804C2A60[0].bankID;
         pp = &HSD_Synth_804C2AE0[bankID];
@@ -157,6 +168,11 @@ static void HSD_SynthSFXHeaderLoadCallback(int result, int length, void* addr,
     if (HSD_Synth_804D7738 == 0) {
         int bankID = HSD_Synth_804C2A60[0].bankID;
 
+#ifdef TARGET_PC
+        /* words 0..3 are used as integers now; words 4..7 are table bytes and
+         * are converted with the rest of the table in the sample callback */
+        port_swap_u32_array((u32*) hsd_SynthSFXLoadBuf, 4);
+#endif
         HSD_ASSERTREPORT(0xCD,
                          hsd_SynthSFXBankHead[bankID + 1] -
                                  hsd_SynthSFXBank[bankID] >=
@@ -204,6 +220,9 @@ int HSD_SynthSFXLoad(const char* filename, int bankID, void (*cb)(int, int),
                      "invalid bankID = %d; filename = %s\n", bankID, filename);
 
     entrynum = DVDConvertPathToEntrynum(filename);
+#ifdef TARGET_PC
+    port_log("ssm: load '%s' entry %d into bank %d (queue %d)", filename, entrynum, bankID, HSD_Synth_804D772C);
+#endif
 
     while (HSD_Synth_804D772C >= 6) {
     }

@@ -1,6 +1,8 @@
 #include "check.h"
 #include "hsd_endian/archive_swap.h"
 
+const port_root port_roots[] = { { NULL, NULL, NULL } }; /* no schemas: swap_roots only logs */
+
 #include <stdlib.h>
 
 static void be32(uint8_t* p, uint32_t v)

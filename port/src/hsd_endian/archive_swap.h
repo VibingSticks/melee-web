@@ -14,6 +14,8 @@
 
 #include <sysdolphin/baselib/archive.h>
 
+#include "schema.h"
+
 typedef struct {
     uint32_t file_size, data_size, nb_reloc, nb_public, nb_extern;
 } port_archive_hdr;

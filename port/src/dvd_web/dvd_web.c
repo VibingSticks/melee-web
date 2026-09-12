@@ -139,21 +139,33 @@ s32 DVDReadPrio(DVDFileInfo* fi, void* addr, s32 length, s32 offset, s32 prio)
     return fi->cb.state == DVD_STATE_END ? (s32) fi->cb.transferredSize : DVD_RESULT_FATAL_ERROR;
 }
 
+void ARQPumpCallbacks(void); /* Aurora AR.cpp (port patch): deferred ARAM DMA completions */
+
 void port_dvd_pump(void)
 {
-    while (g_done_head != NULL) {
-        pending* p = g_done_head;
-        g_done_head = p->next;
-        if (g_done_head == NULL) {
-            g_done_tail = NULL;
+    /* DVD completions and ARAM DMA completions feed each other (HSD's DevCom
+     * relays disc data through ARAM), so drain both until nothing is left. */
+    for (;;) {
+        int did = 0;
+        while (g_done_head != NULL) {
+            pending* p = g_done_head;
+            g_done_head = p->next;
+            if (g_done_head == NULL) {
+                g_done_tail = NULL;
+            }
+            g_in_flight--;
+            DVDFileInfo* fi = p->fi;
+            s32 result = p->result;
+            free(p);
+            fi->cb.state = result < 0 ? DVD_STATE_FATAL_ERROR : DVD_STATE_END;
+            if (fi->callback != NULL) {
+                fi->callback(result, fi);
+            }
+            did = 1;
         }
-        g_in_flight--;
-        DVDFileInfo* fi = p->fi;
-        s32 result = p->result;
-        free(p);
-        fi->cb.state = result < 0 ? DVD_STATE_FATAL_ERROR : DVD_STATE_END;
-        if (fi->callback != NULL) {
-            fi->callback(result, fi);
+        ARQPumpCallbacks();
+        if (!did) {
+            break;
         }
     }
 }

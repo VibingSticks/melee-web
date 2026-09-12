@@ -25,6 +25,9 @@ typedef struct {
     int strict;
     void* visited;
     const char* error; /* description of the first strict-mode violation */
+    const port_type* cur_type;   /* diagnostics: where the walker is */
+    const port_field* cur_field;
+    unsigned nlogged;            /* violations logged so far (capped) */
 } port_walk_ctx;
 
 int port_walk_ctx_init(port_walk_ctx* ctx, const uint8_t* base, uint32_t size, const uint32_t* reloc_set,

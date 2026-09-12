@@ -17,3 +17,6 @@ void port_log(const char* fmt, ...)
 void port_yield(void) {}
 
 void port_request_exit(void) {}
+
+/* Aurora's ARAM queue is not linked into host tests; nothing is ever deferred. */
+void ARQPumpCallbacks(void) {}

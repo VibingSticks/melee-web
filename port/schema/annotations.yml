@@ -1,0 +1,60 @@
+# Per-struct field annotations for tools/gen_schema.py (see its docstring).
+# Union cases are walked at the union slot: a pointer member is written "T*".
+
+# --- sysdolphin descriptors -------------------------------------------------
+HSD_Joint:
+  u: { union_on: flags, mask: 0x4020, cases: { 0: "HSD_DObjDesc*", 0x4000: "HSD_Spline*", 0x20: "HSD_SList*" } }
+  mtx: { ptr_array: f32, len_const: 12 }
+HSD_Spline:
+  cv: { ptr_array: Vec3, len_field: numcv }
+  segLength: { ptr_array: f32, len_field: numcv }
+  segPoly: { opaque: true }   # f32[numcv][5]; not expressible yet, splines are rare
+HSD_PObjDesc:
+  verts: { ptr_array: HSD_VtxDescList, term_value: 0xFF }   # GX_VA_NULL
+  u: { union_on: flags, mask: 0x3000, cases: { 0: "HSD_Joint*", 0x1000: "HSD_ShapeSetDesc*", 0x2000: "port_EnvelopeList*" } }
+HSD_ShapeSetDesc:
+  vertex_desc: { ptr_array: HSD_VtxDescList, term_value: 0xFF }
+  normal_desc: { ptr_array: HSD_VtxDescList, term_value: 0xFF }
+HSD_RObjDesc:
+  u: { union_on: flags, mask: 0x70000000, cases: { 0: "HSD_ExpDesc*", 0x10000000: "HSD_Joint*", 0x20000000: f32, 0x30000000: "HSD_ByteCodeExpDesc*", 0x40000000: "HSD_IKHintDesc*" } }
+HSD_LightDesc:
+  u: { union_on: flags, mask: 0x43, cases: { 0x40: "HSD_LightAttn*", 0x41: "HSD_LightAttn*", 0x42: "HSD_LightAttn*", 0x43: "HSD_LightAttn*", 0x02: "HSD_LightPointDesc*", 0x03: "HSD_LightSpotDesc*", 0x00: "port_F32*", 0x01: "port_F32*" } }
+HSD_CObjDesc:
+  __union__: { disc_offset: 6, disc_size: 2, cases: { 1: HSD_CameraDescPerspective, 2: HSD_CameraDescFrustum, 3: HSD_CameraDescFrustum } }
+HSD_CameraDescCommon:
+  up_vector: { ptr_array: Vec3, len_const: 1 }
+HSD_CameraDescFrustum:
+  up_vector: { ptr_array: Vec3, len_const: 1 }
+HSD_CameraDescPerspective:
+  up_vector: { ptr_array: Vec3, len_const: 1 }
+HSD_TexAnim:
+  imagetbl: { ptr_array: "HSD_ImageDesc*", len_field: n_imagetbl }
+  tluttbl: { ptr_array: "HSD_TlutDesc*", len_field: n_tluttbl }
+
+# --- melee scene descriptors --------------------------------------------------
+DynamicModelDesc:
+  anims: { ptr_array: "HSD_AnimJoint*", null_term: true }
+  matanims: { ptr_array: "HSD_MatAnimJoint*", null_term: true }
+  shapeanims: { ptr_array: "HSD_ShapeAnimJoint*", null_term: true }
+SceneDesc:
+  models: { ptr_array: "DynamicModelDesc*", null_term: true }
+  lights: { ptr_array: "LightList*", null_term: true }
+SceneCameraDesc:
+  anims: { ptr_array: "HSD_CameraAnim*", null_term: true }
+LightList:
+  anims: { ptr_array: "HSD_LightAnim*", null_term: true }
+SceneFogDesc:
+  anims: { ptr_array: "HSD_CameraAnim*", null_term: true }
+
+# --- mirrors ---------------------------------------------------------------------
+port_lbAudioLoadData:
+  x0: { ptr_array: port_IntListPtr, len_const: 30 }
+  x4: { ptr_array: port_IntListPtr, len_const: 30 }
+  x8: { ptr_array: port_IntListPtr, len_const: 30 }
+  xC: { ptr_array: port_IntListPtr, len_const: 30 }
+port_IntListPtr:
+  list: { ptr_array: u32, term_value: 0x83D60 }
+port_EnvelopeDescList:
+  e: { null_term: true }
+port_EnvelopeList:
+  p: { null_term: true }

@@ -19,7 +19,9 @@ typedef enum {
     F_PTR_ARRAY, /* pointer to an array of `type`, length per len_kind/len */
     F_BITS,      /* a bitfield storage unit: repacked MSB-first -> LSB-first */
     F_UNION,     /* discriminated union: case chosen by a sibling field */
-    F_OPAQUE     /* raw data (textures, display lists, vertex buffers): left big-endian */
+    F_OPAQUE,    /* raw data (textures, display lists, vertex buffers): left big-endian */
+    F_WORD       /* 4-byte slot: a pointer when the relocation table names it (followed if
+                    `type` is set), otherwise a u32/f32 scalar to swap */
 } port_fkind;
 
 typedef enum {
@@ -27,7 +29,9 @@ typedef enum {
     LEN_FIELD_U32, /* len = byte offset in the parent of a u32 count (already converted) */
     LEN_FIELD_U16, /* ... u16 count */
     LEN_FIELD_U8,  /* ... u8 count */
-    LEN_NULL_TERM  /* elements until one whose first pointer-sized word is 0 */
+    LEN_NULL_TERM, /* elements until one whose first pointer-sized word is 0 */
+    LEN_TERM_VALUE /* elements until one whose first (big-endian) word equals len; the terminator is
+                      converted too so the game can compare it natively */
 } port_lenkind;
 
 typedef struct port_type port_type;
@@ -41,10 +45,14 @@ typedef struct {
     uint8_t bits_storage;               /* F_BITS: 1, 2 or 4 bytes */
     const uint8_t* bit_widths;          /* F_BITS: declared widths in declaration order */
     uint8_t nbits;                      /* F_BITS: number of widths */
-    uint32_t disc_offset;               /* F_UNION: byte offset of the discriminator (u32) in the parent */
-    const uint32_t* disc_values;        /* F_UNION: case values */
+    uint32_t disc_offset;               /* F_UNION: byte offset of the discriminator in the parent */
+    const uint32_t* disc_values;        /* F_UNION: case values (compared after masking) */
     const port_type* const* disc_types; /* F_UNION: case types */
     uint8_t ncases;
+    uint8_t disc_size;                  /* F_UNION: 1, 2 or 4 bytes (0 means 4) */
+    uint8_t disc_be;                    /* F_UNION: discriminator is still big-endian (it lies inside the union) */
+    uint32_t disc_mask;                 /* F_UNION: bits compared (0 means all) */
+    const char* name;                   /* field name, for diagnostics (may be NULL) */
 } port_field;
 
 struct port_type {
@@ -55,7 +63,8 @@ struct port_type {
 };
 
 typedef struct {
-    const char* prefix; /* public symbol prefix, longest match wins */
+    const char* prefix; /* public symbol prefix (may be NULL) ... */
+    const char* suffix; /* ... and/or suffix; the longest matching prefix+suffix wins */
     const port_type* type;
 } port_root;
 

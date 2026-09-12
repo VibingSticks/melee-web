@@ -368,6 +368,14 @@ void fn_801749B8(HSD_GObj* unused)
     }
 }
 
+#ifdef TARGET_PC
+/* The game calls this 1-argument function through a void (0-argument) pointer (see PORT_FNCAST). */
+static void fn_801749B8__as_event(void)
+{
+    fn_801749B8((HSD_GObj*) 0);
+}
+#endif
+
 s32 fn_80174A60(StatsList* list, s32 slot)
 {
     s32 i;
@@ -579,7 +587,7 @@ void fn_80174B4C(ResultsData* data, s32 slot)
     }
 
     /// Create text objects for visible entries
-    render_callback = (void (*)(void*))(Event) fn_801749B8;
+    render_callback = (void (*)(void*))PORT_FNCAST(fn_801749B8__as_event, (Event) fn_801749B8);
     entry_idx = start_entry;
     while (count < 10) {
         if (list->count <= entry_idx + 1) {

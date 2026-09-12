@@ -733,6 +733,14 @@ void fn_8024B8B4(mnSoundTest_GObj* arg0, f32 farg0)
     mn_8022EC18(sp10, (&vec_5), MOBJ_MASK);
 }
 
+#ifdef TARGET_PC
+/* The game calls this 2-argument function through a void (0-argument) pointer (see PORT_FNCAST). */
+static void fn_8024B8B4__as_event(void)
+{
+    fn_8024B8B4((mnSoundTest_GObj*) 0, (f32) 0);
+}
+#endif
+
 void fn_8024BAF0(mnSoundTest_GObj* arg0)
 {
     u32 pad2;
@@ -777,7 +785,7 @@ void fn_8024BAF0(mnSoundTest_GObj* arg0)
         if (temp_f31 == vec_0.end_frame) {
             HSD_GObjProc_RemoveProc(HSD_GObj_CurrentInvokedProc);
             proc2 = HSD_GObj_SetupProc(
-                arg0, (void (*)(mnSoundTest_GObj*))(Event) fn_8024B8B4, 0U);
+                arg0, (void (*)(mnSoundTest_GObj*))PORT_FNCAST(fn_8024B8B4__as_event, (Event) fn_8024B8B4), 0U);
             proc2->flags_3 = HSD_GObj_804D783C;
             mnSoundTest_8024A958(arg0);
             mnSoundTest_804D6C44 = 0;

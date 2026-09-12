@@ -380,6 +380,15 @@ void fn_80251FE4(void)
 #pragma push
 #pragma auto_inline off
 #endif
+#ifdef TARGET_PC
+/* The game calls this 0-argument function through a void (1-argument) pointer (see PORT_FNCAST). */
+static void fn_80251FE4__as_hsd_gobjevent(HSD_GObj* gobj)
+{
+    (void) gobj;
+    fn_80251FE4();
+}
+#endif
+
 void mnInfo_802522B8(HSD_GObj* gobj)
 {
     s32 count;
@@ -619,7 +628,7 @@ s32 mnInfo_80252758(void)
     }
 
     proc = HSD_GObj_SetupProc(GObj_Create(0, 1, 0x80),
-                              (HSD_GObjEvent) fn_80251FE4, 0);
+                              PORT_FNCAST(fn_80251FE4__as_hsd_gobjevent, (HSD_GObjEvent) fn_80251FE4), 0);
     proc->flags_3 = (u16) HSD_GObj_804D783C;
     return (s32) proc;
 }

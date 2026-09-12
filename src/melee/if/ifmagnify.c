@@ -447,6 +447,15 @@ void ifMagnify_802FBBDC(HSD_GObj* gobj)
     }
 }
 
+#ifdef TARGET_PC
+/* The game calls this 1-argument function through a void (2-argument) pointer (see PORT_FNCAST). */
+static void ifMagnify_802FBBDC__as_gobj_renderfunc(HSD_GObj* gobj, int code)
+{
+    (void) code;
+    ifMagnify_802FBBDC((HSD_GObj*) gobj);
+}
+#endif
+
 void ifMagnify_802FC3BC(void) {}
 
 void ifMagnify_802FC3C0(s32 slot)
@@ -525,7 +534,7 @@ void ifMagnify_802FC618(void)
     gobj = GObj_Create(HSD_GOBJ_CLASS_UI, 15, 0);
     cobj = lb_80013B14((HSD_CameraDescPerspective*) &ifMagnify_803F97E8);
     HSD_GObjObject_80390A70(gobj, HSD_GObj_CameraKind, cobj);
-    GObj_SetupGXLinkMax(gobj, (GObj_RenderFunc) (Event) ifMagnify_802FBBDC, 0);
+    GObj_SetupGXLinkMax(gobj, PORT_FNCAST(ifMagnify_802FBBDC__as_gobj_renderfunc, (GObj_RenderFunc) (Event) ifMagnify_802FBBDC), 0);
     gobj->gxlink_prios = 0x10;
 
     idesc = player0->idesc;

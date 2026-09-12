@@ -667,6 +667,15 @@ void fn_80013614(HSD_GObj* gobj)
     }
 }
 
+#ifdef TARGET_PC
+/* The game calls this 1-argument function through a void (2-argument) pointer (see PORT_FNCAST). */
+static void fn_80013614__as_gobj_renderfunc(HSD_GObj* gobj, int code)
+{
+    (void) code;
+    fn_80013614((HSD_GObj*) gobj);
+}
+#endif
+
 void fn_800138AC(void* ptr)
 {
     HSD_Free(ptr);
@@ -746,7 +755,7 @@ HSD_GObj* lb_800138EC(HSD_ImageDesc* img, GObj_RenderFunc render_func,
     GObj_InitUserData(gobj, 0, fn_800138AC, data);
 
     if (render_func == NULL) {
-        GObj_SetupGXLinkMax(gobj, (GObj_RenderFunc) (Event) fn_80013614, prio);
+        GObj_SetupGXLinkMax(gobj, PORT_FNCAST(fn_80013614__as_gobj_renderfunc, (GObj_RenderFunc) (Event) fn_80013614), prio);
     } else {
         GObj_SetupGXLinkMax(gobj, render_func, prio);
     }

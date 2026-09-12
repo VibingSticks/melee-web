@@ -4185,6 +4185,15 @@ static const GXColor mnCharSel_804DC58C = { 160, 160, 0, 255 };
 static const GXColor mnCharSel_804DC590 = { 180, 80, 0, 255 };
 static const GXColor mnCharSel_804DC594 = { 220, 0, 0, 255 };
 
+#ifdef TARGET_PC
+/* The game calls this 1-argument function through a void (2-argument) pointer (see PORT_FNCAST). */
+static void fn_8026407C__as_gobj_renderfunc(HSD_GObj* gobj, int code)
+{
+    (void) code;
+    fn_8026407C((HSD_GObj*) gobj);
+}
+#endif
+
 s32 mnCharSel_802640A0(void)
 {
     HSD_JObj* sp108;
@@ -4301,7 +4310,7 @@ s32 mnCharSel_802640A0(void)
         HSD_Fog* fog = HSD_FogLoadDesc(css_data_table->fog);
         HSD_GObjObject_80390A70(gobj, HSD_GObj_FogKind, fog);
     }
-    GObj_SetupGXLink(gobj, (GObj_RenderFunc) (Event) fn_8026407C, 0, 0x80);
+    GObj_SetupGXLink(gobj, PORT_FNCAST(fn_8026407C__as_gobj_renderfunc, (GObj_RenderFunc) (Event) fn_8026407C), 0, 0x80);
 
     gobj = GObj_Create(4, 5, 0x80);
     jobj = HSD_JObjLoadJoint(css_models->background.joint);

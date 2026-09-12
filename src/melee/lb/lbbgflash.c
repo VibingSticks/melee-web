@@ -369,6 +369,15 @@ void fn_800204C8(void)
 
 /// @brief Trigger background flash.
 /// @param duration Flash duration in frames (minimum 1).
+#ifdef TARGET_PC
+/* The game calls this 0-argument function through a void (1-argument) pointer (see PORT_FNCAST). */
+static void fn_800204C8__as_hsd_gobjevent(HSD_GObj* gobj)
+{
+    (void) gobj;
+    fn_800204C8();
+}
+#endif
+
 void lbBgFlash_800205F0(s32 duration)
 {
     if (duration < 1) {
@@ -467,7 +476,7 @@ void lbBgFlash_800208EC(int arg0)
     gobj2_slot = &flash->x40;
     GObj_SetupGXLink(*gobj2_slot, (GObj_RenderFunc) fn_8001FEC4, 0x10,
                      (u8) arg0);
-    HSD_GObj_SetupProc(*gobj2_slot, (HSD_GObjEvent) fn_800204C8, 0);
+    HSD_GObj_SetupProc(*gobj2_slot, PORT_FNCAST(fn_800204C8__as_hsd_gobjevent, (HSD_GObjEvent) fn_800204C8), 0);
 
     lbl_80433658.state.active = 1;
     lbl_80433658.state.mode = 0;
@@ -498,7 +507,7 @@ void lbBgFlash_800209F4(void)
     gobj2_slot = &flash->x40;
     GObj_SetupGXLink(*gobj2_slot, (GObj_RenderFunc) fn_8001FEC4, 0x10, 0xa);
     temp = *gobj2_slot;
-    HSD_GObj_SetupProc(temp, (HSD_GObjEvent) fn_800204C8, 0);
+    HSD_GObj_SetupProc(temp, PORT_FNCAST(fn_800204C8__as_hsd_gobjevent, (HSD_GObjEvent) fn_800204C8), 0);
     lbl_80433658.state.active = 1;
     lbl_80433658.state.mode = 0;
 }

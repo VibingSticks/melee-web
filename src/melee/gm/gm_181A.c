@@ -420,6 +420,15 @@ void fn_80181E18(void)
     PAD_STACK(8);
 }
 
+#ifdef TARGET_PC
+/* The game calls this 0-argument function through a void (1-argument) pointer (see PORT_FNCAST). */
+static void fn_80181E18__as_hsd_gobjevent(HSD_GObj* gobj)
+{
+    (void) gobj;
+    fn_80181E18();
+}
+#endif
+
 void gm_80182174(void)
 {
     s32 i;
@@ -568,7 +577,7 @@ void gm_80182174(void)
     lbl_80473594.x10 = Player_GetPlayerId(0);
     lbl_80473594.x11 = Player_GetNametagSlotID(0);
     HSD_GObj_SetupProc(GObj_Create(0xFU, 0x11U, 0U),
-                       (HSD_GObjEvent) fn_80181E18, 0x15U);
+                       PORT_FNCAST(fn_80181E18__as_hsd_gobjevent, (HSD_GObjEvent) fn_80181E18), 0x15U);
     gm_80168F88();
     PAD_STACK(8);
 }

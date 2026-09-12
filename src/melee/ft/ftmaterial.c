@@ -47,12 +47,20 @@ static HSD_TECnst ftMaterial_803C6A44 = {
     HSD_TE_CNST, NULL, NULL, HSD_TE_RGB, HSD_TE_U8, 0xFF, 0xFF, 0, 0,
 };
 
+#ifdef TARGET_PC
+/* The game calls this 3-argument function through a void (0-argument) pointer (see PORT_FNCAST). */
+static void ftMaterial_800BF2B8__as_event(void)
+{
+    ftMaterial_800BF2B8((HSD_MObj*) 0, (u32) 0, (u32) 0);
+}
+#endif
+
 void ftMaterial_800BF260(void)
 {
     hsdInitClassInfo(&ftMObj.parent, &hsdMObj.parent,
                      "sysdolphin_base_library", "ft_mobj",
                      sizeof(HSD_MObjInfo), sizeof(HSD_MObj));
-    ftMObj.setup = (HSD_MObjSetupFunc) (Event) ftMaterial_800BF2B8;
+    ftMObj.setup = (HSD_MObjSetupFunc) PORT_FNCAST(ftMaterial_800BF2B8__as_event, (Event) ftMaterial_800BF2B8);
 }
 
 void ftMaterial_800BF2B8(HSD_MObj* mobj, u32 rendermode, u32 unused)

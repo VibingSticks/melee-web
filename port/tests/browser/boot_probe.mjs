@@ -20,10 +20,20 @@ const stackAfter = Number(process.argv.find(a => a.startsWith('--stack-after='))
 const traceAfter = Number(process.argv.find(a => a.startsWith('--trace-after='))?.slice(14) ?? 0);
 // --press=START@3,A@4.5,...: press controller-1 buttons (through the port's virtual pad) at those seconds.
 const BUTTONS = { LEFT: 1, RIGHT: 2, DOWN: 4, UP: 8, Z: 16, R: 32, L: 64, A: 256, B: 512, X: 1024, Y: 2048, START: 4096 };
+// Melee's menus are stick-driven, so a direction deflects the stick as well as
+// pressing the d-pad. "SUP"/"SDOWN"/"SLEFT"/"SRIGHT" deflect the stick only.
+const STICK = { UP: [0, 110], DOWN: [0, -110], LEFT: [-110, 0], RIGHT: [110, 0] };
 const presses = (process.argv.find(a => a.startsWith('--press='))?.slice(8) ?? '').split(',').filter(Boolean).map(p => {
   const [name, at] = p.split('@');
-  const bits = name.split('+').reduce((m, n) => m | (BUTTONS[n.toUpperCase()] ?? 0), 0);
-  return { name, bits, at: Number(at) };
+  let bits = 0, sx = 0, sy = 0;
+  for (const raw of name.split('+')) {
+    const n = raw.toUpperCase();
+    const stickOnly = n.startsWith('S') && STICK[n.slice(1)];
+    const dir = stickOnly ? n.slice(1) : n;
+    if (STICK[dir]) { sx += STICK[dir][0]; sy += STICK[dir][1]; }
+    if (!stickOnly) bits |= BUTTONS[n] ?? 0;
+  }
+  return { name, bits, sx, sy, at: Number(at) };
 });
 import { readFileSync, unlinkSync } from 'node:fs';
 const browserName = process.argv.find(a => a.startsWith('--browser='))?.slice(10) ?? 'chromium';
@@ -60,10 +70,10 @@ try {
   for (const p of presses) {
     setTimeout(() => {
       logs.push(`[${Date.now() - t0}ms][press] ${p.name}`);
-      page.evaluate(([bits]) => {
-        Module._port_pad_virtual(0, bits, 0, 0, 0, 0, 0, 0);
+      page.evaluate(([bits, sx, sy]) => {
+        Module._port_pad_virtual(0, bits, sx, sy, 0, 0, 0, 0);
         setTimeout(() => Module._port_pad_virtual_clear(0), 150);
-      }, [p.bits]).catch(e => logs.push('[press] failed: ' + e.message));
+      }, [p.bits, p.sx, p.sy]).catch(e => logs.push('[press] failed: ' + e.message));
     }, p.at * 1000);
   }
   if (traceAfter > 0 && browserName === 'chromium') {

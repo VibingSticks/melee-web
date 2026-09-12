@@ -838,6 +838,15 @@ void fn_801891F4(void)
 #pragma dont_inline off
 #endif
 
+#ifdef TARGET_PC
+/* The game calls this 0-argument function through a void (1-argument) pointer (see PORT_FNCAST). */
+static void fn_801891F4__as_hsd_gobjevent(HSD_GObj* gobj)
+{
+    (void) gobj;
+    fn_801891F4();
+}
+#endif
+
 void fn_80189B88(void)
 {
     HSD_GObj* gobj;
@@ -850,7 +859,7 @@ void fn_80189B88(void)
     sub = &gm_80473814;
     sub->x00 = 0;
     sub->x01 = 0;
-    HSD_GObj_SetupProc(GObj_Create(0xE, 2, 0), (HSD_GObjEvent) fn_801891F4,
+    HSD_GObj_SetupProc(GObj_Create(0xE, 2, 0), PORT_FNCAST(fn_801891F4__as_hsd_gobjevent, (HSD_GObjEvent) fn_801891F4),
                        0x15);
     gobj = GObj_Create(0xE, 0xF, 0);
     jobj = HSD_JObjLoadJoint((*lbl_804D662C)->joint);

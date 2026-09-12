@@ -33,17 +33,37 @@ static bool itArwinglaser_UnkMotion2_Coll(Item_GObj*);
 static bool itArwinglaser_UnkMotion3_Coll(Item_GObj*);
 static bool itArwinglaser_UnkMotion5_Coll(Item_GObj*);
 
+#ifdef TARGET_PC
+/* The game calls this void-returning function through a bool (1-argument) pointer (see PORT_FNCAST). */
+static bool itArwinglaser_UnkMotion3_Anim__as_hsd_gobjpredicate(HSD_GObj* gobj)
+{
+    itArwinglaser_UnkMotion3_Anim((Item_GObj*) gobj);
+    return 0; /* the target returns nothing; the hardware left
+                 * whatever was in r3, which the caller ignores */
+}
+#endif
+
+#ifdef TARGET_PC
+/* The game calls this void-returning function through a bool (1-argument) pointer (see PORT_FNCAST). */
+static bool itArwinglaser_UnkMotion2_Anim__as_hsd_gobjpredicate(HSD_GObj* gobj)
+{
+    itArwinglaser_UnkMotion2_Anim((Item_GObj*) gobj);
+    return 0; /* the target returns nothing; the hardware left
+                 * whatever was in r3, which the caller ignores */
+}
+#endif
+
 ItemStateTable it_803F8DE8[] = {
-    { 0, (HSD_GObjPredicate) (Event) itArwinglaser_UnkMotion2_Anim,
+    { 0, PORT_FNCAST(itArwinglaser_UnkMotion2_Anim__as_hsd_gobjpredicate, (HSD_GObjPredicate) (Event) itArwinglaser_UnkMotion2_Anim),
       (HSD_GObjEvent) itArwinglaser_UnkMotion2_Phys,
       itArwinglaser_UnkMotion2_Coll },
-    { 1, (HSD_GObjPredicate) (Event) itArwinglaser_UnkMotion3_Anim,
+    { 1, PORT_FNCAST(itArwinglaser_UnkMotion3_Anim__as_hsd_gobjpredicate, (HSD_GObjPredicate) (Event) itArwinglaser_UnkMotion3_Anim),
       (HSD_GObjEvent) itArwinglaser_UnkMotion3_Phys,
       itArwinglaser_UnkMotion3_Coll },
-    { 2, (HSD_GObjPredicate) (Event) itArwinglaser_UnkMotion2_Anim,
+    { 2, PORT_FNCAST(itArwinglaser_UnkMotion2_Anim__as_hsd_gobjpredicate, (HSD_GObjPredicate) (Event) itArwinglaser_UnkMotion2_Anim),
       (HSD_GObjEvent) itArwinglaser_UnkMotion2_Phys,
       itArwinglaser_UnkMotion2_Coll },
-    { 3, (HSD_GObjPredicate) (Event) itArwinglaser_UnkMotion3_Anim,
+    { 3, PORT_FNCAST(itArwinglaser_UnkMotion3_Anim__as_hsd_gobjpredicate, (HSD_GObjPredicate) (Event) itArwinglaser_UnkMotion3_Anim),
       (HSD_GObjEvent) itArwinglaser_UnkMotion3_Phys,
       itArwinglaser_UnkMotion3_Coll },
     { 4, NULL, NULL, itArwinglaser_UnkMotion5_Coll },

@@ -1300,6 +1300,22 @@ bool grCastle_801CF300(Ground_GObj* gobj)
     return false;
 }
 
+#ifdef TARGET_PC
+/* The game calls this 3-argument function through a void (0-argument) pointer (see PORT_FNCAST). */
+static void fn_801CFB68__as_event(void)
+{
+    fn_801CFB68((Item_GObj*) 0, (Ground*) 0, (HSD_GObj*) 0);
+}
+#endif
+
+#ifdef TARGET_PC
+/* The game calls this 4-argument function through a void (0-argument) pointer (see PORT_FNCAST). */
+static void fn_801CFAFC__as_event(void)
+{
+    fn_801CFAFC((Item_GObj*) 0, (Ground*) 0, (Vec3*) 0, (HSD_GObj*) 0);
+}
+#endif
+
 void grCastle_801CF308(Ground_GObj* gobj)
 {
     s32 var_r6 = 0;
@@ -1340,10 +1356,10 @@ void grCastle_801CF308(Ground_GObj* gobj)
                 gp->u.castle5.xC4 = 3;
                 gp->u.castle11.xD8 = (u32) grMaterial_801C8CFC(
                     0, 1, gp, jobj, NULL,
-                    (void (*)(Item_GObj*, Ground*, Vec3*, HSD_GObj*, f32))(
-                        Event) fn_801CFAFC,
-                    (void (*)(Item_GObj*, Ground*, HSD_GObj*))(
-                        Event) fn_801CFB68);
+                    (void (*)(Item_GObj*, Ground*, Vec3*, HSD_GObj*, f32))PORT_FNCAST(fn_801CFAFC__as_event, (
+                        Event) fn_801CFAFC),
+                    (void (*)(Item_GObj*, Ground*, HSD_GObj*))PORT_FNCAST(fn_801CFB68__as_event, (
+                        Event) fn_801CFB68));
                 grMaterial_801C8DE0((Item_GObj*) gp->u.castle11.xD8, 0.0f,
                                     -1.0f, 0.0f, 0.0f, 1.0f, 0.0f, 4.0f);
                 grMaterial_801C8E08((Item_GObj*) gp->u.castle11.xD8);

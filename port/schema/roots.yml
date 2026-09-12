@@ -18,3 +18,11 @@
 - { prefix: SIS_, type: opaque }             # sislib text tables: kerning bytes and glyph texels
 - { suffix: _camanim, type: HSD_CameraAnim }
 - { suffix: _lightanim, type: HSD_LightAnim }
+# Stage archives export their textures and palettes as plain HSD descriptors.
+- { suffix: _image, type: HSD_ImageDesc }
+- { suffix: _tlut_desc, type: HSD_TlutDesc }
+- { suffix: _tlut, type: HSD_Tlut }
+- { prefix: MnSelectChrDataTable, type: port_MnSelectChrDataTable }
+- { prefix: sqEventInitDataLevelTbl, type: port_EventInitLevel }
+- { prefix: MemSnap, type: opaque }        # LbMcSnap: banner/icon texels and pointer tables
+- { prefix: mnName, type: opaque }         # name lists: arrays of relocated string pointers

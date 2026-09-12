@@ -536,6 +536,15 @@ void fn_8018504C(void)
     }
 }
 
+#ifdef TARGET_PC
+/* The game calls this 0-argument function through a void (1-argument) pointer (see PORT_FNCAST). */
+static void fn_8018504C__as_hsd_gobjevent(HSD_GObj* gobj)
+{
+    (void) gobj;
+    fn_8018504C();
+}
+#endif
+
 s32 fn_801851C0(void)
 {
     u8 pad_stack[8];
@@ -593,6 +602,15 @@ void fn_801852FC(HSD_GObj* gobj)
 }
 
 /// @todo .sdata2 order hack
+#ifdef TARGET_PC
+/* The game calls this 1-argument function through a void (2-argument) pointer (see PORT_FNCAST). */
+static void fn_801852FC__as_gobj_renderfunc(HSD_GObj* gobj, int code)
+{
+    (void) code;
+    fn_801852FC((HSD_GObj*) gobj);
+}
+#endif
+
 static inline void gm_1832_sdata2_order(int unused)
 {
     (void) unused;
@@ -695,6 +713,15 @@ void fn_8018564C(HSD_GObj* gobj)
     HSD_SObjLib_803A54EC(gobj, 7);
 }
 
+#ifdef TARGET_PC
+/* The game calls this 1-argument function through a void (2-argument) pointer (see PORT_FNCAST). */
+static void fn_8018564C__as_gobj_renderfunc(HSD_GObj* gobj, int code)
+{
+    (void) code;
+    fn_8018564C((HSD_GObj*) gobj);
+}
+#endif
+
 void fn_8018569C(HSD_GObj* gobj)
 {
     int i;
@@ -714,6 +741,15 @@ void fn_8018569C(HSD_GObj* gobj)
     }
 }
 
+#ifdef TARGET_PC
+/* The game calls this 1-argument function through a void (2-argument) pointer (see PORT_FNCAST). */
+static void fn_8018569C__as_gobj_renderfunc(HSD_GObj* gobj, int code)
+{
+    (void) code;
+    fn_8018569C((HSD_GObj*) gobj);
+}
+#endif
+
 void fn_8018575C(HSD_GObj* gobj)
 {
     if (HSD_CObjSetCurrent(GET_COBJ(gobj))) {
@@ -726,6 +762,15 @@ void fn_8018575C(HSD_GObj* gobj)
 
 /// @brief Creates splash screen sprite objects from pre-rendered character
 /// images. Distributes 10 image tiles across a grid with random offsets.
+#ifdef TARGET_PC
+/* The game calls this 1-argument function through a void (2-argument) pointer (see PORT_FNCAST). */
+static void fn_8018575C__as_gobj_renderfunc(HSD_GObj* gobj, int code)
+{
+    (void) code;
+    fn_8018575C((HSD_GObj*) gobj);
+}
+#endif
+
 void fn_801857C4(HSD_GObj* arg0)
 {
     HSD_SObjDesc2 desc;
@@ -819,7 +864,7 @@ static inline void fn_80185A0C_Tail(const u8* count_ptr, u8** img_idx, s32* i)
     gobj3 = GObj_Create(0x13, 0x14, 0);
     cobj = HSD_CObjLoadDesc(lbl_804D6600->cameras->desc);
     HSD_GObjObject_80390A70(gobj3, HSD_GObj_CameraKind, cobj);
-    GObj_SetupGXLinkMax(gobj3, (GObj_RenderFunc) (Event) fn_801852FC, 0);
+    GObj_SetupGXLinkMax(gobj3, PORT_FNCAST(fn_801852FC__as_gobj_renderfunc, (GObj_RenderFunc) (Event) fn_801852FC), 0);
     gobj3->gxlink_prios = 0x61;
     lbl_804D65F0 = gobj3;
 }
@@ -840,7 +885,7 @@ s32 fn_80185A0C(void)
     HSD_SObjLib_803A55DC(gobj, 0x280, 0x1E0, 0xB);
     gobj->gxlink_prios = 0x20000;
     HSD_GObjGXLink_8039084C(gobj);
-    GObj_SetupGXLinkMax(gobj, (GObj_RenderFunc) (Event) fn_8018564C, 0xB);
+    GObj_SetupGXLinkMax(gobj, PORT_FNCAST(fn_8018564C__as_gobj_renderfunc, (GObj_RenderFunc) (Event) fn_8018564C), 0xB);
 
     gobj2 = GObj_Create(0xE, 0xF, 0);
     HSD_GObjObject_80390A70(gobj2, HSD_SObjLib_804D7960, NULL);
@@ -1079,9 +1124,9 @@ static inline void gm_80186634_SetupCamera(void)
     gobj2 = GObj_Create(0x13, 0x15, 0);
     HSD_GObjObject_80390A70(gobj2, HSD_GObj_CameraKind, cobj2);
     if (lbl_8047368C.model_scale_kind == 4) {
-        GObj_SetupGXLinkMax(gobj2, (GObj_RenderFunc) (Event) fn_8018569C, 8);
+        GObj_SetupGXLinkMax(gobj2, PORT_FNCAST(fn_8018569C__as_gobj_renderfunc, (GObj_RenderFunc) (Event) fn_8018569C), 8);
     } else {
-        GObj_SetupGXLinkMax(gobj2, (GObj_RenderFunc) (Event) fn_8018575C, 8);
+        GObj_SetupGXLinkMax(gobj2, PORT_FNCAST(fn_8018575C__as_gobj_renderfunc, (GObj_RenderFunc) (Event) fn_8018575C), 8);
     }
 }
 
@@ -1094,7 +1139,7 @@ static inline void gm_80186634_SetupModel(void)
     jobj = HSD_JObjLoadJoint(lbl_804D6600->models[0]->joint);
     HSD_GObjObject_80390A70(gobj, HSD_GObj_JObjKind, jobj);
     GObj_SetupGXLink(gobj, HSD_GObj_JObjCallback, 0xC, 0);
-    HSD_GObj_SetupProc(gobj, (HSD_GObjEvent) (Event) fn_8018504C, 0x11);
+    HSD_GObj_SetupProc(gobj, PORT_FNCAST(fn_8018504C__as_hsd_gobjevent, (HSD_GObjEvent) (Event) fn_8018504C), 0x11);
     gm_8016895C(jobj, lbl_804D6600->models[0], 0);
     HSD_JObjReqAnimAll(jobj, (f32) ((lbl_8047368C.xEE - 1) * 0x32));
     HSD_JObjAnimAll(jobj);

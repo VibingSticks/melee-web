@@ -37,6 +37,16 @@ typedef signed int ssize_t;
 /// A @c void callback with no arguments.
 typedef void (*Event)(void);
 
+/// Selects a signature-correct adapter for a function-pointer cast that changes
+/// arity. WebAssembly checks the callee's type at an indirect call, so calling a
+/// one-argument function through a two-argument pointer traps; on the GameCube
+/// the extra register was simply ignored. Native builds keep the original cast.
+#ifdef TARGET_PC
+#define PORT_FNCAST(adapter, original) adapter
+#else
+#define PORT_FNCAST(adapter, original) original
+#endif
+
 typedef bool (*Predicate)(void);
 
 #if defined(__MWERKS__) && defined(__PPCGEKKO__)

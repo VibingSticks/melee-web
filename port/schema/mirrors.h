@@ -23,4 +23,27 @@ typedef struct { f32 v; } port_F32;
 typedef struct { HSD_EnvelopeDesc e[1]; } port_EnvelopeDescList;
 typedef struct { port_EnvelopeDescList* p[1]; } port_EnvelopeList;
 
+/* mncharsel.c: MnSelectChrDataTable (the struct lives in the .c file). */
+typedef struct {
+    StaticModelDesc background, hand, token, menu, press_start, debug_camera, regend_menu, regend_options, door;
+} port_MnSelectChrModels;
+typedef struct {
+    HSD_CObjDesc* cam;
+    HSD_LightDesc* light0;
+    HSD_LightDesc* light1;
+    HSD_FogDesc* fog;
+    port_MnSelectChrModels models;
+} port_MnSelectChrDataTable;
+
+/* gmevent.c: sqEventInitDataLevelTbl (struct gm_804D6900_t). */
+typedef struct { int x0; int x4; } port_EventLevelPair;
+typedef struct {
+    unsigned char kind, flags, pad2[2];
+    port_EventLevelPair* x4;
+    void* evinit;
+    void* evbonus;
+    void* evstage_table;
+    void* player_init[5];
+} port_EventInitLevel;
+
 #endif

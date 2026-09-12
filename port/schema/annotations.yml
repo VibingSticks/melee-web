@@ -58,3 +58,7 @@ port_EnvelopeDescList:
   e: { null_term: true }
 port_EnvelopeList:
   p: { null_term: true }
+
+# --- menus and events -----------------------------------------------------------
+port_EventInitLevel:
+  x4: { ptr_array: port_EventLevelPair, null_term: true }

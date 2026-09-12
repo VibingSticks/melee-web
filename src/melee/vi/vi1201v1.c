@@ -129,6 +129,14 @@ void fn_8031FB90(HSD_GObj* gobj)
     vi_RunCamera(gobj, (u8*) &un_804D6FF4, 0x881);
 }
 
+#ifdef TARGET_PC
+/* The game calls this 1-argument function through a void (0-argument) pointer (see PORT_FNCAST). */
+static void fn_8031FB90__as_event(void)
+{
+    fn_8031FB90((HSD_GObj*) 0);
+}
+#endif
+
 void fn_8031FC30(HSD_GObj* gobj)
 {
     HSD_CObj* cobj = GET_COBJ(gobj);
@@ -189,7 +197,7 @@ static inline void un_8031FD18_SetupCamera(void)
         lb_80013B14((HSD_CameraDescPerspective*) un_804D6FE0->cameras->desc);
     HSD_GObjObject_80390A70(camera_gobj, HSD_GObj_CameraKind, cobj);
     GObj_SetupGXLinkMax(camera_gobj,
-                        (void (*)(HSD_GObj*, int))(Event) fn_8031FB90, 8);
+                        (void (*)(HSD_GObj*, int))PORT_FNCAST(fn_8031FB90__as_event, (Event) fn_8031FB90), 8);
     HSD_CObjAddAnim(cobj, un_804D6FE0->cameras->anims[0]);
     HSD_CObjReqAnim(cobj, 0.0f);
     HSD_CObjAnim(cobj);

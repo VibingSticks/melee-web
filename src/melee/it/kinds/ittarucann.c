@@ -28,6 +28,14 @@ const lbColl_80008D30_arg1 it_803B8610 = {
 };
 const Vec3 it_803B8634 = { 0.0f, 1.0f, 0.0f };
 
+#ifdef TARGET_PC
+/* The game calls this float-returning function through a void (1-argument) pointer (see PORT_FNCAST). */
+static void itTarucann_UnkMotion7_Phys__as_hsd_gobjevent(HSD_GObj* gobj)
+{
+    itTarucann_UnkMotion7_Phys((Item_GObj*) gobj);
+}
+#endif
+
 ItemStateTable it_803F63C0[] = {
     { -1, itTarucann_UnkMotion0_Anim, itTarucann_UnkMotion0_Phys,
       itTarucann_UnkMotion0_Coll },
@@ -37,14 +45,14 @@ ItemStateTable it_803F63C0[] = {
     { 1, itTarucann_UnkMotion6_Anim, itTarucann_UnkMotion6_Phys,
       itTarucann_UnkMotion6_Coll },
     { 1, itTarucann_UnkMotion7_Anim,
-      (HSD_GObjEvent) (Event) itTarucann_UnkMotion7_Phys,
+      PORT_FNCAST(itTarucann_UnkMotion7_Phys__as_hsd_gobjevent, (HSD_GObjEvent) (Event) itTarucann_UnkMotion7_Phys),
       itTarucann_UnkMotion7_Coll },
     { 1, itTarucann_UnkMotion8_Anim, itTarucann_UnkMotion8_Phys,
       itTarucann_UnkMotion8_Coll },
     { 2, itTarucann_UnkMotion6_Anim, itTarucann_UnkMotion6_Phys,
       itTarucann_UnkMotion6_Coll },
     { 2, itTarucann_UnkMotion7_Anim,
-      (HSD_GObjEvent) (Event) itTarucann_UnkMotion7_Phys,
+      PORT_FNCAST(itTarucann_UnkMotion7_Phys__as_hsd_gobjevent, (HSD_GObjEvent) (Event) itTarucann_UnkMotion7_Phys),
       itTarucann_UnkMotion7_Coll },
     { 2, itTarucann_UnkMotion8_Anim, itTarucann_UnkMotion8_Phys,
       itTarucann_UnkMotion8_Coll },

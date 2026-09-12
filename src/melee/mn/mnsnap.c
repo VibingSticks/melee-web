@@ -2380,6 +2380,15 @@ void fn_802545C4(void)
 }
 
 /// Handles the Back button to exit the Snap menu and cleans up GObjs/text.
+#ifdef TARGET_PC
+/* The game calls this 0-argument function through a void (1-argument) pointer (see PORT_FNCAST). */
+static void fn_802545C4__as_hsd_gobjevent(HSD_GObj* gobj)
+{
+    (void) gobj;
+    fn_802545C4();
+}
+#endif
+
 void fn_80257D7C(void)
 {
     mnSnap_State* snap = &mnSnap_804A0A10;
@@ -2446,6 +2455,15 @@ void fn_80257D7C(void)
 
     mnSnap_804A0A10.frame_count += 1;
 }
+
+#ifdef TARGET_PC
+/* The game calls this 0-argument function through a void (1-argument) pointer (see PORT_FNCAST). */
+static void fn_80257D7C__as_hsd_gobjevent(HSD_GObj* gobj)
+{
+    (void) gobj;
+    fn_80257D7C();
+}
+#endif
 
 static inline void mnSnap_LoadPageIndicator(void** page_joint,
                                             mnSnap_State* snap,
@@ -2656,7 +2674,7 @@ void mnSnap_80257F24(void)
     HSD_JObjSetFlagsAll(*move_jobj_ptr, JOBJ_HIDDEN);
     HSD_AObjSetFlags((*move_jobj_ptr)->u.dobj->mobj->tobj->aobj, 0x20000000);
 
-    HSD_GObj_SetupProc(gobj, (HSD_GObjEvent) fn_802545C4, 0);
+    HSD_GObj_SetupProc(gobj, PORT_FNCAST(fn_802545C4__as_hsd_gobjevent, (HSD_GObjEvent) fn_802545C4), 0);
 
     /* Sub GObj (arrows/cursor) */
     gobj = GObj_Create(6, 7, 0x80);
@@ -2787,6 +2805,6 @@ void mnSnap_80257F24(void)
 
     /* Timer/input GObj */
     gobj = GObj_Create(0, 1, 0x80);
-    proc = HSD_GObj_SetupProc(gobj, (HSD_GObjEvent) fn_80257D7C, 0);
+    proc = HSD_GObj_SetupProc(gobj, PORT_FNCAST(fn_80257D7C__as_hsd_gobjevent, (HSD_GObjEvent) fn_80257D7C), 0);
     proc->flags_3 = HSD_GObj_804D783C;
 }

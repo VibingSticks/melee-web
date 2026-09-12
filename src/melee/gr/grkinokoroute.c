@@ -593,6 +593,14 @@ void grKinokoRoute_802084B4(HSD_GObj* gobj)
     PAD_STACK(20);
 }
 
+#ifdef TARGET_PC
+/* The game calls this 1-argument function through a void (0-argument) pointer (see PORT_FNCAST). */
+static void grKinokoRoute_802084B4__as_event(void)
+{
+    grKinokoRoute_802084B4((HSD_GObj*) 0);
+}
+#endif
+
 void grKinokoRoute_80208564(HSD_GObj* gobj)
 {
     Ground* gp = GET_GROUND(gobj);
@@ -603,8 +611,8 @@ void grKinokoRoute_80208564(HSD_GObj* gobj)
         HSD_JObj* jobj = Ground_801C3FA4(gobj, depths.x[i]);
         Item_GObj* item = grMaterial_801C8CFC(
             8, 0, gp, jobj, NULL,
-            (void (*)(Item_GObj*, Ground*, Vec3*, HSD_GObj*, f32))(
-                Event) grKinokoRoute_802084B4,
+            (void (*)(Item_GObj*, Ground*, Vec3*, HSD_GObj*, f32))PORT_FNCAST(grKinokoRoute_802084B4__as_event, (
+                Event) grKinokoRoute_802084B4),
             NULL);
         if (item != NULL) {
             grMaterial_801C8DE0(item, 0.0F, 0.0F, 0.0F, 0.0F, 0.0F, 0.0F,

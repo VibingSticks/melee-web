@@ -599,6 +599,14 @@ void fn_801B5AA8(int arg0)
     lbBgFlash_8002063C(0x78);
 }
 
+#ifdef TARGET_PC
+/* The game calls this 1-argument function through a void (0-argument) pointer (see PORT_FNCAST). */
+static void fn_801B5AA8__as_event(void)
+{
+    fn_801B5AA8((int) 0);
+}
+#endif
+
 static inline void gm_801B5ACC_inline1(AllstarRoundInfo* ri)
 {
     s32 end_idx = ri[1].start;
@@ -679,7 +687,7 @@ void gm_801B5ACC(GameModeState* arg0)
         gm_801B5ACC_inline1(&gm_803DEC4C[rest_round]);
 
         gm_801B5324(allstar, (s32) rest_round + 1);
-        data->rules.on_match_end = (void (*)(u8))(Event) fn_801B5AA8;
+        data->rules.on_match_end = (void (*)(u8))PORT_FNCAST(fn_801B5AA8__as_event, (Event) fn_801B5AA8);
     }
 }
 

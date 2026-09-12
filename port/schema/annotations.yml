@@ -27,6 +27,8 @@ HSD_CameraDescFrustum:
   up_vector: { ptr_array: Vec3, len_const: 1 }
 HSD_CameraDescPerspective:
   up_vector: { ptr_array: Vec3, len_const: 1 }
+HSD_AObjDesc:
+  obj_id: { word: true }     # an object id, or a relocated pointer, depending on the animation
 HSD_TexAnim:
   imagetbl: { ptr_array: "HSD_ImageDesc*", len_field: n_imagetbl }
   tluttbl: { ptr_array: "HSD_TlutDesc*", len_field: n_tluttbl }
@@ -62,3 +64,30 @@ port_EnvelopeList:
 # --- menus and events -----------------------------------------------------------
 port_EventInitLevel:
   x4: { ptr_array: port_EventLevelPair, null_term: true }
+
+# --- stages ------------------------------------------------------------------
+UnkStageDat:
+  unk0:  { ptr_array: port_StageJointMap, len_field: unk4 }
+  unk8:  { ptr_array: UnkStageDat_x8_t, len_field: unkC }
+  unk10: { ptr_array: "HSD_Spline*", len_field: unk14 }
+  unk20: { ptr_array: GroundShadowEntry, len_field: unk24 }
+  unk28: { ptr_array: "UnkStageDatInternal*", len_field: unk2C }
+UnkStageDat_x8_t:
+  unk4:  { ptr_array: "HSD_AnimJoint*", null_term: true }
+  unk8:  { ptr_array: "HSD_MatAnimJoint*", null_term: true }
+  unkC:  { ptr_array: "HSD_ShapeAnimJoint*", null_term: true }
+  x18:   { ptr_array: "LightList*", null_term: true }
+  unk20: { ptr_array: GrJoint, len_field: unk24 }
+  x2C:   { ptr_array: u16, len_const: 1 }
+MapCollData:
+  verts:  { ptr_array: Vec2, len_field: vert_count }
+  lines:  { ptr_array: MapLine, len_field: line_count }
+  joints: { ptr_array: MapJoint, len_field: joint_count }
+port_GroundItemData:
+  articles: { opaque: true }   # Article descriptors: not typed yet
+
+# --- player, item and effect tables ------------------------------------------
+port_PlLoadCommonDataRef:
+  data: { ptr: pl_804D6470_t }
+port_StageJointMap:
+  pairs: { ptr_array: port_StageJointPair, len_field: pair_count }

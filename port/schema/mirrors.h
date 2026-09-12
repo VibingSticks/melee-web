@@ -46,4 +46,24 @@ typedef struct {
     void* player_init[5];
 } port_EventInitLevel;
 
+/* grdatfiles.c: the "itemdata" stage root is a NULL-terminated array of
+ * pointers to {count, Article*} pairs (StageInfo::itemdata's element type,
+ * which is an anonymous struct in the header). */
+typedef struct {
+    s32 count;
+    void* articles;
+} port_GroundItemData;
+
+/* player.c: "plLoadCommonData" is a pointer to the common player parameters. */
+typedef struct { struct pl_804D6470_t* data; } port_PlLoadCommonDataRef;
+
+/* ground.c (Ground_801C34AC): UnkStageDat::unk0 is an array of joint remap
+ * entries, each naming a model root and a list of (tree index, slot) pairs. */
+typedef struct { s16 target; s16 slot; } port_StageJointPair;
+typedef struct {
+    struct HSD_Joint* joint;
+    port_StageJointPair* pairs;
+    s32 pair_count;
+} port_StageJointMap;
+
 #endif

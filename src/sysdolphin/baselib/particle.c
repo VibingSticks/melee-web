@@ -32,6 +32,10 @@ typedef struct {
 #include <dolphin/gx.h>
 #include <dolphin/os.h>
 
+#ifdef TARGET_PC
+#include <hsd_endian/formats.h>
+#endif
+
 /* 4D78D8 */ u16 hsd_804D78D8 = 0;
 /* 4D78DA */ u16 hsd_804D78DA = 0;
 /* 4D78DC */ static u16 numPeakParticles;
@@ -159,6 +163,11 @@ void psInitDataBankLoad(int bank, const int* cmdBank, const int* texBank,
 void psInitDataBankLocate(HSD_Archive* cmdBank, HSD_Archive* texBank,
                           int* formBank)
 {
+#ifdef TARGET_PC
+    /* The banks are raw big-endian blobs of offsets and counts; convert them
+     * before this function starts reading them as native integers. */
+    port_swap_ptcl_banks(cmdBank, texBank);
+#endif
     s32 num;
     s32* ptr;
     s32* group;

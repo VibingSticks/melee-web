@@ -8,7 +8,13 @@
 typedef void (*ReportCallback)(const unsigned char*, size_t);
 typedef void (*PanicCallback)(OSContext*, ...);
 
+#ifdef TARGET_PC
+/* The port reports a failed assertion and carries on (see port/src/os_shim),
+ * so it must not be declared as never returning. */
+void __assert(char*, u32, char*);
+#else
 ATTRIBUTE_NORETURN void __assert(char*, u32, char*);
+#endif
 
 void HSD_LogInit(void);
 ATTRIBUTE_NORETURN void HSD_Panic(char*, u32, char*);

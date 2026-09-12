@@ -23,17 +23,22 @@ const BUTTONS = { LEFT: 1, RIGHT: 2, DOWN: 4, UP: 8, Z: 16, R: 32, L: 64, A: 256
 // Melee's menus are stick-driven, so a direction deflects the stick as well as
 // pressing the d-pad. "SUP"/"SDOWN"/"SLEFT"/"SRIGHT" deflect the stick only.
 const STICK = { UP: [0, 110], DOWN: [0, -110], LEFT: [-110, 0], RIGHT: [110, 0] };
+// "NAME@seconds", "NAME@seconds:holdSeconds" or "NAME@seconds:hold:stickPercent"
+// (defaults: hold 0.15 s, full deflection). A partial deflection moves menu
+// cursors in smaller steps, which matters when aiming at a small target.
 const presses = (process.argv.find(a => a.startsWith('--press='))?.slice(8) ?? '').split(',').filter(Boolean).map(p => {
-  const [name, at] = p.split('@');
+  const [name, when] = p.split('@');
+  const [at, hold, strength] = when.split(':');
   let bits = 0, sx = 0, sy = 0;
   for (const raw of name.split('+')) {
     const n = raw.toUpperCase();
     const stickOnly = n.startsWith('S') && STICK[n.slice(1)];
     const dir = stickOnly ? n.slice(1) : n;
-    if (STICK[dir]) { sx += STICK[dir][0]; sy += STICK[dir][1]; }
+    const scale = (Number(strength ?? 100)) / 100;
+    if (STICK[dir]) { sx += Math.round(STICK[dir][0] * scale); sy += Math.round(STICK[dir][1] * scale); }
     if (!stickOnly) bits |= BUTTONS[n] ?? 0;
   }
-  return { name, bits, sx, sy, at: Number(at) };
+  return { name, bits, sx, sy, at: Number(at), hold: Number(hold ?? 0.15) };
 });
 import { readFileSync, unlinkSync } from 'node:fs';
 const browserName = process.argv.find(a => a.startsWith('--browser='))?.slice(10) ?? 'chromium';
@@ -58,6 +63,10 @@ page.on('crash', () => logs.push(`[${Date.now() - t0}ms][crash] the renderer pro
 page.on('close', () => logs.push(`[${Date.now() - t0}ms][close] the page closed`));
 page.on('pageerror', e => logs.push(`[${Date.now() - t0}ms][pageerror] ${e.message}\n` + String(e.stack || '').split('\n').slice(0, 40).join('\n')));
 try {
+  // --asserts-fatal: stop on a failed game assertion instead of reporting it
+  if (process.argv.includes('--asserts-fatal')) {
+    await page.addInitScript(() => { window.Module = Object.assign(window.Module ?? {}, { assertsFatal: true }); });
+  }
   await page.goto(`http://localhost:${port}/index.html${query ? '?' + query : ''}`, { waitUntil: 'domcontentloaded' });
   await page.bringToFront();
   let cdp = null;
@@ -67,13 +76,21 @@ try {
     await cdp.send('Debugger.enable');
   }
   await page.setInputFiles('#disc', path.resolve(disc));
+  // --call=name@seconds: invoke an exported wasm function (e.g. the debug VS hook)
+  for (const c of (process.argv.find(a => a.startsWith('--call='))?.slice(7) ?? '').split(',').filter(Boolean)) {
+    const [fn, at] = c.split('@');
+    setTimeout(() => {
+      logs.push(`[${Date.now() - t0}ms][call] ${fn}`);
+      page.evaluate((n) => Module['_' + n](), fn).catch(e => logs.push('[call] failed: ' + e.message));
+    }, Number(at) * 1000);
+  }
   for (const p of presses) {
     setTimeout(() => {
       logs.push(`[${Date.now() - t0}ms][press] ${p.name}`);
-      page.evaluate(([bits, sx, sy]) => {
+      page.evaluate(([bits, sx, sy, hold]) => {
         Module._port_pad_virtual(0, bits, sx, sy, 0, 0, 0, 0);
-        setTimeout(() => Module._port_pad_virtual_clear(0), 150);
-      }, [p.bits, p.sx, p.sy]).catch(e => logs.push('[press] failed: ' + e.message));
+        setTimeout(() => Module._port_pad_virtual_clear(0), hold * 1000);
+      }, [p.bits, p.sx, p.sy, p.hold]).catch(e => logs.push('[press] failed: ' + e.message));
     }, p.at * 1000);
   }
   if (traceAfter > 0 && browserName === 'chromium') {

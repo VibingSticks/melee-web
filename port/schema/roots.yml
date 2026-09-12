@@ -26,3 +26,19 @@
 - { prefix: sqEventInitDataLevelTbl, type: port_EventInitLevel }
 - { prefix: MemSnap, type: opaque }        # LbMcSnap: banner/icon texels and pointer tables
 - { prefix: mnName, type: opaque }         # name lists: arrays of relocated string pointers
+# Stage archives (grdatfiles.c).
+- { prefix: map_head, type: UnkStageDat }
+- { prefix: coll_data, type: MapCollData }
+- { prefix: grGroundParam, type: GroundParam }
+- { prefix: quake_model_set, type: DynamicModelDesc }
+- { prefix: map_plit, type: "LightList*", array: null_term }
+- { prefix: itemdata, type: "port_GroundItemData*", array: null_term }
+- { prefix: map_ptcl, type: opaque }        # particle banks: converted in particle.c
+- { prefix: map_texg, type: opaque }
+- { prefix: ALDYakuAll, type: opaque }      # pointer table; element type not known yet
+- { prefix: yakumono_param, type: opaque }
+- { prefix: plLoadCommonData, type: port_PlLoadCommonDataRef }
+- { prefix: eff, type: opaque }            # effect data tables: the particle banks they point at are converted in particle.c
+- { prefix: itPublicData, type: opaque }   # item tables: element type not known yet
+- { prefix: lbRefData, type: opaque }      # LbRf.dat refraction parameters: float array length not known yet
+- { prefix: ftData, type: ftData }

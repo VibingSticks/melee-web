@@ -503,6 +503,52 @@ typedef void (*Callback3)(HSD_AObj* aobj, HSD_TObj* obj, int param);
 void grAnime_801C6F50(HSD_AObj* aobj, void* obj, u32 flags, void* func,
                       u32 type, void* param)
 {
+#ifdef TARGET_PC
+    /* The GameCube ignored extra register arguments, so this dispatcher could
+     * call every callback through a four-argument pointer. WebAssembly checks
+     * the callee's type, so dispatch with the argument list each AObj_Arg_Type
+     * actually names (the same mapping as the SDK's callbackForeachFunc). */
+    switch (type) {
+    case AOBJ_ARG_A:
+        (*(void (*)(HSD_AObj*)) func)(aobj);
+        return;
+    case AOBJ_ARG_AF:
+        (*(void (*)(HSD_AObj*, f32)) func)(aobj, *(f32*) param);
+        return;
+    case AOBJ_ARG_AV:
+        (*(void (*)(HSD_AObj*, void*)) func)(aobj, *(void**) param);
+        return;
+    case AOBJ_ARG_AU:
+        (*(void (*)(HSD_AObj*, u32)) func)(aobj, *(u32*) param);
+        return;
+    case AOBJ_ARG_AO:
+        (*(void (*)(HSD_AObj*, void*)) func)(aobj, obj);
+        return;
+    case AOBJ_ARG_AOF:
+        (*(void (*)(HSD_AObj*, void*, f32)) func)(aobj, obj, *(f32*) param);
+        return;
+    case AOBJ_ARG_AOV:
+        (*(void (*)(HSD_AObj*, void*, void*)) func)(aobj, obj, *(void**) param);
+        return;
+    case AOBJ_ARG_AOU:
+        (*(void (*)(HSD_AObj*, void*, u32)) func)(aobj, obj, *(u32*) param);
+        return;
+    case AOBJ_ARG_AOT:
+        (*(void (*)(HSD_AObj*, void*, u32)) func)(aobj, obj, flags);
+        return;
+    case AOBJ_ARG_AOTF:
+        (*(void (*)(HSD_AObj*, void*, u32, f32)) func)(aobj, obj, flags, *(f32*) param);
+        return;
+    case AOBJ_ARG_AOTV:
+        (*(void (*)(HSD_AObj*, void*, u32, void*)) func)(aobj, obj, flags, *(void**) param);
+        return;
+    case AOBJ_ARG_AOTU:
+        (*(void (*)(HSD_AObj*, void*, u32, u32)) func)(aobj, obj, flags, *(u32*) param);
+        return;
+    default:
+        return;
+    }
+#else
     switch (type) {
     case 0:
         ((Event) func)();
@@ -541,6 +587,7 @@ void grAnime_801C6F50(HSD_AObj* aobj, void* obj, u32 flags, void* func,
         ((Callback4) func)(aobj, obj, flags, *(int*) param);
         break;
     }
+#endif
 }
 
 void grAnime_801C706C(HSD_TObj* tobj, s32 flags, void* func, u32 type,

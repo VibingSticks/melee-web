@@ -8,7 +8,7 @@ set(PORT_LINK_FLAGS
     -sMAXIMUM_MEMORY=2048MB
     -sSTACK_SIZE=4MB                   # PAD_STACK arrays and large locals
     -sNO_EXIT_RUNTIME=1
-    -sEXPORTED_FUNCTIONS=_main,_port_dvd_init,_port_pad_virtual,_port_pad_virtual_clear,_malloc,_free
+    -sEXPORTED_FUNCTIONS=_main,_port_dvd_init,_port_pad_virtual,_port_pad_virtual_clear,_port_debug_start_vs,_malloc,_free
     -sEXPORTED_RUNTIME_METHODS=ccall,cwrap,callMain,HEAPU8,HEAPF32
     --js-library ${CMAKE_CURRENT_SOURCE_DIR}/web/js/imports.js
     -Wl,--error-limit=0

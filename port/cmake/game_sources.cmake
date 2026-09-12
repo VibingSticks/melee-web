@@ -22,6 +22,7 @@ list(APPEND GAME_SOURCES ${GAME_ROOT}/src/MSL/float.c)
 
 # Port helpers that must see the game's headers and 4-byte bool.
 list(APPEND GAME_SOURCES ${PORT_SRC_DIR}/hsd_port/vtx_arrays.c ${PORT_SRC_DIR}/hsd_port/font_atlas_stub.c
+     ${PORT_SRC_DIR}/game_hooks/debug_vs.c
      ${PORT_SRC_DIR}/hsd_endian/archive_swap.c ${PORT_SRC_DIR}/hsd_endian/formats.c
      ${SCHEMA_TABLES})   # generated port_roots[] + port_type tables
 

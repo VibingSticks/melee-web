@@ -25,4 +25,11 @@ size_t port_swap_ssm_table(uint32_t* table, uint32_t groups);
  * left alone. Returns the number of bytes covered. */
 size_t port_swap_sem_header(uint32_t* file);
 
+/* Particle banks (`map_ptcl` / `map_texg`, and the two blocks an effect data
+ * table points at). They are self-relocating blobs of 32-bit offsets that
+ * psInitDataBankLocate() rewrites into pointers, so every word it treats as an
+ * integer must be native first. Converts both banks in place; either may be
+ * NULL. Call once per bank, immediately before the relocation. */
+void port_swap_ptcl_banks(void* cmd_bank, void* tex_bank);
+
 #endif

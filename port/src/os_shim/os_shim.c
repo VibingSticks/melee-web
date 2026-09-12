@@ -70,11 +70,27 @@ void OSSetProgressiveMode(u32 mode) { g_progressive_mode = mode; }
 /* --- MSL runtime assert, called directly by a few game units --- */
 #include <emscripten.h>
 #include <stdlib.h>
+/* The decompilation compiles the SDK's assertions in; the retail disc runs with
+ * data these sometimes reject (and on hardware a failed assertion only halted a
+ * development build). A port cannot be bit-exact, so an assertion is reported
+ * and execution continues. Set `Module.assertsFatal = true` to stop instead,
+ * which is what the port's own tests do. */
+static int g_asserts_fatal = -1;
+static unsigned g_assert_count;
+
 void __assert(const char* file, int line, const char* expr)
 {
-    port_log("assertion failed: %s (%s:%d)", expr, file, line);
-    emscripten_log(EM_LOG_ERROR | EM_LOG_C_STACK, "assertion stack");
-    abort();
+    if (g_asserts_fatal < 0) {
+        g_asserts_fatal = emscripten_run_script_int(
+            "(typeof Module !== 'undefined' && Module.assertsFatal) ? 1 : 0");
+    }
+    if (++g_assert_count <= 200) {
+        port_log("assertion failed: %s (%s:%d)", expr, file, line);
+    }
+    if (g_asserts_fatal) {
+        emscripten_log(EM_LOG_ERROR | EM_LOG_C_STACK, "assertion stack");
+        abort();
+    }
 }
 
 /* --- OSReport family: Aurora declares these weak and leaves them to the game --- */

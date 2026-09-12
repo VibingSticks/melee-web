@@ -7,6 +7,9 @@
 #include "class.h"
 #include "debug.h"
 #include "displayfunc.h"
+#ifdef TARGET_PC
+#include <hsd_port/vtx_arrays.h>
+#endif
 #include "forward.h"
 #include "id.h"
 #include "jobj.h"
@@ -434,6 +437,23 @@ void HSD_ClearVtxDesc(void)
     prev_vtxdesc = 0;
 }
 
+#ifdef TARGET_PC
+static void setupArrayDesc(HSD_PObj* pobj)
+{
+    HSD_VtxDescList* desc_list = pobj->verts;
+    HSD_VtxDescList* desc;
+
+    if (prev_vtxdesclist_array != desc_list) {
+        for (desc = desc_list; desc->attr != GX_VA_NULL; desc++) {
+            if (desc->attr_type != GX_DIRECT) {
+                GXSetArray(desc->attr, desc->vertex,
+                           port_pobj_array_size(pobj, desc), desc->stride,
+                           false);
+            }
+        }
+        prev_vtxdesclist_array = desc_list;
+    }
+#else
 static void setupArrayDesc(HSD_VtxDescList* desc_list)
 {
     HSD_VtxDescList* desc;
@@ -446,6 +466,7 @@ static void setupArrayDesc(HSD_VtxDescList* desc_list)
         }
         prev_vtxdesclist_array = desc_list;
     }
+#endif
 }
 
 static void setupVtxDesc(HSD_PObj* pobj)
@@ -476,6 +497,27 @@ static void setupVtxDesc(HSD_PObj* pobj)
     }
 }
 
+#ifdef TARGET_PC
+static void setupShapeAnimArrayDesc(HSD_PObj* pobj)
+{
+    HSD_VtxDescList* desc_list = pobj->verts;
+    HSD_VtxDescList* desc;
+
+    for (desc = desc_list; desc->attr != GX_VA_NULL; desc++) {
+        if (desc->attr_type != GX_DIRECT) {
+            switch (desc->attr) {
+            case GX_VA_POS:
+            case GX_VA_NRM:
+            case GX_VA_NBT:
+                break;
+            default:
+                GXSetArray(desc->attr, desc->vertex,
+                           port_pobj_array_size(pobj, desc), desc->stride,
+                           false);
+            }
+        }
+    }
+#else
 static void setupShapeAnimArrayDesc(HSD_VtxDescList* desc_list)
 {
     HSD_VtxDescList* desc;
@@ -492,6 +534,7 @@ static void setupShapeAnimArrayDesc(HSD_VtxDescList* desc_list)
             }
         }
     }
+#endif
     prev_vtxdesclist_array = NULL;
 }
 
@@ -1219,7 +1262,11 @@ static void PObjSetupMtx(HSD_PObj* pobj, Mtx vmtx, Mtx pmtx, u32 rendermode)
 
 static void PObjDispSimplePrimitive(HSD_PObj* pobj, u32 rendermode)
 {
+#ifdef TARGET_PC
+    setupArrayDesc(pobj);
+#else
     setupArrayDesc(pobj->verts);
+#endif
     setupVtxDesc(pobj);
 
     GXCallDisplayList(pobj->display, pobj->n_display << 5);
@@ -1227,7 +1274,11 @@ static void PObjDispSimplePrimitive(HSD_PObj* pobj, u32 rendermode)
 
 static void PObjDispShapeAnim(HSD_PObj* pobj, u32 rendermode)
 {
+#ifdef TARGET_PC
+    setupShapeAnimArrayDesc(pobj);
+#else
     setupShapeAnimArrayDesc(pobj->verts);
+#endif
     setupShapeAnimVtxDesc(pobj);
 
     HSD_ASSERT(0x7B1, pobj->u.shape_set);
@@ -1262,6 +1313,9 @@ static void PObjRelease(HSD_Class* o)
 {
     HSD_PObj* pobj = HSD_POBJ(o);
 
+#ifdef TARGET_PC
+    port_pobj_free_array_sizes(pobj);
+#endif
     switch (pobj_type(pobj)) {
     case POBJ_SHAPEANIM:
         HSD_ShapeSetRemove(pobj->u.shape_set);

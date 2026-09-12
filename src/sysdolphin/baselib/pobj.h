@@ -33,6 +33,12 @@ struct HSD_PObj {
         HSD_SList* envelope_list;
         struct _unk_struct_pobj* unk;
     } u;
+#ifdef TARGET_PC
+    /// Byte size of each indexed vertex array referenced by #display, computed
+    /// on first draw (port/src/hsd_port/vtx_arrays.c). Aurora's GXSetArray
+    /// needs it; the GameCube one does not.
+    u32* port_array_sizes;
+#endif
 };
 
 struct HSD_PObjDesc {

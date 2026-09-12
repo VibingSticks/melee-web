@@ -7,8 +7,8 @@ what the result decided.
 |---|---|---|
 | S1 | Does Aurora's `simple` example build and run under Emscripten + emdawnwebgpu? | **PASS** (2026-09-11), see below |
 | S2 | Is the Asyncify size/CPU cost acceptable for the full game? | not run |
-| S3 | Which storage/audio APIs work on `file://` in Chrome, Firefox, Safari? | not run |
-| S4 | Does any bitfield cross its storage unit under either ABI? | not run |
+| S3 | Which storage/audio APIs work on `file://` in Chrome, Firefox, Safari? | **Done** (2026-09-11) for Chrome 151 and Firefox 155; Safari not available on this machine. See below |
+| S4 | Does any bitfield cross its storage unit under either ABI? | **PASS** (2026-09-11): 1405 bitfield members in 246 structs across 984 units, 0 crossings (`port/tools/check_bitfields.py`) |
 | S5 | Are all pointer fields in game data listed in archive relocation tables? | not run (needs a disc image) |
 | S6 | Peak wasm heap with MEM1 + ARAM + read cache? | not run |
 
@@ -57,3 +57,41 @@ Code:
 - **Timed `WaitAny` needs Asyncify (or JSPI).** Aurora's adapter/device requests use `WaitAny` with a timeout; emdawnwebgpu implements that via `Asyncify.handleAsync`, so Asyncify is required at least during init even before the game's own blocking waits are considered.
 - **The main loop must yield every frame.** `emscripten_sleep(0)` after `aurora_end_frame()` is enough for the spike; the port's `main_loop.c` will use `emscripten_set_main_loop` instead.
 - **Plan Task 9** needs no separate `AURORA_SINGLE_THREADED` option: the `__EMSCRIPTEN__` guards in this patch already cover every thread.
+
+## S3 — `file://` capabilities (2026-09-11)
+
+`port/spikes/file-url/index.html` opened from disk via `node run_pw.mjs chrome|firefox`
+(Playwright, headless). Safari is not available here and stays unverified.
+
+| Probe | Chrome 151 (headless) | Firefox 155 (Playwright build, headless) |
+|---|---|---|
+| secure context | yes | yes |
+| SharedArrayBuffer / crossOriginIsolated | no / no | no / no |
+| WebGPU (`navigator.gpu`) | yes | no (headless Linux build) |
+| WebAssembly from bytes | ok | ok |
+| localStorage | ok | ok |
+| IndexedDB (512 KB write) | ok | ok |
+| OPFS (`navigator.storage.getDirectory`) | SecurityError | ok |
+| `File.slice().arrayBuffer()` | ok | ok |
+| Worker from blob URL | ok | ok |
+| AudioWorklet module from blob URL | **AbortError** ("Unable to load a worklet's module") | ok |
+| AudioWorklet module from `data:` URL | ok | ok |
+| ScriptProcessorNode | ok | ok |
+| AudioBufferSourceNode queueing | ok | ok |
+| Gamepad API | present | present |
+| `showOpenFilePicker` | function exists; AbortError under headless (dialog auto-dismissed, so inconclusive) | absent |
+
+Decisions:
+- **Saves:** IndexedDB works on `file://` in both browsers, so IDBFS is the primary persistence path with export/import as the guaranteed backup (spec D7 stands). OPFS is not usable on `file://` in Chrome and is not needed.
+- **Audio:** the single-file build must load its AudioWorklet processor from a `data:` URL, not a blob URL. ScriptProcessorNode remains a last-resort fallback.
+- **Threads:** no SharedArrayBuffer on `file://`, confirming the single-threaded design.
+- **Disc picking:** `<input type="file">` is the only path that works everywhere; File System Access handles are a hosted-build convenience only.
+
+## S4 — bitfield audit (2026-09-11)
+
+`python3 port/tools/check_bitfields.py` parses every `.c` under `src/melee` and
+`src/sysdolphin` with libclang for `wasm32-unknown-emscripten` + `TARGET_PC`:
+984 units, 246 structs with bitfields, 1405 bitfield members, **0** that straddle
+their storage unit. The converter's per-unit MSB→LSB repacking (spec D2 step 3)
+is therefore sufficient; no struct needs a hand-written swapper for bitfield
+reasons. Runtime: 52 s on this machine.

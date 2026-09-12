@@ -1,0 +1,135 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>file:// capabilities</title>
+<style>body{font:14px monospace;background:#111;color:#ddd;margin:16px}pre{white-space:pre-wrap}</style>
+</head>
+<body>
+<h3>Spike S3: what works when this page is opened from disk?</h3>
+<pre id="o"></pre>
+<script>
+// Each probe appends "name: ok" or "name: <ErrorName>". Results are also collected in
+// window.__results so an automated runner can read them.
+const o = document.getElementById('o');
+const results = window.__results = {};
+const log = (k, v) => { results[k] = v; o.textContent += k + ': ' + v + '\n'; };
+const pending = [];
+
+log('url', location.protocol + '//' + (location.host || '(no host)'));
+log('secureContext', String(window.isSecureContext));
+log('crossOriginIsolated', String(window.crossOriginIsolated));
+log('sharedArrayBuffer', String(typeof SharedArrayBuffer !== 'undefined'));
+log('webgpu', String(!!navigator.gpu));
+log('webassembly', String(typeof WebAssembly !== 'undefined'));
+log('fileSystemAccess', String(typeof window.showOpenFilePicker === 'function'));
+
+try { localStorage.setItem('s3', '1'); log('localStorage', localStorage.getItem('s3') === '1' ? 'ok' : 'mismatch'); } catch (e) { log('localStorage', e.name); }
+
+pending.push(new Promise(res => {
+  try {
+    const r = indexedDB.open('s3-test', 1);
+    r.onupgradeneeded = () => r.result.createObjectStore('kv');
+    r.onsuccess = () => {
+      const tx = r.result.transaction('kv', 'readwrite');
+      tx.objectStore('kv').put(new Uint8Array(512 * 1024), 'card');
+      tx.oncomplete = () => { log('indexedDB', 'ok'); res(); };
+      tx.onerror = () => { log('indexedDB', 'txerror'); res(); };
+    };
+    r.onerror = () => { log('indexedDB', r.error ? r.error.name : 'error'); res(); };
+  } catch (e) { log('indexedDB', e.name); res(); }
+}));
+
+pending.push((async () => {
+  try {
+    const root = await navigator.storage.getDirectory();
+    const fh = await root.getFileHandle('s3.bin', { create: true });
+    const w = await fh.createWritable(); await w.write(new Uint8Array(16)); await w.close();
+    log('opfs', 'ok');
+  } catch (e) { log('opfs', e.name); }
+})());
+
+pending.push(new Promise(res => {
+  try {
+    const u = URL.createObjectURL(new Blob(['postMessage(1)'], { type: 'text/javascript' }));
+    const w = new Worker(u);
+    const t = setTimeout(() => { log('blobWorker', 'timeout'); res(); }, 3000);
+    w.onmessage = () => { clearTimeout(t); log('blobWorker', 'ok'); res(); };
+    w.onerror = e => { clearTimeout(t); log('blobWorker', 'error: ' + e.message); res(); };
+  } catch (e) { log('blobWorker', e.name); res(); }
+}));
+
+pending.push((async () => {
+  try {
+    const c = new AudioContext();
+    const src = 'registerProcessor("s3", class extends AudioWorkletProcessor { process() { return true; } });';
+    await c.audioWorklet.addModule(URL.createObjectURL(new Blob([src], { type: 'text/javascript' })));
+    new AudioWorkletNode(c, 's3');
+    log('audioWorkletBlob', 'ok (state=' + c.state + ')');
+  } catch (e) { log('audioWorkletBlob', e.name + (e.message ? ': ' + e.message : '')); }
+})());
+
+pending.push((async () => {
+  try {
+    const f = new File([new Uint8Array(4096)], 'x.iso');
+    const b = await f.slice(1024, 2048).arrayBuffer();
+    log('fileSlice', b.byteLength === 1024 ? 'ok' : 'wrong size');
+  } catch (e) { log('fileSlice', e.name); }
+})());
+
+pending.push((async () => {
+  try {
+    const mod = new WebAssembly.Module(new Uint8Array([0,97,115,109,1,0,0,0]));
+    new WebAssembly.Instance(mod);
+    log('wasmFromBytes', 'ok');
+  } catch (e) { log('wasmFromBytes', e.name); }
+})());
+
+pending.push((async () => {
+  try {
+    const gp = navigator.getGamepads ? navigator.getGamepads() : null;
+    log('gamepadApi', gp ? 'ok (' + [...gp].filter(Boolean).length + ' connected)' : 'missing');
+  } catch (e) { log('gamepadApi', e.name); }
+})());
+
+pending.push((async () => {
+  try {
+    const c = new AudioContext();
+    const src = 'registerProcessor("s3d", class extends AudioWorkletProcessor { process() { return true; } });';
+    await c.audioWorklet.addModule('data:text/javascript;base64,' + btoa(src));
+    new AudioWorkletNode(c, 's3d');
+    log('audioWorkletDataUrl', 'ok');
+  } catch (e) { log('audioWorkletDataUrl', e.name + (e.message ? ': ' + e.message : '')); }
+})());
+
+pending.push((async () => {
+  try {
+    const c = new AudioContext();
+    const sp = c.createScriptProcessor(2048, 0, 2);
+    sp.onaudioprocess = () => {};
+    sp.connect(c.destination);
+    log('scriptProcessorNode', 'ok');
+  } catch (e) { log('scriptProcessorNode', e.name); }
+})());
+
+pending.push((async () => {
+  try {
+    const c = new AudioContext();
+    const buf = c.createBuffer(2, 160, 32000);
+    const s = c.createBufferSource(); s.buffer = buf; s.connect(c.destination); s.start(c.currentTime + 0.05);
+    log('bufferSourceQueue', 'ok');
+  } catch (e) { log('bufferSourceQueue', e.name); }
+})());
+
+// File System Access needs a user gesture; the runner clicks this button and races a timeout.
+const btn = document.createElement('button'); btn.id = 'fsa'; btn.textContent = 'test showOpenFilePicker';
+btn.onclick = async () => {
+  try { await Promise.race([window.showOpenFilePicker(), new Promise((_, rej) => setTimeout(() => rej(new Error('DialogOpened')), 1500))]); log('showOpenFilePicker', 'ok'); }
+  catch (e) { log('showOpenFilePicker', e.name === 'Error' ? e.message : e.name); }
+};
+document.body.appendChild(btn);
+
+Promise.all(pending).then(() => { log('done', 'true'); document.title = 'S3 done'; });
+</script>
+</body>
+</html>

@@ -32,4 +32,11 @@ size_t port_swap_sem_header(uint32_t* file);
  * NULL. Call once per bank, immediately before the relocation. */
 void port_swap_ptcl_banks(void* cmd_bank, void* tex_bank);
 
+/* Fighter animation tables (ftData::xC / ::x14): arrays of
+ * { char* name; s32 x4; s32 x8; CmdUnion* cmds; s32 flags; u32 x14 }
+ * whose length lives in a table in the code rather than in the archive, so the
+ * schema walker cannot reach them. Swaps the four scalar words of each entry
+ * and leaves the two relocated pointers alone. */
+void port_swap_ft_anim_entries(void* entries, uint32_t count);
+
 #endif

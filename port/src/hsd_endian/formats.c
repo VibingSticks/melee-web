@@ -146,3 +146,17 @@ void port_swap_ptcl_banks(void* cmd_bank, void* tex_bank)
         }
     }
 }
+
+void port_swap_ft_anim_entries(void* entries, uint32_t count)
+{
+    uint32_t* e = entries;
+    if (entries == NULL) {
+        return;
+    }
+    for (uint32_t i = 0; i < count; i++, e += 6) {
+        e[1] = bswap32(e[1]); /* x4 */
+        e[2] = bswap32(e[2]); /* x8 */
+        e[4] = bswap32(e[4]); /* x10 */
+        e[5] = bswap32(e[5]); /* x14 */
+    }
+}

@@ -91,3 +91,10 @@ port_PlLoadCommonDataRef:
   data: { ptr: pl_804D6470_t }
 port_StageJointMap:
   pairs: { ptr_array: port_StageJointPair, len_field: pair_count }
+port_FtLoadCommonData:
+  parts_tables: { ptr_array: "FighterPartsTable*", len_const: 33 }   # CharacterKind count
+ftData:
+  # These animation tables are converted where the game reads them
+  # (ftData_80085A14): their length is a table in the code, not in the archive.
+  xC:  { ptr: opaque }
+  x14: { ptr: opaque }

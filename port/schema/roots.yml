@@ -42,3 +42,4 @@
 - { prefix: itPublicData, type: opaque }   # item tables: element type not known yet
 - { prefix: lbRefData, type: opaque }      # LbRf.dat refraction parameters: float array length not known yet
 - { prefix: ftData, type: ftData }
+- { prefix: ftLoadCommonData, type: port_FtLoadCommonData }

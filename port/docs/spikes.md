@@ -139,3 +139,39 @@ Firefox 155 on this machine exposes no `navigator.gpu` at all and real hardware 
 - **Spike:** `simple.html?renderer=webgl2` renders pixel-identically to Chrome, 119 frames per 120 iterations. Without the parameter Firefox aborts in Aurora's init, confirming the fallback is what makes the page work at all.
 - **Bug this caught — `GPUSupportedLimits` must exist.** emdawnwebgpu feature-detects compatibility-mode limits with `"maxStorageBuffersInVertexStage" in GPUSupportedLimits.prototype`, referencing the class as a bare global. Chrome defines it natively so the polyfill worked there by accident; Firefox threw a `ReferenceError` before the adapter was returned. The polyfill now publishes a stand-in class carrying every limit name, reports the four compatibility-mode limits as zero, and defines each `GPU*` global individually only when missing rather than as one all-or-nothing block.
 - **Performance note:** Firefox warns that `getBufferSubData` on a buffer without a `*_READ` usage stalls the pipeline. That is the device-to-host `copyBufferToBuffer` path. Nothing in the game's per-frame work uses it yet (depth peek is off under `NO_COMPUTE`), so it is left alone.
+
+## Real disc: how far the game runs (2026-09-12)
+
+With `orig/GALE01/*.nkit.iso` and `port/tests/browser/boot_probe.mjs`, Chrome 151
+headed, WebGPU:
+
+| Reached | Notes |
+|---|---|
+| Boot, memory-card notice | The notice is interactive; Start dismisses it |
+| Title screen | The intro movie is skipped: the THP decoder is not ported |
+| Main menu, 1-P submenu, VS mode | Render correctly and take input |
+| Character select | Port 1 joins, a character can be picked, the panel portrait renders |
+| VS match load | Through `Module._port_debug_start_vs()`; the stage and fighters load |
+
+Recurring problem classes found, each now handled:
+
+- **Endianness beyond archives.** Several formats are read as native integers
+  straight from the disc: `.ssm`/`.sem` audio headers, the particle banks, and
+  fighter animation tables. They are converted in `port/src/hsd_endian/formats.c`
+  at the point the game reads them, because their lengths live in code.
+- **Indirect-call signatures.** WebAssembly checks the callee's type, so the
+  game's casts between function pointers of different arity or return type trap
+  where PowerPC ignored the extra register. 34 such sites now go through
+  generated adapters (`PORT_FNCAST`), and `granime`'s animation dispatcher was
+  rewritten to call each `AObj_Arg_Type` with the arguments it names.
+- **Completion callbacks.** Aurora ran ARAM and memory-card callbacks inside the
+  call that posted them; HSD's queues assume a later interrupt and corrupt
+  themselves otherwise. Both are deferred and drained from the port's pump.
+- **Assertions.** The decompilation compiles the SDK's assertions in, and a port
+  is not bit-exact; a failed assertion is reported and execution continues
+  unless `Module.assertsFatal` is set.
+
+Where it stops: building the fighter models. `ftParts` reports "fighter parts
+num not match", then `ft_800C85B8` (metal model) reads out of bounds. The joint
+tree walk and the per-character bone tables disagree, so more of `ftData` needs
+schema coverage or use-site conversion.

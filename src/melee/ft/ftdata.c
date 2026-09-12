@@ -136,6 +136,10 @@
 #include <sysdolphin/baselib/jobj.h>
 #include <sysdolphin/baselib/objalloc.h>
 
+#ifdef TARGET_PC
+#include <hsd_endian/formats.h>
+#endif
+
 typedef struct ft_8045993C_t {
     /* +0 */ u32 pad_x0;
     /* +4 */ u8 pad_x4[0x2];
@@ -1673,6 +1677,9 @@ void ftData_80085A14(FighterKind kind)
         lbFile_800168A0(1, ftData_803C23E4[kind], &sp18, &sp10);
         a_head = sp18;
         HSD_ASSERT(0x974, a_head);
+#ifdef TARGET_PC
+        port_swap_ft_anim_entries(temp_r27->xC, ftData_Table_Unk0[kind].count);
+#endif
         for (i = 0; i < (u32) ftData_Table_Unk0[kind].count; i++) {
             temp_r0 = temp_r27->xC[i].x8;
             if (temp_r0 != 0) {

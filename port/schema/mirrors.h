@@ -66,4 +66,18 @@ typedef struct {
     s32 pair_count;
 } port_StageJointMap;
 
+/* fighter.c: "ftLoadCommonData" is an array of 23 pointers into PlCo.dat.
+ * Only the entries whose targets the port must read as native integers are
+ * typed; the rest are relocated pointers the game uses as opaque data.
+ * Entry 0 is the common fighter parameters, entry 4 the per-character bone
+ * tables (indexed by CharacterKind). */
+typedef struct {
+    struct ftCommonData* common;
+    void* p1;
+    void* p2;
+    void* p3;
+    struct FighterPartsTable** parts_tables;
+    void* rest[18];
+} port_FtLoadCommonData;
+
 #endif

@@ -37,6 +37,8 @@ wrong; they are listed so they can be challenged.
    is for Eaglercraft's offline HTML.
 7. Browser floor: any browser with WebGPU enabled. Chrome/Edge stable qualify;
    Firefox and Safari qualify where WebGPU is shipped. No WebGL fallback in v1.
+   **Superseded 2026-09-11** by `2026-09-11-webgl2-fallback-design.md`: a
+   WebGL2 fallback and a compat profile for WebGPU without immediates.
 
 ## 3. What the survey established
 

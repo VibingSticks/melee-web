@@ -54,6 +54,7 @@ cmake --preset host-tests && cmake --build --preset host-tests && ctest --preset
 | Dolphin SDK sources (`extern/dolphin`) | AX/AXFX/THP C code compiled as-is; headers for everything Aurora does not vendor | this repo |
 | CMake ≥ 3.25, Ninja, Python 3 (+ `libclang`, `pyyaml`) | Build, schema generator, packer | system |
 | [Playwright](https://playwright.dev) | Browser smoke tests | `tests/browser` |
+| [naga](https://github.com/gfx-rs/wgpu/tree/trunk/naga) (Rust, via rustup) | WGSL → GLSL ES 3.00 in the browser for the WebGL2 fallback | `tools/naga-wasm`, built by `tools/build_naga.sh` |
 
 Port-only code (`port/src`) supplies what none of the above provide: the main loop adapter, OS shims, a DVD layer over the user's disc image, load-time big-endian → little-endian conversion of HSD archives, and an AX audio mixer feeding an AudioWorklet.
 

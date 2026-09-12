@@ -1,0 +1,22 @@
+[package]
+name = "naga-wasm"
+version = "0.1.0"
+edition = "2021"
+publish = false
+description = "WGSL -> GLSL ES 3.00 translator for the Melee web port's WebGL2 fallback"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+naga = { version = "30", default-features = false, features = ["wgsl-in", "glsl-out"] }
+
+[profile.release]
+opt-level = "s"
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true
+
+# Standalone: not a member of the decomp's Rust workspace at the repo root.
+[workspace]

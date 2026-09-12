@@ -95,3 +95,23 @@ Decisions:
 their storage unit. The converter's per-unit MSB→LSB repacking (spec D2 step 3)
 is therefore sufficient; no struct needs a hand-written swapper for bitfield
 reasons. Runtime: 52 s on this machine.
+
+## G1 — naga.wasm translates Aurora's WGSL to GLSL ES 3.00 (2026-09-11)
+
+**Result: PASS with one rule.** `port/tools/build_naga.sh` builds naga 30.0.1
+(`wgsl-in`, `glsl-out`, C ABI, no wasm-bindgen) to a 1.1 MB `naga.wasm` in
+18 s. `port/tests/naga/translate_test.mjs` translates Aurora's EFB clear and
+present shaders and a hand-written compat-profile GX shader, and links the
+GLSL in headless Chrome (SwiftShader).
+
+- Everything translates; the reflection info gives per-stage uniform block
+  names (`Uniform_block_0Vertex` / `Uniform_block_0Fragment`) and combined
+  texture-sampler names (`_group_2_binding_0_fs`), which is what the polyfill
+  binds by.
+- **Rule for the compat-profile WGSL: no `extractBits`.** naga emits
+  `bitfieldExtract`, which is GLSL ES 3.10; ES 3.00 rejects it. Shifts and
+  masks translate fine. `bitcast<f32>`, `select`, `textureLoad` on
+  `texture_2d<u32>`, `textureSampleBias`, `discard`, `@builtin(instance_index)`
+  and a dynamic-offset uniform block all link.
+- Rust is not part of `tools/setup.sh`; rustup lives in `~/.cargo`
+  (`rustup-init -y --no-modify-path --profile minimal --target wasm32-unknown-unknown`).

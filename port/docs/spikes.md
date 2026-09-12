@@ -142,7 +142,7 @@ Firefox 155 on this machine exposes no `navigator.gpu` at all and real hardware 
 
 ## Real disc: how far the game runs (2026-09-12)
 
-With `orig/GALE01/*.nkit.iso` and `port/tests/browser/boot_probe.mjs`, Chrome 151
+With `orig/GALE01/*.nkit.iso` and `port/tests/browser/boot_probe.mjs`, Chrome 151.0.7922.173
 headed, WebGPU:
 
 | Reached | Notes |

@@ -420,6 +420,8 @@ git commit -m "port: compile game sources as a wasm static library"
 
 ### Task 6: OS shim
 
+> **Done 2026-09-11.** `port/src/os_shim/os_alarm.{c,h}` and `os_shim.c`, test `port/tests/os_alarm_test.c`. Deviation from the steps below: `OSSetAlarm` keeps SDK semantics (relative to the time of the most recent `port_alarm_tick`), `OSSetAbsAlarm`/`OSCreateAlarm`/`OSSetAlarmTag`/`OSCheckAlarmQueue` are implemented too, periodic alarms collapse missed periods into one call, and the tests use Aurora's real `dolphin/os.h` instead of a host-only struct. `os_shim.c` also provides `OSGetResetSwitchState`, `OSGetConsoleSimulatedMemSize`, `OSCheckActiveThreads` and `OSReport_PrintSpaces`, which the survey of game call sites showed Aurora lacks.
+
 **Files:**
 - Create: `port/src/port.h`, `port/src/os_shim/os_shim.c`, `port/src/os_shim/os_alarm.c`, `port/src/os_shim/os_alarm.h`
 - Test: `port/tests/os_alarm_test.c`
@@ -558,6 +560,8 @@ git commit -m "port: OS shim with a frame-driven OSAlarm implementation"
 
 ### Task 7: FST parser
 
+> **Done 2026-09-11.** `port/src/dvd_web/fst.{c,h}`, test `port/tests/fst_test.c`. The parser references the FST bytes instead of taking ownership (the DVD layer keeps its own copy) and adds `port_fst_free` and `port_fst_entry_name`.
+
 **Files:**
 - Create: `port/src/dvd_web/fst.h`, `port/src/dvd_web/fst.c`
 - Test: `port/tests/fst_test.c`
@@ -687,6 +691,8 @@ git commit -m "port: GameCube disc header and FST parser"
 ```
 
 ### Task 8: `dvd_web` — DVD API over an async byte source
+
+> **Done 2026-09-11.** `port/src/dvd_web/{disc_io.h,dvd_web.h,dvd_web.c}`, test `port/tests/dvd_web_test.c`; the port sources also compile for wasm as the `melee_port` static library. Deviation: reads are not clamped to the file's length. Like the drive, a read may run past the end of the file (the game rounds sizes up to 32 bytes) and is only clamped at the end of the disc, with the remainder zero-filled; the callback result is the requested length. The game's actual DVD surface is `DVDInit`, `DVDConvertPathToEntrynum`, `DVDFastOpen`, `DVDClose`, `DVDReadAsyncPrio`, `DVDGetDriveStatus`, `DVDGetCurrentDiskID`, `DVDCheckDisk`; `DVDOpen`, `DVDReadPrio`, `DVDGetCommandBlockStatus` and `DVDGetFileInfoStatus` are provided for completeness.
 
 **Files:**
 - Create: `port/src/dvd_web/dvd_web.h`, `port/src/dvd_web/dvd_web.c`, `port/src/dvd_web/disc_io.h`

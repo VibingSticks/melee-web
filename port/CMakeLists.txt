@@ -13,7 +13,17 @@ if (PORT_BUILD_TESTS)
 endif ()
 
 if (EMSCRIPTEN)
-    # Game static library, Aurora, and the wasm executable are added by the
-    # plan's Tasks 5, 9 and 10 (see docs/superpowers/plans/).
-    include(cmake/game_sources.cmake OPTIONAL)
+    include(cmake/game_sources.cmake)
+
+    # Port-only sources. Compiled WITHOUT src/compat so `bool` matches Aurora's
+    # C++ side (see src/compat/stdbool.h).
+    add_library(melee_port STATIC
+        src/os_shim/os_shim.c
+        src/os_shim/os_alarm.c
+        src/dvd_web/fst.c
+        src/dvd_web/dvd_web.c)
+    target_include_directories(melee_port PUBLIC src extern/aurora/include)
+    target_compile_options(melee_port PRIVATE -std=gnu99 -Wall -Wextra -Wno-unused-parameter)
+
+    # Aurora and the wasm executable are added by the plan's Tasks 9 and 10.
 endif ()

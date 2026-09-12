@@ -128,8 +128,44 @@ index 2efc47b..eada7dc 100644
        EXCLUDE_FROM_ALL
      )
      FetchContent_MakeAvailable(imgui)
+diff --git a/include/dolphin/card.h b/include/dolphin/card.h
+index 4d39d1e..e992544 100644
+--- a/include/dolphin/card.h
++++ b/include/dolphin/card.h
+@@ -288,6 +288,7 @@ s32 CARDErase(CARDFileInfo* fileInfo, s32 length, s32 offset);
+ 
+ // CARDFormat
+ s32 CARDFormat(s32 chan);
++s32 CARDFormatAsync(s32 chan, CARDCallback callback);
+ 
+ // CARDMount
+ int CARDProbe(s32 chan);
+diff --git a/include/dolphin/gx/GXManage.h b/include/dolphin/gx/GXManage.h
+index a4d7d72..62ffe7b 100644
+--- a/include/dolphin/gx/GXManage.h
++++ b/include/dolphin/gx/GXManage.h
+@@ -14,6 +14,7 @@ GXFifoObj* GXInit(void* base, u32 size);
+ GXDrawSyncCallback GXSetDrawSyncCallback(GXDrawSyncCallback cb);
+ GXDrawDoneCallback GXSetDrawDoneCallback(GXDrawDoneCallback cb);
+ void GXDrawDone(void);
++void GXWaitDrawDone(void);
+ void GXSetDrawDone(void);
+ void GXFlush(void);
+ void GXPixModeSync(void);
+diff --git a/include/dolphin/gx/GXPixel.h b/include/dolphin/gx/GXPixel.h
+index db6d9d0..9dc5253 100644
+--- a/include/dolphin/gx/GXPixel.h
++++ b/include/dolphin/gx/GXPixel.h
+@@ -10,6 +10,7 @@ extern "C" {
+ void GXSetFog(GXFogType type, f32 startz, f32 endz, f32 nearz, f32 farz, GXColor color);
+ void GXSetFogColor(GXColor color);
+ void GXSetFogRangeAdj(GXBool enable, u16 center, GXFogAdjTable *table);
++void GXInitFogAdjTable(GXFogAdjTable* table, u16 width, f32 projmtx[4][4]);
+ void GXSetBlendMode(GXBlendMode type, GXBlendFactor src_factor, GXBlendFactor dst_factor, GXLogicOp op);
+ void GXSetColorUpdate(GXBool update_enable);
+ void GXSetAlphaUpdate(GXBool update_enable);
 diff --git a/include/dolphin/os.h b/include/dolphin/os.h
-index cfc801b..4cabf23 100644
+index cfc801b..319653a 100644
 --- a/include/dolphin/os.h
 +++ b/include/dolphin/os.h
 @@ -1,6 +1,7 @@
@@ -140,6 +176,59 @@ index cfc801b..4cabf23 100644
  #ifdef __cplusplus
  #include <cstdio>
  #else
+@@ -73,8 +74,15 @@ typedef struct {
+ 
+ extern uintptr_t OSBaseAddress;
+ 
++#ifdef __MWERKS__
+ #define OS_BASE_CACHED   (OS_CACHED_REGION_PREFIX << 16)
+ #define OS_BASE_UNCACHED (OS_UNCACHED_REGION_PREFIX << 16)
++#else
++/* MEM1 lives wherever AuroraOSInitMemory() allocated it; low-memory globals
++ * and the physical/cached address macros are relative to that base. */
++#define OS_BASE_CACHED   ((uintptr_t) OSBaseAddress)
++#define OS_BASE_UNCACHED ((uintptr_t) OSBaseAddress)
++#endif
+ 
+ #ifdef __MWERKS__
+ u32 __OSPhysicalMemSize AT_ADDRESS(OS_BASE_CACHED | 0x0028);
+diff --git a/include/dolphin/os/OSTime.h b/include/dolphin/os/OSTime.h
+index 2dc1cf2..b25c370 100644
+--- a/include/dolphin/os/OSTime.h
++++ b/include/dolphin/os/OSTime.h
+@@ -40,7 +40,7 @@ typedef u32 OSTick;
+ 
+ #define BIAS 0xB2575
+ 
+-#define __OSSystemTime (OSTime*)0x800030D8
++#define __OSSystemTime ((OSTime*) (OS_BASE_CACHED + 0x30D8))
+ 
+ #ifdef __cplusplus
+ }
+diff --git a/include/dolphin/pad.h b/include/dolphin/pad.h
+index f864aeb..b7c0ba4 100644
+--- a/include/dolphin/pad.h
++++ b/include/dolphin/pad.h
+@@ -142,6 +142,7 @@ void PADControlMotor(u32 chan, u32 cmd);
+ void PADSetSpec(u32 spec);
+ void PADControlAllMotors(const u32* cmdArr);
+ void PADSetAnalogMode(u32 mode);
++void PADSetSamplingRate(u32 msec);
+ 
+ #ifdef TARGET_PC
+ #define PAD_KEY_INVALID (-1)
+diff --git a/include/dolphin/vi.h b/include/dolphin/vi.h
+index 377d952..58a1d88 100644
+--- a/include/dolphin/vi.h
++++ b/include/dolphin/vi.h
+@@ -15,6 +15,7 @@ void VIConfigurePan(u16 xOrg, u16 yOrg, u16 width, u16 height);
+ void VIFlush(void);
+ 
+ void VIWaitForRetrace(void);
++u16 VIPadFrameBufferWidth(u16 width);
+ 
+ u32 VIGetTvFormat(void);
+ u32 VIGetRetraceCount(void);
 diff --git a/lib/aurora.cpp b/lib/aurora.cpp
 index cf4924b..2ce0d0c 100644
 --- a/lib/aurora.cpp
@@ -188,6 +277,35 @@ index 447ead8..3b49f41 100644
    return SetupWindowAndGetSurfaceDescriptorCocoa(window);
  #else
    const auto props = SDL_GetWindowProperties(window);
+diff --git a/lib/dolphin/os/OSMemory.cpp b/lib/dolphin/os/OSMemory.cpp
+index 2a963a5..59bfcdf 100644
+--- a/lib/dolphin/os/OSMemory.cpp
++++ b/lib/dolphin/os/OSMemory.cpp
+@@ -7,6 +7,8 @@
+ #include "fmt/base.h"
+ 
+ #include <cassert>
++#include <cstdlib>
++#include <cstring>
+ 
+ #include "internal.hpp"
+ #include <dolphin/os.h>
+@@ -138,7 +140,14 @@ static void* AllocMEM1(u32 size) {
+ }
+ #else
+ static void* AllocMEM1(u32 size) {
+-  return calloc(1, size);
++  // The GameCube arena starts 32-byte aligned (and games assume it); use a page.
++  const size_t alignment = 4096;
++  const size_t rounded = (static_cast<size_t>(size) + alignment - 1) & ~(alignment - 1);
++  void* mem = aligned_alloc(alignment, rounded);
++  if (mem != nullptr) {
++    memset(mem, 0, rounded);
++  }
++  return mem;
+ }
+ #endif
+ 
 diff --git a/lib/gfx/frame.cpp b/lib/gfx/frame.cpp
 index e47b223..f6f08a9 100644
 --- a/lib/gfx/frame.cpp

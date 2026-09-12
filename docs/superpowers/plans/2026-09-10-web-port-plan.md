@@ -838,6 +838,8 @@ git commit -m "port: DVD layer over an async byte source with frame-pumped callb
 
 ### Task 9: Aurora patches for the game's API surface
 
+> **Done 2026-09-11.** The five units compile; the only real gap was `GXSetArray` needing array sizes (solved by `port/src/hsd_port/vtx_arrays.c`, a per-PObj display-list scan cached in a `TARGET_PC`-only PObj field). The other missing functions are declared in Aurora's headers by patch 0001 and defined in `port/src/gx_shim.c` / `vi_shim.c`.
+
 **Files:**
 - Create: `port/extern/aurora-patches/0002-single-threaded-option.patch`, `0003-melee-api-gaps.patch`
 - Modify: `port/cmake/game_sources.cmake` (remove `fog.c pobj.c video.c lb_0195.c lbcardnew.c` from `GAME_EXCLUDE`)
@@ -877,6 +879,18 @@ git commit -m "port: Aurora patches — single-threaded mode and Melee API gaps"
 ```
 
 ### Task 10: Main loop adapter, silent audio, first link
+
+> **Done 2026-09-11 — the game links (36.7 MB debug wasm) and boots to its first `OSReport`.** Verified with `port/tests/browser/boot_probe.mjs` against a synthetic disc from `port/tools/make_test_disc.py`: OS/VI/DVD/PAD/CARD init, the first disc lookups and the `audio/main.ssm` header read complete through the JS byte source, and HSD's SFX loader prints its first report. Progress beyond this point needs real game data (M2).
+>
+> Deviations from the steps below, all recorded in the code:
+> - **Main loop:** instead of restructuring `gm_801A4D34` into a frame function, the game keeps its own nested loops and yields through Asyncify at three places: `port_vblank()` (a virtual retrace: present, pace to 60 Hz, run the VI retrace callbacks, begin the next Aurora frame) from the pad-queue wait in `gmscene.c` and from `VIWaitForRetrace`; `port_yield()` in `lbfile.c`'s `waitForDisc`; and a conditional `port_yield()` in `lb_800195D0` (the service routine every wait loop calls) while disc reads are pending. `port/src/main_loop.c`, `vi_shim.c`.
+> - **Memory model:** Aurora's non-CodeWarrior headers hard-code the GameCube base `0x80000000`; patch 0001 makes `OS_BASE_CACHED`/`__OSSystemTime` relative to `OSBaseAddress` and page-aligns the MEM1 block. The game's three "is this ARAM?" tests (`lbfile.c`, `lbmemory.c`, `ftdata.c`) use `port_is_aram_address()` (a MEM1 range test); `main_loop.c` reserves low heap so MEM1 sits above the ARAM offset range.
+> - **Undeclared functions are errors** in the game build (`-Werror=implicit-function-declaration`): with warnings off, clang silently gave `PADSetSamplingRate` and four others an `int f()` prototype and a mismatched wasm signature. Aurora's headers now declare them.
+> - **`inline` without `static`** (two game functions) needs `-fgnu89-inline` to emit a symbol like CodeWarrior.
+> - **`OSReport`/`OSVReport`/`OSPanic`/`OSFatal`** are compiled out of Aurora (declared weak for the game to supply); `os_shim.c` implements them on the console.
+> - **Stubs** live in `port/src/game_stubs.c` (debug console drawing, MCC/FIO host link, THP decoder, `GXNtsc480Prog`, `__cvt_dbl_usll`), `ax_stub.c` (silent AX/AXFX/AI), `hsd_port/font_atlas_stub.c` (blank SIS atlas). `lbmthp.c`/`lb_01F8.c` compile via a compat forwarder for `<dolphin/thp/thp.h>`.
+> - **Alignment:** `hsd_SynthSFXLoadBuf` (a DVD destination) is 32-aligned only by placement on the GameCube; it carries `ATTRIBUTE_ALIGN(32)` under `TARGET_PC`, and `devcom.c` logs any unaligned request before asserting so further cases are easy to find.
+> - `CARDInit` takes the game and maker codes in Aurora; `gmmain.c` passes `"GALE", "01"` under `TARGET_PC`. The `melee_game` include directories are private so port sources keep Aurora's 1-byte `bool`.
 
 **Files:**
 - Create: `port/src/main_loop.c`, `port/src/ax_hle/ax_stub.c`, `port/src/js_bridge.c`, `port/web/js/imports.js`, `port/web/js/disc_source.js`, `port/web/js/boot.js`, `port/web/shell/index.html`, `port/cmake/emscripten_link.cmake`

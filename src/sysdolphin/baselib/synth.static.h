@@ -52,7 +52,12 @@ static struct {
     /* 08 */ void (*x8)(int, int);
     /* 0C */ int xC;
 } HSD_Synth_804C2A60[6];
+#ifdef TARGET_PC
+/* DVD read destination: 32-byte aligned on the GameCube by placement */
+static u32 hsd_SynthSFXLoadBuf[0x20 / 4] ATTRIBUTE_ALIGN(32);
+#else
 static u32 hsd_SynthSFXLoadBuf[0x20 / 4];
+#endif
 static AXVPB* HSD_Synth_804C2AE0[0x80 / 4];
 static int hsd_SynthSFXBank[0x80 / 4];
 static int hsd_SynthSFXBankHead[0x84 / 4];

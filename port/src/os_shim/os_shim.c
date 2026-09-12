@@ -66,10 +66,59 @@ void OSSetSoundMode(u32 mode) { g_sound_mode = mode; }
 u32 OSGetProgressiveMode(void) { return g_progressive_mode; }
 void OSSetProgressiveMode(u32 mode) { g_progressive_mode = mode; }
 
-/* --- debug output helper used by sysdolphin's class.c --- */
-void OSReport_PrintSpaces(int n)
+
+/* --- MSL runtime assert, called directly by a few game units --- */
+#include <emscripten.h>
+#include <stdlib.h>
+void __assert(const char* file, int line, const char* expr)
 {
-    while (n-- > 0) {
-        OSReport(" ");
+    port_log("assertion failed: %s (%s:%d)", expr, file, line);
+    emscripten_log(EM_LOG_ERROR | EM_LOG_C_STACK, "assertion stack");
+    abort();
+}
+
+/* --- OSReport family: Aurora declares these weak and leaves them to the game --- */
+#include <dolphin/gx/GXStruct.h>
+#include <stdio.h>
+#include <string.h>
+
+void OSVReport(const char* msg, va_list list)
+{
+    char buf[1024];
+    vsnprintf(buf, sizeof buf, msg, list);
+    size_t n = strlen(buf);
+    while (n > 0 && (buf[n - 1] == '\n' || buf[n - 1] == '\r')) {
+        buf[--n] = 0; /* console.log adds its own line break */
     }
+    if (n > 0) {
+        emscripten_log(EM_LOG_CONSOLE, "%s", buf);
+    }
+}
+
+void OSReport(const char* msg, ...)
+{
+    va_list ap;
+    va_start(ap, msg);
+    OSVReport(msg, ap);
+    va_end(ap);
+}
+
+void OSPanic(const char* file, int line, const char* msg, ...)
+{
+    char buf[512];
+    va_list ap;
+    va_start(ap, msg);
+    vsnprintf(buf, sizeof buf, msg, ap);
+    va_end(ap);
+    port_log("OSPanic at %s:%d: %s", file, line, buf);
+    emscripten_log(EM_LOG_ERROR | EM_LOG_C_STACK, "OSPanic stack");
+    abort();
+}
+
+void OSFatal(GXColor fg, GXColor bg, const char* msg)
+{
+    (void) fg;
+    (void) bg;
+    port_log("OSFatal: %s", msg);
+    abort();
 }

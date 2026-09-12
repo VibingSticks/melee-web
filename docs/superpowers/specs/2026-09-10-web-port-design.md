@@ -227,6 +227,8 @@ known; Aurora's render path is excluded from instrumentation.
 
 ### D4. Main loop: frame function, not `while(1)`
 
+> **Revised 2026-09-11 (plan Task 10):** the game's nested loops stay as they are. Since D3 requires Asyncify anyway, the port yields from inside the game's existing wait points (`port_vblank()` in the pad-queue wait and `VIWaitForRetrace`, `port_yield()` in disc waits and the service routine). One virtual retrace per 60 Hz tick presents the frame and runs the VI callbacks that fill the pad queue. This avoids turning three nested scene loops into a state machine; `emscripten_set_main_loop` is not used.
+
 `gm_801A4D34()` is patched under `TARGET_PC` so one iteration of its outer
 loop is a function `port_frame()`. `port/src/main_loop.c` registers it with
 `emscripten_set_main_loop_arg` at 60 Hz (or `requestAnimationFrame` with a

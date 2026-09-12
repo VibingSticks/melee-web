@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Melee</title>
+<style>
+  :root { color-scheme: dark; }
+  html, body { margin: 0; height: 100%; background: #0b0b0e; color: #ddd; font: 14px system-ui, sans-serif; }
+  #wrap { display: flex; flex-direction: column; height: 100%; }
+  #bar { display: flex; gap: 12px; align-items: center; padding: 8px 12px; background: #16161c; }
+  #bar label { cursor: pointer; }
+  #status { flex: 1; opacity: .85; }
+  #status.error { color: #ff7b7b; }
+  #canvas { flex: 1; width: 100%; min-height: 0; background: #000; outline: none; }
+  #log { height: 120px; margin: 0; padding: 6px 12px; overflow: auto; background: #101014; color: #9a9; font: 12px monospace; white-space: pre; }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <div id="bar">
+    <label>Disc image (GALE01 .iso/.gcm): <input id="disc" type="file" accept=".iso,.gcm,.bin"></label>
+    <span id="status">Pick your Melee disc image to start.</span>
+  </div>
+  <canvas id="canvas" tabindex="-1" oncontextmenu="event.preventDefault()"></canvas>
+  <pre id="log"></pre>
+</div>
+<script type="module" src="boot.js"></script>
+</body>
+</html>

@@ -26,6 +26,15 @@ cmake --preset web-debug && cmake --build --preset web-debug
 python3 -m http.server -d build/web-debug 8080
 ```
 
+## Boot smoke test without a real disc
+
+```sh
+python3 port/tools/make_test_disc.py port/build/test-disc.iso audio/main.ssm=port/build/fake-main.ssm
+node port/tests/browser/boot_probe.mjs port/build/web-debug port/build/test-disc.iso 8 --headed
+```
+
+`boot_probe.mjs` drives Chrome through Playwright, feeds the disc to the page, and prints the console. Use `--headed`: headless Chrome only offers a software WebGPU adapter that Chrome drops after a few frames.
+
 ## Host unit tests
 
 ```sh

@@ -1,3 +1,6 @@
+#ifdef TARGET_PC
+#include <port_game.h>
+#endif
 #include "lbfile.h"
 
 #include <placeholder.h>
@@ -37,6 +40,9 @@ static bool discIsDone(void)
 static void waitForDisc(void)
 {
     do {
+#ifdef TARGET_PC
+        port_yield(); /* let the browser complete the read */
+#endif
     } while (!discIsDone());
 }
 
@@ -123,7 +129,11 @@ void lbFile_800164A4(int file, uintptr_t dst, size_t* size, int pri,
 {
     int type;
     *size = lbFile_8001634C(file);
+#ifdef TARGET_PC
+    type = port_is_aram_address(dst) ? 0x23 : 0x21;
+#else
     type = (dst >= 0x80000000) ? 0x21 : 0x23;
+#endif
     HSD_DevComRequest(file, 0, dst, ROUND_UP_32(*size), type, pri, callback,
                       args);
 }

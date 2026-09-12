@@ -43,7 +43,11 @@ void DVDInit(void) {}
 
 s32 DVDConvertPathToEntrynum(const char* path)
 {
-    return g_fst != NULL ? port_fst_lookup(g_fst, path) : -1;
+    s32 e = g_fst != NULL ? port_fst_lookup(g_fst, path) : -1;
+    if (e < 0) {
+        port_log("dvd: no such file on the disc: %s", path);
+    }
+    return e;
 }
 
 BOOL DVDFastOpen(s32 entry, DVDFileInfo* fi)

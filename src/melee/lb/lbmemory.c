@@ -1,3 +1,6 @@
+#ifdef TARGET_PC
+#include <port_game.h>
+#endif
 #include "lbmemory.h"
 
 #include <Runtime/platform.h>
@@ -278,7 +281,11 @@ static void lbMemory_80015320(int arg0, int _handle, void* arg2,
             *currentp = (void*) ((u32) handle->x4_lo + (u32) handle->x8_hi);
             copy_src = null_or_old;
 
+#ifdef TARGET_PC
+            if (port_is_aram_address((u32) handle->x4_lo)) {
+#else
             if ((u32) handle->x4_lo < 0x80000000U) {
+#endif
                 HSD_DevComRequest(0, (u32) copy_src, current,
                                   OSRoundUp32B(handle->x8_hi), 0x1B, 1,
                                   lbMemory_80015320, handle->x0_next);

@@ -1,3 +1,6 @@
+#ifdef TARGET_PC
+#include <port_game.h>
+#endif
 #include "gmscene.h"
 
 #include "gm_1A36.h"
@@ -291,6 +294,9 @@ void gm_801A4D34(void (*on_frame)(void), UNUSED GameSceneInfo* info)
 
         while ((pad_queue_count = lb_80019894()) == 0) {
             lb_800195D0();
+#ifdef TARGET_PC
+            port_vblank(); /* virtual retrace: present, pace, fill the pad queue */
+#endif
         }
         lb_800195D0();
 

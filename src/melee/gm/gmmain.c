@@ -127,7 +127,11 @@ static void init_spr_unk(void)
 void __eabi(void) {}
 #endif
 
+#ifdef TARGET_PC
+int melee_main(void) /* the port's own main() calls this */
+#else
 int main(void)
+#endif
 {
     char* unused_format_string = "Data %lx\n";
     u32 _[2];
@@ -136,7 +140,11 @@ int main(void)
     VIInit();
     DVDInit();
     PADInit();
+#ifdef TARGET_PC
+    CARDInit("GALE", "01"); /* Aurora's CARD takes the game and maker codes */
+#else
     CARDInit();
+#endif
     OSInitAlarm();
     db_GetGameLaunchButtonState();
     gmMain_8015FDA4();

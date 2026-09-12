@@ -23,7 +23,10 @@ struct lbl_804335B8_t {
     /* 0x98 */ size_t unk98;
     /* 0x9C */ char pad_9C[0xA0 - 0x9C];
 }; /* size = 0xA0 */
+#ifndef TARGET_PC
+/* Runtime-only state; Aurora's GXTexObj is a different size. */
 ASSERT_SIZE(struct lbl_804335B8_t, 0xA0);
+#endif
 
 extern struct lbl_804333E0_t Movieplayer;
 

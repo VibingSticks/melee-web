@@ -1,3 +1,6 @@
+#ifdef TARGET_PC
+#include <port_game.h>
+#endif
 #include "lb_0195.h"
 
 #include "lb_0192.h"
@@ -46,6 +49,13 @@ void lb_8001955C(void)
 
 void lb_800195D0(void)
 {
+#ifdef TARGET_PC
+    /* Every wait loop services through here; let the browser complete
+     * outstanding disc reads before polling again. */
+    if (port_dvd_pending() != 0) {
+        port_yield();
+    }
+#endif
     lb_800192A8(lb_8001955C);
     lb_8001CC84();
 }

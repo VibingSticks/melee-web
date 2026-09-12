@@ -1,3 +1,6 @@
+#ifdef TARGET_PC
+#include <port_game.h>
+#endif
 #include "devcom.h"
 
 #include "debug.h"
@@ -406,6 +409,12 @@ int HSD_DevComRequest(int file, uintptr_t src, uintptr_t dest, size_t size,
         !(HSD_DevComGetDestType(type) == DEVCOMDEST_SBUF
             && size > DEVCOM_BUF_SIZE));
 
+#ifdef TARGET_PC
+    if (src % 32 != 0 || dest % 32 != 0 || size % 32 != 0) {
+        port_log("HSD_DevComRequest: unaligned request file=%d src=%#lx dest=%#lx size=%#zx type=%#x",
+                 file, (unsigned long) src, (unsigned long) dest, size, type);
+    }
+#endif
     HSD_ASSERT(0x1EF, src % 32 == 0);
     HSD_ASSERT(0x1F0, dest % 32 == 0);
     HSD_ASSERT(0x1F1, size % 32 == 0);

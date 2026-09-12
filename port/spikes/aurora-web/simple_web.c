@@ -77,6 +77,25 @@ static void draw() {
   GXPosition3f32(0.0f, 0.9f, 0.5f);
   GXColor4u8(255, 0, 0, 255);
   GXEnd();
+
+  /* A second triangle whose positions come from a GXSetArray array via
+   * GX_INDEX8 (exercises the storage/data-texture fetch path). */
+  static const float tri2[3][3] = {{0.2f, -0.9f, 0.5f}, {0.95f, -0.9f, 0.5f}, {0.6f, -0.2f, 0.5f}};
+  GXSetArray(GX_VA_POS, tri2, sizeof tri2, 12, true /* little-endian host data */);
+  GXClearVtxDesc();
+  GXSetVtxDesc(GX_VA_POS, GX_INDEX8);
+  GXSetVtxDesc(GX_VA_CLR0, GX_DIRECT);
+  GXSetVtxAttrFmt(GX_VTXFMT1, GX_VA_POS, GX_POS_XYZ, GX_F32, 0);
+  GXSetVtxAttrFmt(GX_VTXFMT1, GX_VA_CLR0, GX_CLR_RGBA, GX_RGBA8, 0);
+  GXSetChanMatColor(GX_COLOR0A0, (GXColor){.r = 32, .g = 255, .b = 32, .a = 255});
+  GXBegin(GX_TRIANGLES, GX_VTXFMT1, 3);
+  GXPosition1x8(0);
+  GXColor4u8(0, 255, 0, 255);
+  GXPosition1x8(1);
+  GXColor4u8(0, 255, 0, 255);
+  GXPosition1x8(2);
+  GXColor4u8(0, 255, 0, 255);
+  GXEnd();
 }
 
 int main(int argc, char* argv[]) {
@@ -85,7 +104,7 @@ int main(int argc, char* argv[]) {
       .logCallback = &log_callback,
       .allowCpuAdapter = true, /* spike: headless Chrome may only offer SwiftShader */
       /* ?gpu=noimm forces the no-immediates compat profile on a real WebGPU adapter */
-      .forceCompatProfile = emscripten_run_script_int("(new URLSearchParams(location.search).get('gpu') === 'noimm') ? 1 : 0"),
+      .forceCompatProfile = emscripten_run_script_int("(new URLSearchParams(location.search).get('gpu')) === 'noimm' ? 1 : (new URLSearchParams(location.search).get('gpu')) === 'nostorage' ? 2 : (new URLSearchParams(location.search).get('gpu')) === 'compat' ? 7 : 0"),
   };
   AuroraInfo initInfo = aurora_initialize(argc, argv, &config);
 

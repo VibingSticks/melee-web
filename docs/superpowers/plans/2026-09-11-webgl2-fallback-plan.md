@@ -108,6 +108,8 @@ process.exit(failed ? 1 : 0);
 
 ### Task 4: Storage buffers → `rgba32uint` textures
 
+> **Done 2026-09-11.** Under `noStorage` the generated WGSL is post-processed (`ptr<storage, array<u32>>` → `texture_2d<u32>`, `load_word` → `textureLoad` on a 2048-texel-wide `rgba32uint` texture with one `u32` per component, bind group 0 holds two texture views), the frame resources create the two data textures, and the per-frame high-water copies go row by row through `CopyBufferToTexture`. `extractBits` was replaced by an `ebits` shift/mask helper in every profile so the WGSL translates to GLSL ES 3.00. Verified: the spike draws a direct-attribute triangle and a `GXSetArray`/`GX_INDEX8` triangle identically under default, `noimm`, `nostorage` and `compat` profiles on Chrome. Frame-time measurement (G2) still pending real game data.
+
 **Files:**
 - Modify (Aurora): `lib/gfx/resources.hpp` + `frame.cpp` (under `PROFILE_NO_STORAGE`: create `vertexTexture` 2048×⌈5 MiB/32 KiB⌉ and `storageTexture` 2048×⌈8 MiB/32 KiB⌉, `rgba32uint`, usage `TextureBinding|CopyDst`; bind group 0 holds their views), `lib/gfx/encoding.cpp` (`copy_staging_to_high_water`: `CopyBufferToTexture` rows of 32 KiB with `bytesPerRow = 32768`), `lib/gx/shader.cpp` (when `noStorage`: `@group(0) @binding(0) var vbuf: texture_2d<u32>;` and `load_word(t, w) = textureLoad(t, vec2u(w & 2047u, w >> 11u), 0)[w-component]` — store one `u32` per texel component so `word_idx` maps to `(texel = w >> 2, comp = w & 3)`; all `ptr<storage, array<u32>>` parameters become `texture_2d<u32>`), `lib/gx/gx.cpp` (bind group layout 0 entries become sampled-texture entries of `sampleType: uint`).
 

@@ -115,3 +115,7 @@ GLSL in headless Chrome (SwiftShader).
   and a dynamic-offset uniform block all link.
 - Rust is not part of `tools/setup.sh`; rustup lives in `~/.cargo`
   (`rustup-init -y --no-modify-path --profile minimal --target wasm32-unknown-unknown`).
+
+## G-A — Aurora compat profile verified on real WebGPU (2026-09-11)
+
+`port/spikes/aurora-web` now draws two GX triangles (direct attributes, and positions from a `GXSetArray` array via `GX_INDEX8`). With `?gpu=noimm`, `?gpu=nostorage` and `?gpu=compat` the frames are pixel-identical to the default profile and the console shows no WebGPU errors, so immediates-in-uniform and texture-based vertex pulling are behaviourally equivalent. The triangles come out black rather than the material colour in every profile; that is a spike TEV/channel setup detail, not a profile difference, and is left as-is.

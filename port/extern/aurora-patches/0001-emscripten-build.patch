@@ -346,8 +346,72 @@ index 08f7743..62a3592 100644
      return;
    }
    g_bindGroupLayout = create_bind_group_layout("Depth Peek Bind Group Layout");
+diff --git a/lib/gfx/encoding.cpp b/lib/gfx/encoding.cpp
+index 7321bee..78f01c7 100644
+--- a/lib/gfx/encoding.cpp
++++ b/lib/gfx/encoding.cpp
+@@ -338,6 +338,33 @@ void copy_staging_buffer_range(wgpu::CommandEncoder& cmd, const FramePacket& fra
+   copied = highWater;
+ }
+ 
++// Compat profile: copy a staging range into an rgba32uint data texture, row by row.
++void copy_staging_texture_range(wgpu::CommandEncoder& cmd, const FramePacket& frame, uint32_t& copied,
++                                uint32_t highWater, uint64_t stagingOffset, const wgpu::Texture& dst) {
++  if (highWater <= copied) {
++    return;
++  }
++  constexpr uint32_t TexelBytes = 16;
++  const uint32_t start = copied & ~(TexelBytes - 1);
++  const uint32_t end = AURORA_ALIGN(highWater, TexelBytes);
++  for (uint32_t row = start / DataTextureRowBytes; row <= (end - 1) / DataTextureRowBytes; ++row) {
++    const uint32_t rs = std::max(start, row * DataTextureRowBytes);
++    const uint32_t re = std::min(end, (row + 1) * DataTextureRowBytes);
++    const wgpu::TexelCopyBufferInfo src{
++        .layout = wgpu::TexelCopyBufferLayout{.offset = stagingOffset + rs, .bytesPerRow = DataTextureRowBytes, .rowsPerImage = 1},
++        .buffer = staging_buffer(frame.stagingBuffer),
++    };
++    const wgpu::TexelCopyTextureInfo dstInfo{
++        .texture = dst,
++        .mipLevel = 0,
++        .origin = {(rs % DataTextureRowBytes) / TexelBytes, row, 0},
++    };
++    const wgpu::Extent3D extent{(re - rs) / TexelBytes, 1, 1};
++    cmd.CopyBufferToTexture(&src, &dstInfo, &extent);
++  }
++  copied = highWater;
++}
++
+ bool needs_staging_copy(const FramePacket& frame, const FrameOp& op) {
+   const auto& highWater = op.highWater;
+   if (highWater.verts > frame.copied.verts || highWater.uniforms > frame.copied.uniforms ||
+@@ -357,12 +384,22 @@ void copy_staging_to_high_water(wgpu::CommandEncoder& cmd, FramePacket& frame, c
+   const webgpu::gpu_prof::Zone zone{cmd, "Staging copies"};
+   const auto& highWater = op.highWater;
+   auto& res = resources();
+-  copy_staging_buffer_range(cmd, frame, frame.copied.verts, highWater.verts, VertexStagingOffset, res.vertexBuffer);
++  const bool dataTextures = (webgpu::g_graphicsConfig.profile & AURORA_COMPAT_NO_STORAGE) != 0;
++  if (dataTextures) {
++    copy_staging_texture_range(cmd, frame, frame.copied.verts, highWater.verts, VertexStagingOffset, res.vertexTexture);
++  } else {
++    copy_staging_buffer_range(cmd, frame, frame.copied.verts, highWater.verts, VertexStagingOffset, res.vertexBuffer);
++  }
+   copy_staging_buffer_range(cmd, frame, frame.copied.uniforms, highWater.uniforms, UniformStagingOffset,
+                             res.uniformBuffer);
+   copy_staging_buffer_range(cmd, frame, frame.copied.indices, highWater.indices, IndexStagingOffset, res.indexBuffer);
+-  copy_staging_buffer_range(cmd, frame, frame.copied.storage, highWater.storage, StorageStagingOffset,
+-                            res.storageBuffer);
++  if (dataTextures) {
++    copy_staging_texture_range(cmd, frame, frame.copied.storage, highWater.storage, StorageStagingOffset,
++                               res.storageTexture);
++  } else {
++    copy_staging_buffer_range(cmd, frame, frame.copied.storage, highWater.storage, StorageStagingOffset,
++                              res.storageBuffer);
++  }
+ 
+   if constexpr (UseTextureBuffer) {
+     for (size_t i = frame.copied.textureUploadCount; i < op.textureUploads.size(); ++i) {
 diff --git a/lib/gfx/frame.cpp b/lib/gfx/frame.cpp
-index e47b223..f6f08a9 100644
+index e47b223..2c02519 100644
 --- a/lib/gfx/frame.cpp
 +++ b/lib/gfx/frame.cpp
 @@ -28,6 +28,9 @@
@@ -374,6 +438,74 @@ index e47b223..f6f08a9 100644
  }
  
  void pace_frame_start() {
+@@ -414,7 +423,55 @@ void initialize() {
+     map_staging_buffer(slot);
+   }
+ 
+-  {
++  if ((webgpu::g_graphicsConfig.profile & AURORA_COMPAT_NO_STORAGE) != 0) {
++    // Compat profile: vertex/storage data lives in rgba32uint textures.
++    auto createDataTexture = [&](wgpu::Texture& tex, wgpu::TextureView& view, uint64_t bytes, const char* label) {
++      const wgpu::TextureDescriptor desc{
++          .label = label,
++          .usage = wgpu::TextureUsage::TextureBinding | wgpu::TextureUsage::CopyDst,
++          .dimension = wgpu::TextureDimension::e2D,
++          .size = {DataTextureRowTexels, static_cast<uint32_t>((bytes + DataTextureRowBytes - 1) / DataTextureRowBytes), 1},
++          .format = wgpu::TextureFormat::RGBA32Uint,
++          .mipLevelCount = 1,
++          .sampleCount = 1,
++      };
++      tex = g_device.CreateTexture(&desc);
++      view = tex.CreateView();
++    };
++    createDataTexture(g_resources.vertexTexture, g_resources.vertexTextureView, VertexBufferSize, "Shared Vertex Texture");
++    createDataTexture(g_resources.storageTexture, g_resources.storageTextureView, StorageBufferSize, "Shared Storage Texture");
++    const std::array layoutEntries{
++        wgpu::BindGroupLayoutEntry{
++            .binding = 0,
++            .visibility = wgpu::ShaderStage::Vertex,
++            .texture = wgpu::TextureBindingLayout{.sampleType = wgpu::TextureSampleType::Uint,
++                                                 .viewDimension = wgpu::TextureViewDimension::e2D},
++        },
++        wgpu::BindGroupLayoutEntry{
++            .binding = 1,
++            .visibility = wgpu::ShaderStage::Vertex,
++            .texture = wgpu::TextureBindingLayout{.sampleType = wgpu::TextureSampleType::Uint,
++                                                 .viewDimension = wgpu::TextureViewDimension::e2D},
++        },
++    };
++    const wgpu::BindGroupLayoutDescriptor layoutDesc{
++        .label = "Static bind group layout (textures)",
++        .entryCount = layoutEntries.size(),
++        .entries = layoutEntries.data(),
++    };
++    g_resources.staticBindGroupLayout = g_device.CreateBindGroupLayout(&layoutDesc);
++    const std::array entries{
++        wgpu::BindGroupEntry{.binding = 0, .textureView = g_resources.vertexTextureView},
++        wgpu::BindGroupEntry{.binding = 1, .textureView = g_resources.storageTextureView},
++    };
++    const wgpu::BindGroupDescriptor bindGroupDescriptor{
++        .label = "Static bind group (textures)",
++        .layout = g_resources.staticBindGroupLayout,
++        .entryCount = entries.size(),
++        .entries = entries.data(),
++    };
++    g_resources.staticBindGroup = g_device.CreateBindGroup(&bindGroupDescriptor);
++  } else {
+     constexpr std::array layoutEntries{
+         // Vertex data buffer
+         wgpu::BindGroupLayoutEntry{
+@@ -533,6 +590,10 @@ void shutdown() {
+     g_freeEncoderTaskTypeSlots.clear();
+   }
+   g_resources.vertexBuffer = {};
++  g_resources.vertexTexture = {};
++  g_resources.vertexTextureView = {};
++  g_resources.storageTexture = {};
++  g_resources.storageTextureView = {};
+   g_resources.uniformBuffer = {};
+   g_resources.indexBuffer = {};
+   g_resources.storageBuffer = {};
 diff --git a/lib/gfx/pipeline_cache.cpp b/lib/gfx/pipeline_cache.cpp
 index bff9b47..5e4e7ff 100644
 --- a/lib/gfx/pipeline_cache.cpp
@@ -438,6 +570,31 @@ index 85783b6..a6eac9d 100644
  
  bool is_idle() noexcept { return g_pendingItems.load(std::memory_order_acquire) == 0; }
  
+diff --git a/lib/gfx/resources.hpp b/lib/gfx/resources.hpp
+index 3fdc0ee..49d434f 100644
+--- a/lib/gfx/resources.hpp
++++ b/lib/gfx/resources.hpp
+@@ -9,6 +9,8 @@ inline constexpr uint64_t VertexBufferSize = 5242880;   // 5 MiB
+ inline constexpr uint64_t IndexBufferSize = 2097152;    // 2 MiB
+ inline constexpr uint64_t StorageBufferSize = 8388608;  // 8 MiB
+ inline constexpr uint64_t TextureUploadSize = 25165824; // 24 MiB
++inline constexpr uint32_t DataTextureRowTexels = 2048;                      // compat profile data textures
++inline constexpr uint32_t DataTextureRowBytes = DataTextureRowTexels * 16; // rgba32uint
+ 
+ namespace detail {
+ struct Resources {
+@@ -16,6 +18,11 @@ struct Resources {
+   wgpu::Buffer uniformBuffer;
+   wgpu::Buffer indexBuffer;
+   wgpu::Buffer storageBuffer;
++  // Compat profile (no storage buffers): the same data as rgba32uint textures, 2048 texels per row.
++  wgpu::Texture vertexTexture;
++  wgpu::TextureView vertexTextureView;
++  wgpu::Texture storageTexture;
++  wgpu::TextureView storageTextureView;
+   wgpu::BindGroupLayout staticBindGroupLayout;
+   wgpu::BindGroup staticBindGroup;
+   wgpu::BindGroupLayout uniformBindGroupLayout;
 diff --git a/lib/gfx/texture_replacement.cpp b/lib/gfx/texture_replacement.cpp
 index a05b95d..4b299ef 100644
 --- a/lib/gfx/texture_replacement.cpp
@@ -581,7 +738,7 @@ index 0c3631c..346bc04 100644
    pass.SetBindGroup(1, resources.uniformBindGroup, offsets.size(), offsets.data());
    if (data.bindGroups.textureBindGroup) {
 diff --git a/lib/gx/shader.cpp b/lib/gx/shader.cpp
-index 31f5901..a1e25c4 100644
+index 31f5901..a8f57ff 100644
 --- a/lib/gx/shader.cpp
 +++ b/lib/gx/shader.cpp
 @@ -524,7 +524,7 @@ std::string vtx_attr(const ShaderConfig& config, GXAttr attr) {
@@ -659,7 +816,7 @@ index 31f5901..a1e25c4 100644
    }
  
    // Load vertex attributes
-@@ -1582,6 +1586,26 @@ std::string build_shader_source(const ShaderConfig& config) noexcept {
+@@ -1582,7 +1586,32 @@ std::string build_shader_source(const ShaderConfig& config) noexcept {
      fragmentFn += "\n    prev = vec4f(in.nrm, prev.a);";
    }
  
@@ -684,9 +841,73 @@ index 31f5901..a1e25c4 100644
 +)""";
 +  }
    const auto shaderSource = fmt::format(R"""(
++// extractBits stand-in: GLSL ES 3.00 (WebGL2) has no bitfieldExtract.
++fn ebits(v: u32, off: u32, cnt: u32) -> u32 {{
++  return (v >> off) & ((1u << cnt) - 1u);
++}}
++
  fn bswap32(v: u32, le: bool) -> u32 {{
    if (le) {{
-@@ -1910,16 +1934,7 @@ fn tev_overflow_vec4f(in: vec4f) -> vec4f {{
+     return v;
+@@ -1631,10 +1660,10 @@ fn load_u16(p: ptr<storage, array<u32>>, byte_off: u32, le: bool) -> u32 {{
+   let sub = byte_off & 3u;
+   let word = load_word(p, word_idx);
+   if (sub <= 2u) {{
+-    return bswap16(extractBits(word, sub * 8u, 16u), le);
++    return bswap16(ebits(word, sub * 8u, 16u), le);
+   }}
+   let next = load_word(p, word_idx + 1u);
+-  let raw = extractBits(word, 24u, 8u) | (extractBits(next, 0u, 8u) << 8u);
++  let raw = ebits(word, 24u, 8u) | (ebits(next, 0u, 8u) << 8u);
+   return bswap16(raw, le);
+ }}
+ 
+@@ -1667,33 +1696,33 @@ fn raw_fetch_u8_2(p: ptr<storage, array<u32>>, byte_off: u32) -> vec2u {{
+   if (sub <= 2u) {{
+     let shift = sub * 8u;
+     return vec2u(
+-      extractBits(word, shift + 0u, 8u),
+-      extractBits(word, shift + 8u, 8u),
++      ebits(word, shift + 0u, 8u),
++      ebits(word, shift + 8u, 8u),
+     );
+   }}
+   let next = load_word(p, word_idx + 1u);
+   return vec2u(
+-    extractBits(word, 24u, 8u),
+-    extractBits(next, 0u, 8u),
++    ebits(word, 24u, 8u),
++    ebits(next, 0u, 8u),
+   );
+ }}
+ 
+ fn raw_fetch_u8_3(p: ptr<storage, array<u32>>, byte_off: u32) -> vec3u {{
+   let raw = load_u32_raw(p, byte_off);
+   return vec3u(
+-    extractBits(raw, 0u, 8u),
+-    extractBits(raw, 8u, 8u),
+-    extractBits(raw, 16u, 8u),
++    ebits(raw, 0u, 8u),
++    ebits(raw, 8u, 8u),
++    ebits(raw, 16u, 8u),
+   );
+ }}
+ 
+ fn raw_fetch_u8_4(p: ptr<storage, array<u32>>, byte_off: u32) -> vec4u {{
+   let raw = load_u32_raw(p, byte_off);
+   return vec4u(
+-    extractBits(raw, 0u, 8u),
+-    extractBits(raw, 8u, 8u),
+-    extractBits(raw, 16u, 8u),
+-    extractBits(raw, 24u, 8u),
++    ebits(raw, 0u, 8u),
++    ebits(raw, 8u, 8u),
++    ebits(raw, 16u, 8u),
++    ebits(raw, 24u, 8u),
+   );
+ }}
+ 
+@@ -1910,16 +1939,7 @@ fn tev_overflow_vec4f(in: vec4f) -> vec4f {{
  }}
  
  {8}
@@ -704,12 +925,37 @@ index 31f5901..a1e25c4 100644
  struct Uniform {{
      render_viewport_size: vec2f,
      logical_viewport_size: vec2f,{0}
-@@ -1949,7 +1964,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {{{6}{5}
+@@ -1949,7 +1969,32 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {{{6}{5}
  }}
  )""",
                                          uniBufAttrs, texBindings, vtxOutAttrs, vtxInAttrs, vtxXfrAttrs, fragmentFn,
 -                                        fragmentFnPre, vtxXfrAttrsPre, uniformPre);
 +                                        fragmentFnPre, vtxXfrAttrsPre, uniformPre, immediateDecl);
++  if (config.noStorage) {
++    // Compat profile: vertex data is pulled from rgba32uint textures (one u32 per texel
++    // component, 2048 texels per row) instead of storage buffers.
++    auto replaceAll = [](std::string& str, std::string_view from, std::string_view to) {
++      for (size_t pos = str.find(from); pos != std::string::npos; pos = str.find(from, pos + to.size())) {
++        str.replace(pos, from.size(), to);
++      }
++    };
++    std::string src = shaderSource;
++    replaceAll(src, "ptr<storage, array<u32>>", "texture_2d<u32>");
++    replaceAll(src, "&vbuf", "vbuf");
++    replaceAll(src, "&abuf", "abuf");
++    replaceAll(src, "var<storage, read> vbuf: array<u32>;", "var vbuf: texture_2d<u32>;");
++    replaceAll(src, "var<storage, read> abuf: array<u32>;", "var abuf: texture_2d<u32>;");
++    const std::string_view oldLoadWord =
++        "  if (word_idx < arrayLength(p)) {\n    return p[word_idx];\n  }\n  return 0u;\n";
++    const std::string_view newLoadWord =
++        "  let texel = word_idx >> 2u;\n  return textureLoad(p, vec2u(texel & 2047u, texel >> 11u), 0)[word_idx & 3u];\n";
++    const size_t at = src.find(oldLoadWord);
++    if (at == std::string::npos) {
++      FATAL("compat profile: load_word template changed");
++    }
++    src.replace(at, oldLoadWord.size(), newLoadWord);
++    return src;
++  }
    if (EnableDebugPrints) {
      Log.info("Generated shader (hash {:x}): {}", hash, shaderSource);
    }

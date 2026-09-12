@@ -27,7 +27,7 @@ example's blue clear color at display rate.
 | Headed Chrome 151, GTX 1660 SUPER | 239 frames in ~2 s after init, 0 skipped; screenshot center pixel `(0, 0, 100)` |
 | Headless Chrome (SwiftShader CPU adapter) | device initializes, then Chrome reports `device.lost` reason `destroyed` after 3 frames with no error and no `destroy()` call from our side. Treat headless SwiftShader as unsupported for smoke tests; use a real GPU |
 
-Run it: `emcmake cmake -S port/spikes/aurora-web -B port/spikes/aurora-web/build -G Ninja && cmake --build port/spikes/aurora-web/build`, serve `build/`, open `simple.html`. `run_pw.mjs` drives headless/headed Chrome (`HEADED=1`) and prints the console.
+Run it: `emcmake cmake -S port/spikes/aurora-web -B port/spikes/aurora-web/build -G Ninja && cmake --build port/spikes/aurora-web/build`, serve `build/`, open `simple.html`. `run_pw.mjs` drives Chrome through Playwright (`HEADED=1` for the real GPU) and prints the console; headless `--screenshot` with `--virtual-time-budget` does not work because virtual time expires the WebGPU adapter wait.
 
 ### What the patch changes (all guarded by `EMSCRIPTEN` / `__EMSCRIPTEN__`)
 

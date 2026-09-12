@@ -6,7 +6,7 @@ what the result decided.
 | # | Question | Result |
 |---|---|---|
 | S1 | Does Aurora's `simple` example build and run under Emscripten + emdawnwebgpu? | **PASS** (2026-09-11), see below |
-| S2 | Is the Asyncify size/CPU cost acceptable for the full game? | not run |
+| S2 | Is the Asyncify size/CPU cost acceptable for the full game? | **Size measured** (2026-09-11): release `melee.wasm` 11.6 MB + 260 KB JS with the whole game, Aurora and Asyncify, no `ASYNCIFY_ONLY` tuning yet; debug 36.7 MB. CPU cost still to measure with real game data |
 | S3 | Which storage/audio APIs work on `file://` in Chrome, Firefox, Safari? | **Done** (2026-09-11) for Chrome 151 and Firefox 155; Safari not available on this machine. See below |
 | S4 | Does any bitfield cross its storage unit under either ABI? | **PASS** (2026-09-11): 1405 bitfield members in 246 structs across 984 units, 0 crossings (`port/tools/check_bitfields.py`) |
 | S5 | Are all pointer fields in game data listed in archive relocation tables? | not run (needs a disc image) |

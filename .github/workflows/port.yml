@@ -1,0 +1,117 @@
+name: port
+run-name: Build the web port
+
+# The browser tests are deliberately absent: they need a real GALE01 disc
+# image, which is the player's own copy and is not in this repository. What CI
+# can prove is that everything builds, that the host unit tests pass, and that
+# the offline file packs with no reference to a second file -- which is the
+# check that stops melee-offline.html going stale unnoticed.
+
+on:
+  push:
+    paths:
+      - 'port/**'
+      - 'src/**'
+      - '.github/workflows/port.yml'
+  pull_request:
+    paths:
+      - 'port/**'
+      - 'src/**'
+      - '.github/workflows/port.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: port-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build, test and pack
+    runs-on: ubuntu-latest
+    # doldecomp/melee has its own CI and does not build the port.
+    if: github.repository != 'doldecomp/melee'
+    timeout-minutes: 180
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install build tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            cmake ninja-build python3 python3-clang
+
+      # emsdk and Aurora are large clones and Aurora drags in Dawn and SDL3.
+      # Keyed on setup.sh so a pinned-revision change refetches.
+      - name: Cache the toolchain
+        uses: actions/cache@v4
+        with:
+          path: |
+            port/extern/emsdk
+            port/extern/aurora
+          key: port-toolchain-${{ runner.os }}-${{ hashFiles('port/tools/setup.sh', 'port/extern/aurora-patches/*.patch') }}
+
+      - name: Cache build trees
+        uses: actions/cache@v4
+        with:
+          path: |
+            port/build/host-tests
+            port/build/web-release
+          key: port-build-${{ runner.os }}-${{ github.sha }}
+          restore-keys: |
+            port-build-${{ runner.os }}-
+
+      - name: Set up emsdk and Aurora
+        run: port/tools/setup.sh
+
+      - name: Host unit tests
+        working-directory: port
+        run: |
+          . tools/env.sh
+          cmake --preset host-tests
+          cmake --build --preset host-tests -j"$(nproc)"
+          ctest --preset host-tests --output-on-failure
+
+      # The hosted build. Its wasm is a separate file, streamed by the page.
+      - name: Build (hosted)
+        working-directory: port
+        run: |
+          . tools/env.sh
+          cmake --preset web-release
+          cmake --build --preset web-release -j"$(nproc)"
+
+      - name: Upload the hosted build
+        uses: actions/upload-artifact@v4
+        with:
+          name: melee-web-hosted
+          path: |
+            port/build/web-release/index.html
+            port/build/web-release/melee.js
+            port/build/web-release/melee.wasm
+            port/build/web-release/*.js
+            port/build/web-release/naga/
+          if-no-files-found: error
+
+      # -sSINGLE_FILE changes only the link, so reconfiguring the same tree
+      # relinks the same objects rather than compiling the game again.
+      - name: Relink with the wasm embedded
+        working-directory: port
+        run: |
+          . tools/env.sh
+          cmake -B build/web-release -DPORT_SINGLE_FILE=ON
+          cmake --build --preset web-release -j"$(nproc)"
+
+      - name: Pack the offline file
+        working-directory: port
+        run: python3 tools/pack_single_html.py build/web-release -o melee-offline.html
+
+      - name: Upload the offline file
+        uses: actions/upload-artifact@v4
+        with:
+          name: melee-offline-html
+          path: port/melee-offline.html
+          if-no-files-found: error

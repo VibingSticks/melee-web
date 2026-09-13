@@ -100,7 +100,7 @@ cmake --preset host-tests && cmake --build --preset host-tests && ctest --preset
 |---|---|---|
 | [doldecomp/melee](https://github.com/doldecomp/melee) | The game itself, 100% decompiled C (`src/melee`, `src/sysdolphin`) | this repo |
 | [Aurora](https://github.com/encounter/aurora) | GameCube compatibility layer: GX on WebGPU, PAD, VI, CARD, ARAM, mtx, part of OS | r-burns fork, rev `e6a6f02` (same rev as `.nix/overlay.nix`), MIT |
-| [Emscripten](https://emscripten.org) | C/C++ → WebAssembly toolchain, `emscripten_set_main_loop`, Asyncify, IDBFS, `-sSINGLE_FILE` | emsdk `latest` (6.0.9 at setup time), installed by `tools/setup.sh` |
+| [Emscripten](https://emscripten.org) | C/C++ → WebAssembly toolchain, `emscripten_set_main_loop`, Asyncify, IDBFS, `-sSINGLE_FILE` | emsdk 6.0.9, pinned in `tools/setup.sh` and installed by it |
 | [emdawnwebgpu](https://dawn.googlesource.com/dawn/+/refs/heads/main/src/emdawnwebgpu/pkg/README.md) | Dawn's `webgpu.h` implemented on the browser's WebGPU; needs `SetImmediates`, so a newer port than Emscripten's bundled one | remote port v20260910.214722, tracked as `extern/emdawnwebgpu-*.remoteport.py` |
 | [SDL3](https://github.com/libsdl-org/SDL) | Window, input and gamepads via Aurora's app layer; Emscripten backend | Emscripten's `sdl3` port (3.4.2) |
 | Dolphin SDK sources (`extern/dolphin`) | AX/AXFX/THP C code compiled as-is; headers for everything Aurora does not vendor | this repo |

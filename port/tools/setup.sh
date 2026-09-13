@@ -7,7 +7,10 @@ set -euo pipefail
 
 PORT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 EXTERN="$PORT_DIR/extern"
-EMSDK_VERSION="${EMSDK_VERSION:-latest}"
+# Pinned like AURORA_REV below: "latest" means CI and a fresh clone can get a
+# different compiler from the one the port is known to build with. Override in
+# the environment to try a newer one.
+EMSDK_VERSION="${EMSDK_VERSION:-6.0.9}"
 AURORA_REPO="https://github.com/r-burns/aurora.git"
 AURORA_REV="e6a6f02ace4146e8a2f648d5c274dbb7dd89665c"
 

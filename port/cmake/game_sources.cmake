@@ -8,6 +8,11 @@ file(GLOB_RECURSE GAME_SOURCES CONFIGURE_DEPENDS
     ${GAME_ROOT}/src/melee/*.c
     ${GAME_ROOT}/src/sysdolphin/*.c)
 
+# The SDK's THP video decoder, which the intro movie needs. Its PowerPC asm is
+# all behind __MWERKS__ -- it only primes the paired-single quantisation
+# registers, which this target has no equivalent of and does not need.
+list(APPEND GAME_SOURCES ${GAME_ROOT}/extern/dolphin/src/dolphin/thp/THPDec.c)
+
 set(GAME_EXCLUDE
     dberror.c debug.c debugconsole_main.c   # PPC register dumps / debug console thread (never)
 
@@ -30,7 +35,10 @@ target_include_directories(melee_game PRIVATE
     ${GAME_ROOT}/src
     ${CMAKE_CURRENT_SOURCE_DIR}/extern/aurora/include
     ${PORT_SRC_DIR}/compat    # <printf.h> stand-in, 4-byte bool
-    ${PORT_SRC_DIR})          # <hsd_port/...>
+    ${PORT_SRC_DIR}           # <hsd_port/...>
+    # Last: this tree carries a whole SDK dolphin/ that would otherwise shadow
+    # Aurora's headers. Only the THP decoder's own header is wanted from it.
+    ${GAME_ROOT}/extern/dolphin/include)
 target_compile_definitions(melee_game PRIVATE
     TARGET_PC LINT VERSION_GALE01 BUILD_VERSION=0)   # bool is int via compat/stdbool.h
 target_compile_options(melee_game PRIVATE

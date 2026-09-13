@@ -537,8 +537,11 @@ void lbMthp_8001F410(const char* filename, u32* rate_table, void* buf,
     HSD_ASSERT(833, !MoviePlayer.power);
     MoviePlayer.power = 1;
 #ifdef TARGET_PC
-    /* THP decoding is not ported yet (plan Task 22): report the movie as
-     * finished at once with nothing to draw, so movie scenes end normally. */
+    /* The SDK decoder is compiled now (cmake/game_sources.cmake) but decoding a
+     * movie runs the stack away -- 16 MB of it goes the same way 4 MB does, so
+     * it is unbounded rather than merely deep. Until that is found, report the
+     * movie as finished at once with nothing to draw, so movie scenes still end
+     * normally. */
     (void) memoryRequired;
     MoviePlayer.rate_table = rate_table;
     MoviePlayer.unk_140 = NULL;
@@ -546,7 +549,7 @@ void lbMthp_8001F410(const char* filename, u32* rate_table, void* buf,
     MoviePlayer.unk_144 = 1;
     MoviePlayer.unk_148 = 0;
     MoviePlayer.unk_70 = 0;
-    port_log("movie '%s' skipped: THP decoder not ported", filename);
+    port_log("movie '%s' skipped: THP decode overruns the stack", filename);
     return;
 #endif
     fn_8001EB14(&MoviePlayer, filename);

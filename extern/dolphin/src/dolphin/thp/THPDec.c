@@ -2706,6 +2706,9 @@ static struct THPLCSizeEntry __THPLCSizeTableB[9] = {
 };
 
 // clang-format off
+/* Aurora supplies this too, and its body here is all __MWERKS__ asm priming
+ * the paired-single quantisation registers, which this target has none of. */
+#ifndef TARGET_PC
 static inline void OSInitFastCast(void) {
 #ifdef __MWERKS__
   asm
@@ -2728,10 +2731,22 @@ static inline void OSInitFastCast(void) {
   }
 #endif
 }
+#endif
 // clang-format on
 
 #ifdef __MWERKS__
 #pragma function_align 4
+#endif
+
+#ifdef TARGET_PC
+/* The GameCube maps 16 KB of locked cache at 0xE0000000 and THPInit carves the
+ * decoder's tile buffers out of it. Nothing is mapped there on this target, so
+ * the same 16 KB comes from a static buffer and LCStoreData is a plain copy
+ * out of it (see port/src/game_stubs.c). */
+static u8 __THPLCBuffer[0x4000] __attribute__((aligned(32)));
+#define THP_LC_BASE ((u8*) __THPLCBuffer)
+#else
+#define THP_LC_BASE ((u8*) 0xE0000000)
 #endif
 
 void THPInit(void)
@@ -2741,12 +2756,14 @@ void THPInit(void)
     int j;
     struct THPInitWork* work = (struct THPInitWork*) &__THPLC;
 
+#ifndef TARGET_PC
     if ((PPCMfhid2() & 0x10000000) == 0) {
         DCInvalidateRange((void*) 0xE0000000, 0x4000);
         LCEnable();
     }
+#endif
 
-    base = (u8*) 0xE0000000;
+    base = THP_LC_BASE;
     for (j = 0; j < 2; j++) {
         for (i = 0; i < 5; i++) {
             work->cache.offsets512[j][i] = base;
@@ -2754,7 +2771,7 @@ void THPInit(void)
         }
     }
 
-    base = (u8*) 0xE0000000;
+    base = THP_LC_BASE;
     for (j = 0; j < 2; j++) {
         for (i = 0; i < 9; i++) {
             work->cache.offsets672[j][i] = base;
@@ -2762,14 +2779,14 @@ void THPInit(void)
         }
     }
 
-    base             = (u8*) 0xE0000000;
+    base             = THP_LC_BASE;
     work->cache.work512[0] = base;
     base += 0x2000;
     work->cache.work512[1] = base;
     base += 0x800;
     work->cache.work512[2] = base;
 
-    base             = (u8*) 0xE0000000;
+    base             = THP_LC_BASE;
     work->work672[0] = base;
     base += 0x2800;
     work->work672[1] = base;

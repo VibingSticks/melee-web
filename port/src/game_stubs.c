@@ -28,17 +28,22 @@ void GXSetMisc(u32 token, u32 val)
 unsigned char _stack_end[4];
 unsigned char _stack_addr[4];
 
-/* --- THP video decoder (SDK, not built yet; Task 22): every decode fails --- */
-void THPInit(void) {}
-s32 THPVideoDecode(void* file, void* tileY, void* tileU, void* tileV, void* work)
+/* The SDK's own THP decoder is compiled now (see cmake/game_sources.cmake), so
+ * the stubs that used to fail every decode here have gone. What it still needs
+ * are three cache primitives Aurora does not carry. The GameCube's locked
+ * cache is a scratchpad the decoder fills and then DMAs out; this target has
+ * one flat address space, so the "DMA" is a copy and the wait is nothing.
+ * THPInit backs the scratchpad itself with a static buffer. */
+#include <string.h>
+void DCZeroRange(void* addr, u32 nBytes) { memset(addr, 0, nBytes); }
+u32 LCStoreData(void* dest, void* src, u32 nBytes)
 {
-    (void) file; (void) tileY; (void) tileU; (void) tileV; (void) work;
-    return -1;
+    memcpy(dest, src, nBytes);
+    /* The hardware answers with the number of 32-byte blocks it queued. No
+     * caller here looks, but keep the shape honest. */
+    return (nBytes + 31) / 32;
 }
-s32 THPDec_8032FD40(void* data, u16 arg1) { (void) data; (void) arg1; return -1; }
-s32 THPDec_8032F8D4(u8* data, void* out) { (void) data; (void) out; return -1; }
-void THPDec_80331340(s32 a, void* b, void* c, void* d) { (void) a; (void) b; (void) c; (void) d; }
-void THPDec_803313D0(s32 a, void* b, void* c, void* d, u32 e) { (void) a; (void) b; (void) c; (void) d; (void) e; }
+void LCQueueWait(u32 len) { (void) len; }
 
 /* --- host PC link (MCC over EXI) and its file IO: never connected --- */
 #include <dolphin/mcc.h>

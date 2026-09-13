@@ -11,6 +11,26 @@ game ships with the build.
 Design: [`docs/superpowers/specs/2026-09-10-web-port-design.md`](../docs/superpowers/specs/2026-09-10-web-port-design.md)
 Plan: [`docs/superpowers/plans/2026-09-10-web-port-plan.md`](../docs/superpowers/plans/2026-09-10-web-port-plan.md)
 
+## What runs today
+
+Chrome 151 on WebGPU and Firefox on the WebGL2 fallback, against a real disc:
+boot → the memory-card notice → title → main menu → VS Mode → character select
+with every portrait → a VS match on Final Destination with both fighters, the
+HUD and particle effects. `Module._port_debug_start_vs()` jumps straight to a
+match without the menus. The packed offline file does all of this from
+`file://`. Host tests: `ctest --preset host-tests`.
+
+Not working yet, roughly in the order worth fixing:
+
+| | |
+|---|---|
+| A translucent overlay washes over the 3D scene | cause not yet found |
+| No audio | the mixer in `src/ax_hle/ax_hle.c` runs the game's synth engine, which wedges the scene load; build `-DPORT_AUDIO=ON` to work on it |
+| Only controller port 1 is usable | the player-type toggle does not respond |
+| The intro movie is skipped | THP decoder not ported (plan Task 22) |
+
+`docs/milestones.md` tracks this in more detail.
+
 ## Setup
 
 ```sh
@@ -89,13 +109,22 @@ cmake --preset host-tests && cmake --build --preset host-tests && ctest --preset
 | [naga](https://github.com/gfx-rs/wgpu/tree/trunk/naga) (Rust, via rustup) | WGSL → GLSL ES 3.00 in the browser for the WebGL2 fallback | `tools/naga-wasm`, built by `tools/build_naga.sh` |
 | `web/js/gpu-gl2.js` (port-only) | The WebGPU subset emdawnwebgpu needs, on WebGL2: used automatically when the browser has no WebGPU adapter, or with `?renderer=webgl2` | this repo; tests in `tests/browser/gl2_polyfill_test.mjs` |
 
-Port-only code (`port/src`) supplies what none of the above provide: the main loop adapter, OS shims, a DVD layer over the user's disc image, load-time big-endian → little-endian conversion of HSD archives, and an AX audio mixer feeding an AudioWorklet.
+Port-only code (`port/src`) supplies what none of the above provide: the main
+loop adapter, OS shims, a DVD layer over the user's disc image, load-time
+big-endian → little-endian conversion of HSD archives, and an AX voice mixer
+(`src/ax_hle`, off by default -- see below).
+
+Two font atlases are read out of the boot DOL on the player's disc at startup
+(`src/font_dol.c`). sysdolphin keeps them as bitmaps in the executable rather
+than in a DAT file, so the decompilation has nothing to compile them from and
+the units that draw text were excluded from the build until this loaded them.
+As with everything else, the data stays on the player's disc.
 
 ## Layout
 
 | Path | What |
 |---|---|
-| `src/` | Port-only C: main loop adapter, OS shims, DVD layer, archive endian conversion, AX mixer. `src/compat/` holds headers that shadow libc for the game library only (`bool` as a 4-byte int, MSL `printf.h`) |
+| `src/` | Port-only C: main loop adapter, OS shims, DVD layer, archive endian conversion, font atlases from the disc's DOL, AX mixer. `src/compat/` holds headers that shadow libc for the game library only (`bool` as a 4-byte int, MSL `printf.h`) |
 | `web/` | JS glue and HTML shells |
 | `schema/` | Annotations and root-symbol table for the endian converter |
 | `tools/` | Setup, schema generator, single-file packer |

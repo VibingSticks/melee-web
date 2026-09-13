@@ -13,7 +13,11 @@
   #status { flex: 1; opacity: .85; }
   #status.error { color: #ff7b7b; }
   #renderer { opacity: .6; font-size: 12px; }
-  #canvas { flex: 1; width: 100%; min-height: 0; background: #000; outline: none; }
+  /* The game renders 4:3. Let the canvas take the space it is given but keep
+     its own shape inside it, so a wider window letterboxes instead of
+     stretching everything sideways. */
+  #canvas { flex: 1; width: 100%; min-height: 0; background: #000; outline: none;
+            object-fit: contain; }
   #log { height: 120px; margin: 0; padding: 6px 12px; overflow: auto; background: #101014; color: #9a9; font: 12px monospace; white-space: pre; }
 </style>
 </head>

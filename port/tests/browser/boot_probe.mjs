@@ -60,7 +60,10 @@ const browser = await playwright[browserName].launch(browserName === 'chromium' 
   args: ['--enable-unsafe-webgpu', '--ignore-gpu-blocklist', '--no-sandbox', '--js-flags=--stack-trace-limit=100',
          '--disable-backgrounding-occluded-windows', '--disable-renderer-backgrounding'],
 } : { headless: !headed });
-const page = await browser.newPage({ viewport: { width: 1280, height: 960 } });
+// --viewport=WxH: the window shape to open. The game renders 4:3, so a
+// non-4:3 value is how you check the page letterboxes rather than stretches.
+const vp = (process.argv.find(a => a.startsWith('--viewport='))?.slice(11) ?? '1280x960').split('x');
+const page = await browser.newPage({ viewport: { width: Number(vp[0]), height: Number(vp[1]) } });
 await page.addInitScript(() => { Error.stackTraceLimit = 64; });
 const t0 = Date.now();
 const logs = [];

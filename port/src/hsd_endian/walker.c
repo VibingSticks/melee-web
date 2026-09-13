@@ -414,9 +414,18 @@ static int walk_field(port_walk_ctx* c, const port_field* f, uint8_t* obj)
         }
         if (f->type->nfields == 1 && f->type->fields[0].offset == 0 && f->type->fields[0].kind != F_STRUCT
             && f->type->fields[0].kind != F_ARRAY) {
-            /* plain array of scalars/pointers/words: no per-element visit bookkeeping */
+            /* Plain array of scalars, pointers or words: walk the one field per
+             * element rather than paying for a visited-set entry each time.
+             * Elements holding a pointer are still recorded, because that set is
+             * what tells a caller which relocated slots the walk reached -- and
+             * without them every slot past the first looks unvisited. */
+            int is_ptr = f->type->fields[0].kind == F_PTR || f->type->fields[0].kind == F_PTR_ARRAY;
             for (uint32_t i = 0; i < n; i++) {
-                if (walk_field(c, &f->type->fields[0], p + i * f->type->size) != 0) {
+                uint8_t* e = p + i * f->type->size;
+                if (is_ptr && vset_add(c->visited, (uintptr_t) e, f->type) < 0) {
+                    return fail(c, "out of memory", e);
+                }
+                if (walk_field(c, &f->type->fields[0], e) != 0) {
                     return -1;
                 }
             }

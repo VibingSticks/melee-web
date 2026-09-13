@@ -995,10 +995,20 @@ void ftLib_80087610(u8 arg0)
     }
 }
 
+#ifdef TARGET_PC
+/* gm_1798.c declares this `extern s32` and tests what it returns. That works on
+ * the GameCube because the discarded result of the call below is still sitting
+ * in r3 when the function returns; nothing carries it here, so return it. */
+s32 ftLib_800876B4(HSD_GObj* gobj)
+{
+    return ftAnim_IsFramesRemaining(gobj);
+}
+#else
 void ftLib_800876B4(HSD_GObj* gobj)
 {
     ftAnim_IsFramesRemaining(gobj);
 }
+#endif
 
 bool ftLib_800876D4(HSD_GObj* gobj)
 {

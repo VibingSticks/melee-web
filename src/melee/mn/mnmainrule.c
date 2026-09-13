@@ -152,7 +152,13 @@ HSD_GObj* mn_804D6BD0;
 void mnItemSw_802358C0(void);
 void mn_802339FC(void);
 void mnCharSel_80264070(void);
+#ifdef TARGET_PC
+s32 mnCharSel_802640A0(void); /* returns s32; the void spelling below is a
+                               * second declaration of the same function and
+                               * wasm will not link two shapes of one name */
+#else
 void mnCharSel_802640A0(void);
+#endif
 
 static inline u8 mn_8022F538_GetHoveredSelection(void)
 {

@@ -97,7 +97,11 @@
 /* 087574 */ void ftLib_80087574(s8);
 /// /* 087574 */ void ftLib_80087574(FighterKind);
 /* 087610 */ void ftLib_80087610(u8);
+#ifdef TARGET_PC
+/* 0876B4 */ s32 ftLib_800876B4(HSD_GObj*); /* see ftlib.c */
+#else
 /* 0876B4 */ void ftLib_800876B4(HSD_GObj*);
+#endif
 /* 0876D4 */ bool ftLib_800876D4(HSD_GObj*);
 /* 0876F4 */ s32 ftLib_800876F4(HSD_GObj*);
 /* 087700 */ s32 ftLib_80087700(HSD_GObj*);

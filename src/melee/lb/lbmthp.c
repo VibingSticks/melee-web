@@ -103,6 +103,19 @@ struct lbl_803BAFE8_t {
 /* 4333E0 */ static THPDecComp MoviePlayer;
 #endif
 
+/* A frame's packed size, which sits in the first word of the frame itself and
+ * so comes off the disc big-endian however the host reads memory. A plain load
+ * was already that on the GameCube. */
+static inline u32 thpFrameSize(const void* frame)
+{
+#ifdef TARGET_PC
+    const u8* b = (const u8*) frame;
+    return ((u32) b[0] << 24) | ((u32) b[1] << 16) | ((u32) b[2] << 8) | b[3];
+#else
+    return *(u32*) frame;
+#endif
+}
+
 static void fn_8001E910(int arg0, int arg1, void* arg2, int cancelflag)
 {
     THPDecComp* streamPlayer = &MoviePlayer;
@@ -128,7 +141,7 @@ static void fn_8001E910(int arg0, int arg1, void* arg2, int cancelflag)
     } else {
         var_r0 = streamPlayer->unk_8C - 1;
     }
-    streamPlayer->currPackedSize = *(u32*) streamPlayer->frame_buffers[var_r0];
+    streamPlayer->currPackedSize = thpFrameSize((void*) streamPlayer->frame_buffers[var_r0]);
     if (streamPlayer->unk_90 != streamPlayer->unk_8C &&
         streamPlayer->unk_70 != 0)
     {
@@ -315,7 +328,7 @@ static void fn_8001ECF4(THPDecComp* data, void* buf)
                             1);
             csizep = var_r29;
             data->curr_file_offset += var_r24;
-            var_r24 = *(u32*) var_r29;
+            var_r24 = thpFrameSize(var_r29);
             var_r29 = var_r29 + data->unk_100;
         }
         data->unk_74 = var_r25;
@@ -545,9 +558,13 @@ void lbMthp_8001F410(const char* filename, u32* rate_table, void* buf,
     HSD_ASSERT(833, !MoviePlayer.power);
     MoviePlayer.power = 1;
 #ifdef TARGET_PC
-    /* The decoder builds and the header reads correctly now, but streaming a
-     * movie still reads 0x80000 bytes into a frame slot of ALIGN_32(buf_size),
-     * about 61 KB, which runs off the end of the heap. Until that is found,
+    /* The SDK decoder builds, and its header and frame sizes read correctly
+     * now, but it cannot actually decode here: seven of its ten functions --
+     * the Huffman tables, the Huffman decode, the three DCT component decoders
+     * and both inverse DCTs -- exist only as PowerPC assembly behind
+     * __MWERKS__. Compiled for anything else they fall through and return
+     * whatever was in the register, so the Huffman reader never finds a valid
+     * code and spins. Playing movies needs those written in C. Until then,
      * report the movie as finished at once with nothing to draw, so movie
      * scenes still end normally. */
     (void) memoryRequired;
@@ -557,7 +574,7 @@ void lbMthp_8001F410(const char* filename, u32* rate_table, void* buf,
     MoviePlayer.unk_144 = 1;
     MoviePlayer.unk_148 = 0;
     MoviePlayer.unk_70 = 0;
-    port_log("movie '%s' skipped: frame streaming overruns its buffer", filename);
+    port_log("movie '%s' skipped: the SDK decoder's hot path is PowerPC asm", filename);
     return;
 #endif
     fn_8001EB14(&MoviePlayer, filename);

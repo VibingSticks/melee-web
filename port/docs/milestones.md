@@ -9,7 +9,7 @@ Manual acceptance list from spec §10. Tick with date and browser.
       notice through the title, main menu and character select renders with
       readable text, and the character-icon grid shows all portraits and name
       plates. Outstanding: only port 1 is usable (the player-type toggle does
-      not respond), and there is no audio.
+      not respond).
 
       Two things this entry used to blame were wrong, for the record. Text was
       blank because no font data was compiled in at all -- hsd_3915.c and
@@ -24,9 +24,21 @@ Manual acceptance list from spec §10. Tick with date and browser.
       Melee's own debug VS mode and the match runs: the stage, both fighters,
       the HUD and particle effects all render, inputs move the fighters, and a
       64-second run (3840 frames) and five back-to-back scene loads finish with
-      no assertion, no trap and a flat heap. Outstanding: no audio, a large
-      translucent overlay covers the scene, and a match has not yet been played
-      through to a result screen.
+      no assertion, no trap and a flat heap. Outstanding: a match has not yet
+      been played through to a result screen.
+
+      Audio (2026-09-12): the AX mixer is on by default. Menu and match music
+      stream from the .hps files and SFX play through the .sem macro driver;
+      the mixer reports non-silent PCM and the SDL queue drains. Three
+      byte-order bugs had kept the synth engine silent or wedged: the .ssm
+      voice blocks were swapped on the wrong layout (loopFlag/format
+      exchanged, so every SFX voice stopped at once), the .hps block header's
+      "next" offset was used raw (a DVD read at 0xa0000100 that never
+      completed left HSD's DevCom busy forever, which is what hung the
+      nr_vs.ssm load), and the .sem macro bytecode was never swapped, so no
+      macro reached its play command. The game's u32 reads of the DSP
+      parameter block's hi/lo u16 pairs go through PB_GET32/PB_SET32 now.
+      Not mixed: the aux busses (reverb, chorus, delay) and ITD.
 - [ ] M5 Saves: save created, page reloaded, save present; export/import round-trip
 - [~] M6 Single-file: `melee-offline.html` boots from `file://` on Chrome, Firefox, Safari
       (2026-09-12: Chrome 151 on WebGPU and Firefox on the WebGL2 fallback both

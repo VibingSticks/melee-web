@@ -6,10 +6,9 @@ set(GAME_ROOT ${CMAKE_CURRENT_SOURCE_DIR}/..)
 
 option(PORT_BUILD_TESTS "Build host unit tests" OFF)
 option(PORT_SINGLE_FILE "Embed the wasm in the JS (-sSINGLE_FILE)" OFF)
-# The AX mixer runs the game's synth engine, which currently wedges the scene
-# load (see docs/milestones.md, M4 audio). Off until that is fixed; the stub
-# keeps the game silent but running.
-option(PORT_AUDIO "Mix AX voices instead of running silent" OFF)
+# The AX mixer (src/ax_hle/ax_hle.c) runs the game's synth engine and mixes
+# its voices; the stub keeps the game silent but running.
+option(PORT_AUDIO "Mix AX voices instead of running silent" ON)
 
 if (PORT_BUILD_TESTS)
     enable_testing()

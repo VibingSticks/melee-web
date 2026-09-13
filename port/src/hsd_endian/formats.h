@@ -12,17 +12,24 @@ void port_swap_u32_array(uint32_t* p, size_t n);
 void port_swap_u16_array(uint16_t* p, size_t n);
 
 /* .ssm sound-bank table: `groups` runs of { u32 n; u32 x; block[n] }, where
- * each 0x40-byte block is
- *   { u32 w[4]; u16 loopFlag, format; u32 loopAddr, endAddr, currentAddr; s16 coef[16] }.
- * The three addresses are AXPBADDR hi/lo u16 pairs on the GameCube, but
- * synth.c adds the bank base to them as whole u32s, so they are swapped as
- * u32s; the port's AX layer reads them the same way. Returns the number of
+ * each 0x40-byte block is the DSP parameter blocks for one voice, back to
+ * back: { AXPBADDR; AXPBADPCM; AXPBADPCMLOOP; u16 pad } (synth.c reads it
+ * through `struct foo` at +0x10, +0x20 and +0x48 of the node the block is
+ * copied into). Every field is a u16, including the hi/lo halves of the three
+ * addresses, which synth.c relocates through PB_ADD32. Returns the number of
  * bytes covered. */
 size_t port_swap_ssm_table(uint32_t* table, uint32_t groups);
 
+/* .hps music stream. The 0x80-byte file header is { "HALPST\0\0"; u32 rate;
+ * u32 channels; per channel { AXPBADDR; AXPBADPCM } } and each 0x20-byte
+ * block header is { u32 length; u32 end; s32 next (-1 at the end); per
+ * channel { AXPBADPCMLOOP; u16 pad } }. The parameter blocks are u16 fields. */
+void port_swap_hps_file_header(uint32_t* header);
+void port_swap_hps_block_header(uint32_t* header);
+
 /* .sem sound-macro file header (AXDriver_8038DA70): four runs of
- * { u32 count; u32 words[count] }. The macro bytecode after the header is
- * left alone. Returns the number of bytes covered. */
+ * { u32 count; u32 words[count] }. Returns the number of bytes covered; the
+ * macro bytecode after it is u32 commands, which the caller swaps as words. */
 size_t port_swap_sem_header(uint32_t* file);
 
 /* Particle banks (`map_ptcl` / `map_texg`, and the two blocks an effect data

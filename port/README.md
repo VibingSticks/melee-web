@@ -25,7 +25,7 @@ Not working yet, roughly in the order worth fixing:
 | | |
 |---|---|
 | A translucent overlay washes over the 3D scene | cause not yet found |
-| No audio | the mixer in `src/ax_hle/ax_hle.c` runs the game's synth engine, which wedges the scene load; build `-DPORT_AUDIO=ON` to work on it |
+| Audio is plain | `src/ax_hle/ax_hle.c` mixes the game's voices (music stream and SFX) but skips the aux busses (reverb/chorus) and ITD, and resamples linearly; `-DPORT_AUDIO=OFF` swaps in the silent stubs |
 | Only controller port 1 is usable | the player-type toggle does not respond |
 | The intro movie is skipped | THP decoder not ported (plan Task 22) |
 

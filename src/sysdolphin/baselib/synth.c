@@ -14,6 +14,28 @@
 #ifdef TARGET_PC
 #include <hsd_endian/formats.h>
 #include <port_game.h>
+
+/* The DSP parameter blocks keep 32-bit values as u16 pairs, high half first.
+ * The game reads and writes them through u32 casts, which is the same thing on
+ * the PowerPC and the two halves swapped on a little-endian host. */
+static inline u32 pb_get32(const void* hilo)
+{
+    const u16* p = hilo;
+    return ((u32) p[0] << 16) | p[1];
+}
+static inline void pb_set32(void* hilo, u32 v)
+{
+    u16* p = hilo;
+    p[0] = (u16) (v >> 16);
+    p[1] = (u16) v;
+}
+#define PB_GET32(p) pb_get32(p)
+#define PB_SET32(p, v) pb_set32((p), (v))
+#define PB_ADD32(p, d) pb_set32((p), pb_get32(p) + (d))
+#else
+#define PB_GET32(p) (*(u32*) (p))
+#define PB_SET32(p, v) (*(u32*) (p) = (v))
+#define PB_ADD32(p, d) (*(u32*) (p) += (d))
 #endif
 
 /* 389334 */ static int HSD_Synth_80389334(int sfx_id, u8 vol, u8 vol2, u8 pan,
@@ -119,14 +141,14 @@ static void HSD_SynthSFXSampleLoadCallback(int result, int length, void* addr,
             for (k = 0; k < n; k++) {
                 u8* e = (u8*) HSD_Synth_804D7730 + k * 0x40;
                 if (e + 0x10 != NULL) {
-                    *(u32*) (e + 0x14) += hsd_SynthSFXBank[bankID] * 2;
+                    PB_ADD32(e + 0x14, hsd_SynthSFXBank[bankID] * 2);
                 } else {
-                    *(u32*) (e + 0x14) = HSD_Synth_804D7784;
+                    PB_SET32(e + 0x14, HSD_Synth_804D7784);
                 }
-                *(u32*) ((u8*) HSD_Synth_804D7730 + k * 0x40 + 0x18) +=
-                    hsd_SynthSFXBank[bankID] * 2;
-                *(u32*) ((u8*) HSD_Synth_804D7730 + k * 0x40 + 0x1C) +=
-                    hsd_SynthSFXBank[bankID] * 2;
+                PB_ADD32((u8*) HSD_Synth_804D7730 + k * 0x40 + 0x18,
+                         hsd_SynthSFXBank[bankID] * 2);
+                PB_ADD32((u8*) HSD_Synth_804D7730 + k * 0x40 + 0x1C,
+                         hsd_SynthSFXBank[bankID] * 2);
             }
             id = base + i;
             HSD_Synth_804D7730->x4 = id;
@@ -412,10 +434,10 @@ void HSD_SynthSFXGroupDataReaddress(AXVPB* arg0, void* callback)
         q = p;
         for (j = 0; j < count; j++) {
             if (*(u16*) (q + 0x10) != 0) {
-                *(u32*) (q + 0x14) += delta;
+                PB_ADD32(q + 0x14, delta);
             }
-            *(u32*) (q + 0x18) += delta;
-            *(u32*) (q + 0x1C) += delta;
+            PB_ADD32(q + 0x18, delta);
+            PB_ADD32(q + 0x1C, delta);
             q += 0x40;
         }
         p = (u8*) ((count << 6) + (uintptr_t) p);
@@ -634,9 +656,9 @@ int HSD_Synth_80389334(int sfx_id, u8 vol, u8 vol2, u8 pan, int priority,
             while (voice_idx < sfx_entry->unk8) {
                 AXSetVoicePriority(voices[voice_idx], priority);
                 AXSetVoiceVe(voices[voice_idx], &ve);
-                *(u32*) &HSD_Synth_80407FD8.ratioHi =
-                    (65536.0F *
-                     (sfx_node->x18[1] * (sfx_node->x14 * sfx_node->x18[0])));
+                PB_SET32(&HSD_Synth_80407FD8.ratioHi,
+                         (65536.0F * (sfx_node->x18[1] *
+                                      (sfx_node->x14 * sfx_node->x18[0]))));
                 AXSetVoiceSrc(voices[voice_idx], &HSD_Synth_80407FD8);
                 AXSetVoiceAddr(voices[voice_idx], &SFX_VOICE(voice_idx)->x10);
                 AXSetVoiceAdpcm(voices[voice_idx], &SFX_VOICE(voice_idx)->x20);
@@ -744,9 +766,8 @@ static inline void stopRange(size_t lo, size_t hi)
     for (i = 0; i < 0x40; i++) {
         struct HSD_SynthSFXNode* node = &hsd_SynthSFXNodes[i];
         if (hsd_SynthSFXNodes[i].x0 > 0) {
-            addr = *(size_t*) &hsd_SynthSFXNodes[i]
-                        .voice[0]
-                        ->pb.addr.currentAddressHi;
+            addr = PB_GET32(
+                &hsd_SynthSFXNodes[i].voice[0]->pb.addr.currentAddressHi);
             if (addr >= lo && addr < hi) {
                 HSD_SynthSFXStopNode(&hsd_SynthSFXNodes[i]);
             }
@@ -1235,6 +1256,8 @@ static void HSD_Synth_8038AD74_devcom(int dcreq, int args, void* buf, bool cance
 {
     (void) buf;
     (void) cancelflag;
+    /* the block header that was just DVD-read raw into lbl_804C4540 */
+    port_swap_hps_block_header((u32*) &lbl_804C4540[HSD_Synth_804D7768]);
     HSD_Synth_8038AD74((u32) dcreq, (uintptr_t) args);
 }
 #endif
@@ -1282,7 +1305,7 @@ void HSD_Synth_8038ADD0(void)
     if (node->flags & 8) {
         return;
     }
-    pos = (*(u32*) ((u8*) node->voice[0] + 0x1B2) - HSD_Synth_804D7780 * 2) >>
+    pos = (PB_GET32((u8*) node->voice[0] + 0x1B2) - HSD_Synth_804D7780 * 2) >>
           0x11;
     if (pos != HSD_Synth_804D7774) {
         HSD_Synth_804D7774 = pos;
@@ -1344,11 +1367,11 @@ void HSD_Synth_8038B120(void)
         for (i = 0; i < node->voice_count; i++) {
             AXSetVoiceVe(node->voice[i], &ve);
             if (node->flags & 4) {
-                *(u32*) &HSD_Synth_80407FD8.ratioHi = 0;
+                PB_SET32(&HSD_Synth_80407FD8.ratioHi, 0);
             } else {
-                *(u32*) &HSD_Synth_80407FD8.ratioHi =
-                    (u32) (65536.0F *
-                           (node->x14 * node->x18[0] * node->x18[1]));
+                PB_SET32(&HSD_Synth_80407FD8.ratioHi,
+                         (u32) (65536.0F *
+                                (node->x14 * node->x18[0] * node->x18[1])));
             }
             AXSetVoiceSrc(node->voice[i], &HSD_Synth_80407FD8);
             AXSetVoiceCurrentAddr(
@@ -1407,6 +1430,7 @@ static void HSD_SynthPStreamFirstHakoHeaderCallback_devcom(int dcreq, int args, 
     (void) args;
     (void) buf;
     (void) cancelflag;
+    port_swap_hps_block_header((u32*) &lbl_804C4540[HSD_Synth_804D7768]);
     HSD_SynthPStreamFirstHakoHeaderCallback();
 }
 #endif
@@ -1418,6 +1442,10 @@ void HSD_SynthPStreamHeaderCallback(int arg0, int arg1, void* arg2,
     struct HSD_SynthSFXNode* node;
     int i;
 
+#ifdef TARGET_PC
+    /* DVD-read raw into the relay buffer; the game indexes it as integers */
+    port_swap_hps_file_header(entry);
+#endif
     node = getNode(HSD_Synth_804D7760);
     if (node != NULL) {
         node->voice_count = entry[3];
@@ -1427,7 +1455,7 @@ void HSD_SynthPStreamHeaderCallback(int arg0, int arg1, void* arg2,
         }
         node->x14 = 0.00003125f * (f32) entry[2];
         for (i = 0; i < node->voice_count; i++) {
-            *(u32*) &HSD_Synth_80407FD8.ratioHi = (u32) (65536.0f * node->x14);
+            PB_SET32(&HSD_Synth_80407FD8.ratioHi, (u32) (65536.0f * node->x14));
             AXSetVoiceAddr(node->voice[i], (AXPBADDR*) &entry[i * 14 + 4]);
             AXSetVoiceAdpcm(node->voice[i], (AXPBADPCM*) &entry[i * 14 + 8]);
         }

@@ -850,8 +850,14 @@ void AXDriver_8038DA70(const char* path, void (*callback)(void))
     DVDClose(&fileInfo);
 
 #ifdef TARGET_PC
-    /* the file header is big-endian and indexed as native words below */
-    port_swap_sem_header((u32*) AXDriver_804D7798);
+    /* The file is big-endian: the header is indexed as native words below,
+     * and the macro streams after it are u32 commands that AXDriver_8038C6C0
+     * decodes by shifting (type in the top byte). */
+    {
+        size_t header = port_swap_sem_header((u32*) AXDriver_804D7798);
+        port_swap_u32_array((u32*) ((u8*) AXDriver_804D7798 + header),
+                            (alignedSize - header) / 4);
+    }
 #endif
 
     AXDriver_804D77A0 = ((s32*) AXDriver_804D7798)[0];

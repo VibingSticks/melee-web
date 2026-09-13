@@ -34,14 +34,23 @@ size_t port_swap_ssm_table(uint32_t* table, uint32_t groups)
         n = p[0];
         p += 2;
         for (uint32_t k = 0; k < n; k++) {
-            port_swap_u32_array(p, 4);                     /* 0x00..0x0F */
-            port_swap_u16_array((uint16_t*) (p + 4), 2);   /* loopFlag, format */
-            port_swap_u32_array(p + 5, 3);                 /* loop, end, current */
-            port_swap_u16_array((uint16_t*) (p + 8), 16);  /* ADPCM coefficients */
+            port_swap_u16_array((uint16_t*) p, 32); /* the whole 0x40 block */
             p += 16;
         }
     }
     return (size_t) ((uint8_t*) p - (uint8_t*) table);
+}
+
+void port_swap_hps_file_header(uint32_t* header)
+{
+    port_swap_u32_array(header + 2, 2);                 /* rate, channels */
+    port_swap_u16_array((uint16_t*) (header + 4), 56);  /* two channels of AXPBADDR + AXPBADPCM */
+}
+
+void port_swap_hps_block_header(uint32_t* header)
+{
+    port_swap_u32_array(header, 3);                     /* length, end, next */
+    port_swap_u16_array((uint16_t*) (header + 3), 8);   /* two channels of AXPBADPCMLOOP + pad */
 }
 
 size_t port_swap_sem_header(uint32_t* file)

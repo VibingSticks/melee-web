@@ -99,6 +99,9 @@ s32 DVDReadAsyncPrio(DVDFileInfo* fi, void* addr, s32 length, s32 offset, DVDCal
 {
     (void) prio;
     if (length < 0 || offset < 0 || addr == NULL) {
+        /* A rejected read never completes, and a caller that queued it behind
+         * its own busy flag (HSD's DevCom) stays blocked; say so. */
+        port_log("dvd: rejected read of %d bytes at offset %d (file at %#x) into %p", length, offset, fi->startAddr, addr);
         return 0;
     }
     uint32_t disc_off = fi->startAddr + (uint32_t) offset;

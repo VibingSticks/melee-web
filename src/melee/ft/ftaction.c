@@ -1210,8 +1210,15 @@ void ftAction_80072E4C(Fighter_GObj* gobj, CommandInfo* cmd)
     fp = gobj->user_data;
     sp60 = 1;
     gfx_id = -1;
+#ifdef TARGET_PC
+    /* The same bit (byte 1, bit 7) by its footstep_fx_0 name: the port repacks
+     * this word for the sound_effect_0 read in ftAction_80071B50, which does
+     * not keep x1_b0_7 intact (port_swap_ft_cmd_scripts, opcode 55). */
+    cmd_flag = cmd->u->footstep_fx_0.x1_b7;
+#else
     cmd_flag = cmd->u->unk_fx_0.x1_b0_7;
     cmd_flag &= 1;
+#endif
     if ((ft_80084C38(gobj, &sp64, &sp60, &gfx_id) != false) &&
         (cmd_flag == 0) && (sp64 != -1))
     {

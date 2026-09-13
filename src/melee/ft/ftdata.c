@@ -1581,9 +1581,18 @@ void ftData_8008572C(FighterKind kind)
          * clears gFtDataList between scenes, so a second match re-reads the
          * archive from the disc and that copy needs converting too. */
         if (gFtDataList[kind] != NULL) {
+            ftData* fd = gFtDataList[kind];
             u32 costumes = CostumeListsForeachCharacter[kind].numCostumes;
-            port_swap_ft_costume_tobjs(gFtDataList[kind]->x8, costumes);
-            port_swap_ft_parts_vis(gFtDataList[kind]->x8, costumes);
+            port_swap_ft_costume_tobjs(fd->x8, costumes);
+            port_swap_ft_parts_vis(fd->x8, costumes);
+            /* The two animation tables (their lengths are the count tables
+             * below, not anything in the archive) and the subaction scripts
+             * they point at. The scripts of both tables go in one call, so
+             * one they share is converted once. */
+            port_swap_ft_anim_entries(fd->xC, ftData_Table_Unk0[kind].count);
+            port_swap_ft_anim_entries(fd->x14, ftData_UnkIntPairs[kind].count);
+            port_swap_ft_cmd_scripts(NULL, fd->xC, ftData_Table_Unk0[kind].count,
+                                     fd->x14, ftData_UnkIntPairs[kind].count);
         }
 #endif
     }
@@ -1687,9 +1696,6 @@ void ftData_80085A14(FighterKind kind)
         lbFile_800168A0(1, ftData_803C23E4[kind], &sp18, &sp10);
         a_head = sp18;
         HSD_ASSERT(0x974, a_head);
-#ifdef TARGET_PC
-        port_swap_ft_anim_entries(temp_r27->xC, ftData_Table_Unk0[kind].count);
-#endif
         for (i = 0; i < (u32) ftData_Table_Unk0[kind].count; i++) {
             temp_r0 = temp_r27->xC[i].x8;
             if (temp_r0 != 0) {

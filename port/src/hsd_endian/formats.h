@@ -46,6 +46,24 @@ void port_swap_ptcl_banks(void* cmd_bank, void* tex_bank, void* form_bank);
  * and leaves the two relocated pointers alone. */
 void port_swap_ft_anim_entries(void* entries, uint32_t count);
 
+/* Fighter subaction scripts (Fighter_WaitAnimData::xC of the two tables
+ * above): bytecode streams of 32-bit words that ftaction.c and lbcommand.c
+ * read through bitfield structs, which CodeWarrior packs MSB-first and this
+ * build LSB-first. Each stream is walked as the interpreter would -- the
+ * opcode is the top 6 bits of the big-endian word, and the fighter opcodes
+ * have fixed word counts -- and every word is repacked with the widths of
+ * the struct the game reads it through. Subroutine and goto targets are
+ * followed; the second word of those commands is a relocated pointer and is
+ * left alone. Streams shared between entries, or between the two tables,
+ * are converted once, which is why both tables go in one call.
+ * `base` is what port_archive_fixup added to the pointer slots (the archive
+ * data), so a slot resolves to base + (slot - (u32) base): in the wasm build
+ * a slot already is the pointer and base may be NULL; a 64-bit host test
+ * passes its buffer. Call once per archive load, with the entries already
+ * swapped by port_swap_ft_anim_entries. */
+void port_swap_ft_cmd_scripts(const void* base, void* entries_a, uint32_t count_a, void* entries_b,
+                              uint32_t count_b);
+
 /* Per-costume texture-animation id lists (ftData::x8->x8.xC): an array of
  * `costumes` pointers, each to `count` u16 ids. Their lengths come from the
  * costume table in the code, so the schema walker cannot reach them. Call once

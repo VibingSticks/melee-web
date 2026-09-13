@@ -14,7 +14,8 @@ port_add_test(fst_test fst_test.c ${PORT_SRC_DIR}/dvd_web/fst.c)
 port_add_test(dvd_web_test dvd_web_test.c ${PORT_SRC_DIR}/dvd_web/dvd_web.c
               ${PORT_SRC_DIR}/dvd_web/fst.c)
 port_add_test(walker_test walker_test.c ${PORT_SRC_DIR}/hsd_endian/walker.c)
-port_add_test(formats_test formats_test.c ${PORT_SRC_DIR}/hsd_endian/formats.c)
+port_add_test(formats_test formats_test.c ${PORT_SRC_DIR}/hsd_endian/formats.c
+              ${PORT_SRC_DIR}/hsd_endian/walker.c)
 add_test(NAME gen_schema_test COMMAND python3 ${CMAKE_CURRENT_SOURCE_DIR}/gen_schema_test.py)
 add_test(NAME pack_test COMMAND python3 ${CMAKE_CURRENT_SOURCE_DIR}/pack_test.py)
 
@@ -33,6 +34,8 @@ port_add_game_test(vtx_arrays_test vtx_arrays_test.c ${PORT_SRC_DIR}/hsd_port/vt
 port_add_game_test(archive_swap_test archive_swap_test.c ${PORT_SRC_DIR}/hsd_endian/archive_swap.c
                    ${PORT_SRC_DIR}/hsd_endian/walker.c)
 port_add_game_test(archive_roots_test archive_roots_test.c ${PORT_SRC_DIR}/hsd_endian/archive_swap.c
+                   ${PORT_SRC_DIR}/hsd_endian/walker.c)
+port_add_game_test(ft_script_test ft_script_test.c ${PORT_SRC_DIR}/hsd_endian/formats.c
                    ${PORT_SRC_DIR}/hsd_endian/walker.c)
 
 # Host tool: archive schema coverage straight from a disc image (not a test).

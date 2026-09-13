@@ -27,6 +27,11 @@ annotations.yml (per struct name):
                       field_types: { <field>: T } to aim a pointer field at T for this root }
     term_value: 0x83D60                    pointer array ends at the element whose first word is this
     reloc_run: true                        inline array runs while each element's pointers are relocated
+    object_run: true                       array runs until the next object some relocated pointer targets
+    ptr_list: T  len_const: N  elem_field: f  elem_types: [T0, ~, T2, {f: T3, g: T4} ...]
+                                           pointer to N pointers to T, where element i's field f is aimed
+                                           at Ti (a null entry leaves that element's f alone; a mapping
+                                           aims several fields of that element)
   __union__: { disc_offset: 4, cases: {...} }   the struct itself is a union chosen by a word inside it
 """
 import argparse
@@ -298,6 +303,8 @@ class Gen:
         if "ptr_array" in fa:
             lk, lv = self.len_spec(fa, kids)
             return f"{{F_PTR_ARRAY, {off}, {self.need_name(fa['ptr_array'])}, {lk}, {lv}}}"
+        if "ptr_list" in fa:
+            return self.ptr_list(name, off, fa)
         t = f.type.get_canonical()
         if t.kind == T.POINTER:
             if "ptr" in fa:
@@ -325,6 +332,8 @@ class Gen:
                 lk, lv = "LEN_NULL_TERM", 0
             elif fa.get("reloc_run"):
                 lk, lv = "LEN_RELOC_RUN", 0
+            elif fa.get("object_run"):
+                lk, lv = "LEN_OBJECT_RUN", 0
             elif "term_value" in fa:
                 lk, lv = "LEN_TERM_VALUE", f"{int(fa['term_value'])}u"
             if et.kind == T.RECORD:
@@ -362,8 +371,28 @@ class Gen:
             return "LEN_TERM_VALUE", f"{int(fa['term_value'])}u"
         if fa.get("reloc_run"):
             return "LEN_RELOC_RUN", 0
+        if fa.get("object_run"):
+            return "LEN_OBJECT_RUN", 0
         k = next(k for k in kids if k.spelling == fa["len_field"])
         return {4: "LEN_FIELD_U32", 2: "LEN_FIELD_U16", 1: "LEN_FIELD_U8"}[k.type.get_size()], k.get_field_offsetof() // 8
+
+
+    def ptr_list(self, name, off, fa):
+        """A pointer to `len_const` pointers to `ptr_list`, element i of which has
+        `elem_field` aimed at elem_types[i] (a variant of the base struct); a null
+        entry keeps the base struct, whose field is then a pointer the walk does
+        not follow."""
+        base = fa["ptr_list"]
+        n = int(fa["len_const"])
+        types = list(fa.get("elem_types") or [])
+        if len(types) > n:
+            raise SystemExit(f"gen_schema: {name}: {len(types)} elem_types for a list of {n}")
+        types += [None] * (n - len(types))
+        plain = self.need_name(base)
+        refs = [self.variant(base, t if isinstance(t, dict) else {fa["elem_field"]: t}) if t else plain
+                for t in types]
+        self.out.append(f"static const port_type* const list_{name}_{off}[] = {{ {', '.join(refs)} }};")
+        return f"{{F_PTR_LIST, {off}, {self.helper('__ptr')}, LEN_CONST, {n}, .disc_types = list_{name}_{off}}}"
 
 
 def resource_dir_args():
@@ -395,7 +424,8 @@ def main():
     for h in a.header:
         g.collect(idx.parse(h, args=args, options=cindex.TranslationUnit.PARSE_SKIP_FUNCTION_BODIES))
     for key in ann:
-        if key not in g.by_name and not key.startswith("port_"):
+        # "__anon<off>" keys name an anonymous member struct by the identifier emit() gives it
+        if key not in g.by_name and not key.startswith("port_") and "__anon" not in key:
             g.warn(f"annotations.yml: '{key}' is not a type in the headers")
     for t in filter(None, a.types.split(",")):
         g.need_name(t)

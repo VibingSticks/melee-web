@@ -10,6 +10,7 @@
  *    landing on a relocation slot is an error;
  *  - pointers are followed only when they point inside the archive data;
  *  - F_OPAQUE fields are skipped;
+ *  - LEN_OBJECT_RUN arrays end where the next object the archive points at begins;
  *  - F_BITS repacks a storage unit from MSB-first to LSB-first field order. */
 #ifndef PORT_HSD_ENDIAN_WALKER_H
 #define PORT_HSD_ENDIAN_WALKER_H
@@ -18,7 +19,7 @@
 
 #include "schema.h"
 
-typedef struct {
+typedef struct port_walk_ctx_s {
     const uint8_t* base;
     uint32_t size;
     const uint32_t* reloc_set; /* sorted offsets relative to base */
@@ -27,6 +28,8 @@ typedef struct {
     void* visited;
     uint8_t* converted; /* one bit per byte of `base`: scalars are swapped once */
     const char* error; /* description of the first strict-mode violation */
+    uint32_t* targets;           /* sorted offsets the relocated pointers point at (built on first use) */
+    uint32_t ntargets;
     const port_type* cur_type;   /* diagnostics: where the walker is */
     const port_field* cur_field;
     unsigned nlogged;            /* violations logged so far (capped) */
@@ -39,6 +42,11 @@ void port_walk_ctx_free(port_walk_ctx* ctx);
 /* Convert `obj` (of type `type`) and everything reachable from it.
  * Returns 0, or -1 on a strict-mode violation (ctx->error says which). */
 int port_walk(port_walk_ctx* ctx, const port_type* type, void* obj);
+
+/* Records a 4-byte relocated pointer slot that a converter outside the walk
+ * (a bytecode pass) resolved and left in place, so the visited set -- and a
+ * coverage walk over it -- counts the slot as reached. */
+int port_walk_mark_slot(port_walk_ctx* ctx, const void* slot);
 
 /* Coverage: call `fn` for every (object, type) the walk visited. */
 void port_walk_visited_foreach(const port_walk_ctx* ctx, void (*fn)(void* user, const uint8_t* obj, const port_type* type),

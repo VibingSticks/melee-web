@@ -39,6 +39,17 @@ typedef struct itAnimlistCmdUnk {
     u16 x2;
 } itAnimlistCmdUnk;
 
+#ifdef TARGET_PC
+/* The first word of the effect command as the port repacks it: the opcode
+ * it_802799E4 reads, then the 10-bit argument it_80278F2C masks out of the
+ * high halfword on the GameCube (port_swap_it_cmd_scripts, opcode 10). */
+typedef struct itAnimlistGfxCmd {
+    u32 opcode : 6;
+    u32 arg : 10;
+    u32 x0_b16 : 16;
+} itAnimlistGfxCmd;
+#endif
+
 void it_80278F2C(Item_GObj* item_gobj, CommandInfo* cmd)
 {
     Vec3 sp20;
@@ -48,8 +59,12 @@ void it_80278F2C(Item_GObj* item_gobj, CommandInfo* cmd)
     s32 arg6;
     PAD_STACK(4);
 
+#ifdef TARGET_PC
+    arg2 = ((itAnimlistGfxCmd*) cmd->u)->arg;
+#else
     arg2 = ((u16*) cmd->u)[0];
     arg2 = arg2 & 0x3FF;
+#endif
     ++cmd->u;
     arg6 = (f32) ((u16*) cmd->u)[1];
     ef_id = ((u16*) cmd->u)[0];
@@ -171,7 +186,13 @@ void it_80279544(Item_GObj* item_gobj, CommandInfo* cmd)
 {
     Item* item = item_gobj->user_data;
     HitCapsule* hit = &item->x5D4_hitboxes[cmd->u->set_hitbox_damage.idx].hit;
+#ifdef TARGET_PC
+    /* The low 13 bits of the 23-bit value: the same bits the halfword read
+     * below takes from the big-endian word (port_swap_it_cmd_scripts, opcode 12). */
+    u32 val = cmd->u->set_hitbox_damage.value & 0x1FFF;
+#else
     u32 val = ((u16*) cmd->u)[1] & 0x1FFF;
+#endif
     PAD_STACK(8);
     it_80272460(hit, (u32) (item->xC3C * ((f32) val * item->xC40)), item_gobj);
     ++cmd->u;

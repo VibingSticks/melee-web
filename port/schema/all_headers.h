@@ -85,6 +85,13 @@
 #include <melee/gr/types.h>
 #include <melee/if/types.h>
 #include <melee/it/types.h>
+#include <melee/it/it_3F14.h>
+#include <melee/it/itCharItems.h>
+#include <melee/it/itCommonItems.h>
+#include <melee/it/kinds/itdosei.h>
+#include <melee/it/kinds/itkinoko.h>
+#include <melee/it/kinds/itlipstickspore.h>
+#include <melee/it/kinds/types.h>
 #include <melee/lb/types.h>
 #include <melee/mn/types.h>
 #include <melee/mp/types.h>

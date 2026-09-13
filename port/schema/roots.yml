@@ -39,7 +39,7 @@
 - { prefix: yakumono_param, type: opaque }
 - { prefix: plLoadCommonData, type: port_PlLoadCommonDataRef }
 - { prefix: eff, suffix: DataTable, type: port_EfDataTable }
-- { prefix: itPublicData, type: opaque }   # item tables: element type not known yet
+- { prefix: itPublicData, type: it_804D6D20_t }   # ItCo.dat: see annotations.yml
 - { prefix: lbRefData, type: opaque }      # LbRf.dat refraction parameters: float array length not known yet
 - { prefix: ftData, type: ftData }
 - { prefix: ftLoadCommonData, type: port_FtLoadCommonData }

@@ -64,6 +64,17 @@ void port_swap_ft_anim_entries(void* entries, uint32_t count);
 void port_swap_ft_cmd_scripts(const void* base, void* entries_a, uint32_t count_a, void* entries_b,
                               uint32_t count_b);
 
+/* Item scripts (ItemStateDesc::xC_script): the same kind of bytecode with the
+ * item command set of itanimlist.c (opcodes 10-25, one of them of variable
+ * length). `slots` are the addresses of the relocated script-pointer words
+ * (the walk of an ItCo.dat archive collects them from the state rows it
+ * visited); `base` is as for port_swap_ft_cmd_scripts. Streams shared between
+ * rows are converted once per call. `note_ptr`, when given, is called with
+ * every subroutine or goto pointer word left in place, so a coverage walk can
+ * count it as reached. */
+void port_swap_it_cmd_scripts(const void* base, const void* const* slots, uint32_t nslots,
+                              void (*note_ptr)(void* user, const void* slot), void* user);
+
 /* Per-costume texture-animation id lists (ftData::x8->x8.xC): an array of
  * `costumes` pointers, each to `count` u16 ids. Their lengths come from the
  * costume table in the code, so the schema walker cannot reach them. Call once

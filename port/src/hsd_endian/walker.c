@@ -87,6 +87,9 @@ void port_walk_ctx_free(port_walk_ctx* c)
     c->visited = NULL;
     free(c->converted);
     c->converted = NULL;
+    free(c->targets);
+    c->targets = NULL;
+    c->ntargets = 0;
 }
 
 /* --- helpers --- */
@@ -98,6 +101,47 @@ static int in_reloc(const port_walk_ctx* c, uint32_t off)
         if (c->reloc_set[m] < off) {
             lo = m + 1;
         } else if (c->reloc_set[m] > off) {
+            hi = m;
+        } else {
+            return 1;
+        }
+    }
+    return 0;
+}
+
+static int cmp_u32(const void* a, const void* b)
+{
+    uint32_t x = *(const uint32_t*) a, y = *(const uint32_t*) b;
+    return x < y ? -1 : x > y;
+}
+
+/* Is `off` the start of an object: the target of some relocated pointer in
+ * the archive? The sorted target list is built the first time it is needed,
+ * from the (already native) values in the relocation slots. */
+static int is_target(port_walk_ctx* c, uint32_t off)
+{
+    if (c->targets == NULL) {
+        c->targets = malloc((c->reloc_count + 1) * sizeof *c->targets);
+        if (c->targets == NULL) {
+            return 0;
+        }
+        c->ntargets = 0;
+        for (uint32_t i = 0; i < c->reloc_count; i++) {
+            uint32_t v, t;
+            memcpy(&v, c->base + c->reloc_set[i], 4);
+            t = v - (uint32_t) (uintptr_t) c->base;
+            if (v != 0 && t < c->size) {
+                c->targets[c->ntargets++] = t;
+            }
+        }
+        qsort(c->targets, c->ntargets, sizeof *c->targets, cmp_u32);
+    }
+    uint32_t lo = 0, hi = c->ntargets;
+    while (lo < hi) {
+        uint32_t m = lo + (hi - lo) / 2;
+        if (c->targets[m] < off) {
+            lo = m + 1;
+        } else if (c->targets[m] > off) {
             hi = m;
         } else {
             return 1;
@@ -232,9 +276,45 @@ static uint32_t read_len(const port_field* f, const uint8_t* obj)
     case LEN_FIELD_U8: return obj[f->len];
     case LEN_NULL_TERM:
     case LEN_TERM_VALUE:
-    case LEN_RELOC_RUN: return 0xFFFFFFFFu;
+    case LEN_RELOC_RUN:
+    case LEN_OBJECT_RUN: return 0xFFFFFFFFu;
     }
     return 0;
+}
+
+/* Does `t` hold any pointer (directly or in an inline struct or array)?
+ * Decides whether an object run can ask looks_like() about its elements. */
+static int type_has_pointers(const port_type* t, unsigned depth)
+{
+    if (t == NULL || depth > 8) {
+        return 0;
+    }
+    for (uint32_t i = 0; i < t->nfields; i++) {
+        const port_field* f = &t->fields[i];
+        if (f->kind == F_PTR || f->kind == F_PTR_ARRAY || f->kind == F_PTR_LIST) {
+            return 1;
+        }
+        if ((f->kind == F_STRUCT || f->kind == F_ARRAY) && type_has_pointers(f->type, depth + 1)) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
+static int looks_like(const port_walk_ctx* c, const port_type* t, const uint8_t* obj);
+
+/* One more element of an object run at `e` (element `i`)? The run stops at the
+ * end of the archive, at the start of another object, and, when the element
+ * type can be recognised by its pointers, at the first element that is not one. */
+static int object_run_continues(port_walk_ctx* c, const port_type* t, const uint8_t* e, uint32_t i)
+{
+    if (!inside(c, e, t->size)) {
+        return 0;
+    }
+    if (i != 0 && is_target(c, (uint32_t) (e - c->base))) {
+        return 0;
+    }
+    return !type_has_pointers(t, 0) || looks_like(c, t, e);
 }
 
 /* Does `obj` still look like an instance of `t`? Every pointer it holds,
@@ -253,8 +333,9 @@ static int looks_like_rec(const port_walk_ctx* c, const port_type* t, const uint
         const uint8_t* p = obj + f->offset;
         switch (f->kind) {
         case F_PTR:
-        case F_PTR_ARRAY: {
-            uint32_t n = f->kind == F_PTR ? 1 : read_len(f, obj);
+        case F_PTR_ARRAY:
+        case F_PTR_LIST: {
+            uint32_t n = f->kind == F_PTR_ARRAY ? read_len(f, obj) : 1;
             if (n == 0xFFFFFFFFu) {
                 n = 1;
             }
@@ -392,6 +473,11 @@ static int walk_field(port_walk_ctx* c, const port_field* f, uint8_t* obj)
             while (n < 0x1000 && looks_like(c, f->type, p + n * f->type->size)) {
                 n++;
             }
+        } else if (f->len_kind == LEN_OBJECT_RUN) {
+            n = 0;
+            while (n < 0x100000 && object_run_continues(c, f->type, p + n * f->type->size, n)) {
+                n++;
+            }
         } else if (f->len_kind == LEN_NULL_TERM || f->len_kind == LEN_TERM_VALUE) {
             /* inline terminated array (a root symbol that is a list): count elements first */
             n = 0;
@@ -470,7 +556,11 @@ static int walk_field(port_walk_ctx* c, const port_field* f, uint8_t* obj)
         uint32_t n = read_len(f, obj);
         for (uint32_t i = 0; i < n; i++) {
             uint8_t* e = q + i * f->type->size;
-            if (!inside(c, e, f->type->size)) {
+            if (f->len_kind == LEN_OBJECT_RUN) {
+                if (!object_run_continues(c, f->type, e, i)) {
+                    break;
+                }
+            } else if (!inside(c, e, f->type->size)) {
                 return fail(c, "array element outside the archive", e);
             }
             if (f->len_kind == LEN_NULL_TERM) {
@@ -496,6 +586,49 @@ static int walk_field(port_walk_ctx* c, const port_field* f, uint8_t* obj)
                 }
             }
             if (walk_obj(c, f->type, e) != 0) {
+                return -1;
+            }
+        }
+        return 0;
+    }
+    case F_PTR_LIST: {
+        uint8_t* q;
+        int r = resolve_ptr(c, p, 0, &q);
+        if (r == 0) {
+            return 0;
+        }
+        if (r == -2) {
+            return fail(c, "list pointer descriptor on an unrelocated slot", p);
+        }
+        if (r < 0) {
+            return fail(c, "list pointer outside the archive", p);
+        }
+        for (uint32_t i = 0; i < f->len; i++) {
+            uint8_t* slot = q + 4 * i;
+            uint8_t* e;
+            const port_type* t = f->disc_types[i];
+            if (!inside(c, slot, 4)) {
+                return fail(c, "list element outside the archive", slot);
+            }
+            /* Recorded like the elements of a pointer array: the visited set is
+             * what says which relocated slots the walk reached. */
+            if (vset_add(c->visited, (uintptr_t) slot, f->type) < 0) {
+                return fail(c, "out of memory", slot);
+            }
+            if (t == NULL) {
+                continue;
+            }
+            r = resolve_ptr(c, slot, t->size, &e);
+            if (r == 0) {
+                continue;
+            }
+            if (r == -2) {
+                return fail(c, "list element descriptor on an unrelocated slot", slot);
+            }
+            if (r < 0) {
+                return fail(c, "list element outside the archive", slot);
+            }
+            if (walk_obj(c, t, e) != 0) {
                 return -1;
             }
         }
@@ -566,6 +699,14 @@ static int walk_obj(port_walk_ctx* c, const port_type* t, uint8_t* obj)
 int port_walk(port_walk_ctx* c, const port_type* t, void* obj)
 {
     return walk_obj(c, t, obj);
+}
+
+static const port_field marked_slot_fields[] = { { .kind = F_PTR, .offset = 0, .type = NULL } };
+static const port_type marked_slot_type = { "script pointer", 4, marked_slot_fields, 1 };
+
+int port_walk_mark_slot(port_walk_ctx* c, const void* slot)
+{
+    return vset_add(c->visited, (uintptr_t) slot, &marked_slot_type) < 0 ? -1 : 0;
 }
 
 void port_walk_visited_foreach(const port_walk_ctx* c, void (*fn)(void*, const uint8_t*, const port_type*), void* user)

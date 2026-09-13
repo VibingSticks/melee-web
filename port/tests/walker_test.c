@@ -120,6 +120,54 @@ static void run(void)
     CHECK_EQ_U32(port_walk(&c, &Un_t, u), (uint32_t) -1); /* no such case */
     port_walk_ctx_free(&c);
 
+    /* object runs: an array with no length of its own ends where the next object
+     * some pointer targets begins (and, for element types with pointers, at the
+     * first element that is not one). A per-index typed pointer list. */
+    {
+        /* Layout: Hdr at 0 { Row* rows; u32* words; Leaf** list }, then rows at 16: two
+         * { Leaf* p; u32 v } rows, then Leaf at 32 (a pointer target, so the run of
+         * rows ends there), words at 40: 3 u32 then Leaf at 52 (another target), list
+         * at 60: [&leaf52, &leaf32]. */
+        static const port_field row_fields[] = { { F_PTR, 0, &Leaf_t }, { F_U32, 4 } };
+        static const port_type Row_t = { "Row", 8, row_fields, 2 };
+        static const port_field u32_fields[] = { { F_U32, 0 } };
+        static const port_type U32_t = { "u32", 4, u32_fields, 1 };
+        static const port_type* const list_types[] = { &Leaf_t, NULL };
+        static const port_field hdr_fields[] = {
+            { F_PTR_ARRAY, 0, &Row_t, LEN_OBJECT_RUN, 0 },
+            { F_PTR_ARRAY, 4, &U32_t, LEN_OBJECT_RUN, 0 },
+            { F_PTR_LIST, 8, &LeafPtr_t, LEN_CONST, 2, .disc_types = list_types },
+        };
+        static const port_type Hdr_t = { "Hdr", 12, hdr_fields, 3 };
+        uint8_t o[72];
+        memset(o, 0, sizeof o);
+        native_ptr(o + 0, o + 16);
+        native_ptr(o + 4, o + 40);
+        native_ptr(o + 8, o + 60);
+        native_ptr(o + 16, o + 32); be32(o + 20, 0x01020304u);   /* row 0 -> leaf at 32 */
+        native_ptr(o + 24, NULL);   be32(o + 28, 0x05060708u);   /* row 1: null pointer still looks like a row */
+        be16(o + 32, 0x1234); be16(o + 34, 0x5678); be32(o + 36, 0x3F800000u); /* leaf at 32 */
+        be32(o + 40, 0x11111111u); be32(o + 44, 0x22222222u); be32(o + 48, 0x33333333u);
+        be16(o + 52, 0x0102); be16(o + 54, 0x0304); be32(o + 56, 0x40000000u); /* leaf at 52 */
+        native_ptr(o + 60, o + 52);
+        native_ptr(o + 64, o + 32);
+        uint32_t orelocs[] = { 0, 4, 8, 16, 60, 64 };
+        CHECK_EQ_U32(port_walk_ctx_init(&c, o, sizeof o, orelocs, 6, 1), 0);
+        CHECK_EQ_U32(port_walk(&c, &Hdr_t, o), 0);
+        CHECK(c.error == NULL);
+        uint32_t v;
+        memcpy(&v, o + 20, 4); CHECK_EQ_U32(v, 0x01020304u);
+        memcpy(&v, o + 28, 4); CHECK_EQ_U32(v, 0x05060708u);
+        memcpy(&a, o + 32, 2); CHECK_EQ_U32(a, 0x1234);         /* leaf at 32: reached via row 0 */
+        memcpy(&v, o + 36, 4); CHECK_EQ_U32(v, 0x3F800000u);    /* ... and not swapped again as a third row */
+        memcpy(&v, o + 40, 4); CHECK_EQ_U32(v, 0x11111111u);
+        memcpy(&v, o + 48, 4); CHECK_EQ_U32(v, 0x33333333u);
+        memcpy(&a, o + 52, 2); CHECK_EQ_U32(a, 0x0102);         /* leaf at 52: list entry 0, typed; the word run stopped before it */
+        memcpy(&f, o + 56, 4); CHECK(f == 2.0f);
+        port_walk_ctx_free(&c);
+        /* list entry 1 has no type: the leaf at 32 was converted through row 0 only */
+    }
+
     /* bitfield repacking: 16-bit unit with padding, and a full 8-bit unit */
     uint8_t w16[2];
     be16(w16, (0x3u << 14) | (0x2Au << 8) | 0x00FF); /* fields 2,6 then 8 unused bits */

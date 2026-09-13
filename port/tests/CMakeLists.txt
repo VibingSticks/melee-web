@@ -32,10 +32,12 @@ endfunction()
 
 port_add_game_test(vtx_arrays_test vtx_arrays_test.c ${PORT_SRC_DIR}/hsd_port/vtx_arrays.c)
 port_add_game_test(archive_swap_test archive_swap_test.c ${PORT_SRC_DIR}/hsd_endian/archive_swap.c
-                   ${PORT_SRC_DIR}/hsd_endian/walker.c)
+                   ${PORT_SRC_DIR}/hsd_endian/walker.c ${PORT_SRC_DIR}/hsd_endian/formats.c)
 port_add_game_test(archive_roots_test archive_roots_test.c ${PORT_SRC_DIR}/hsd_endian/archive_swap.c
-                   ${PORT_SRC_DIR}/hsd_endian/walker.c)
+                   ${PORT_SRC_DIR}/hsd_endian/walker.c ${PORT_SRC_DIR}/hsd_endian/formats.c)
 port_add_game_test(ft_script_test ft_script_test.c ${PORT_SRC_DIR}/hsd_endian/formats.c
+                   ${PORT_SRC_DIR}/hsd_endian/walker.c)
+port_add_game_test(it_script_test it_script_test.c ${PORT_SRC_DIR}/hsd_endian/formats.c
                    ${PORT_SRC_DIR}/hsd_endian/walker.c)
 
 # Host tool: archive schema coverage straight from a disc image (not a test).
@@ -59,6 +61,7 @@ add_custom_command(OUTPUT ${HOST_SCHEMA_TABLES}
     COMMENT "Generating archive endian schema tables (host)")
 add_executable(archive_coverage ${CMAKE_SOURCE_DIR}/tools/archive_coverage.c ${HOST_SCHEMA_TABLES}
                ${PORT_SRC_DIR}/hsd_endian/archive_swap.c ${PORT_SRC_DIR}/hsd_endian/walker.c
+               ${PORT_SRC_DIR}/hsd_endian/formats.c
                ${PORT_SRC_DIR}/dvd_web/fst.c port_host_stubs.c)
 target_include_directories(archive_coverage PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}
                            ${PORT_SRC_DIR}/compat ${PORT_SRC_DIR} ${GAME_ROOT}/src ${AURORA_INC})

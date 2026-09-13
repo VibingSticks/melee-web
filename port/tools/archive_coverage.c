@@ -107,6 +107,7 @@ static void check_archive(const char* name, uint8_t* file, uint32_t size)
     }
     /* coverage: relocated slots not inside any visited object */
     g_nvis = 0;
+    port_archive_convert_scripts(&c, name);
     port_walk_visited_foreach(&c, collect, NULL);
     qsort(g_vis, g_nvis, sizeof *g_vis, cmp_vis);
     int unreached = 0;
@@ -129,7 +130,7 @@ static void check_archive(const char* name, uint8_t* file, uint32_t size)
                 /* covered if some visited object's descriptor names this slot as a pointer */
                 for (uint32_t f = 0; f < v->type->nfields; f++) {
                     const port_field* fd = &v->type->fields[f];
-                    if ((fd->kind == F_PTR || fd->kind == F_PTR_ARRAY || fd->kind == F_WORD || fd->kind == F_UNION)
+                    if ((fd->kind == F_PTR || fd->kind == F_PTR_ARRAY || fd->kind == F_PTR_LIST || fd->kind == F_WORD || fd->kind == F_UNION)
                         && v->obj + fd->offset == slot) covered = 1;
                     if (fd->kind == F_ARRAY && fd->type->nfields == 1 && (fd->type->fields[0].kind == F_PTR || fd->type->fields[0].kind == F_WORD)
                         && slot >= v->obj + fd->offset && ((size_t) (slot - v->obj - fd->offset) % fd->type->size) == 0) covered = 1;

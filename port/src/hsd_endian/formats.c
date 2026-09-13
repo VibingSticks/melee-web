@@ -294,10 +294,76 @@ static const ft_cmd_layout ft_cmd_layouts[] = {
 };
 #define FT_CMD_OPCODES (sizeof ft_cmd_layouts / sizeof ft_cmd_layouts[0])
 
+/* Item scripts (ItemStateDesc::xC_script; itanimlist.c it_802799E4): the same
+ * generic commands 0-9, then the 16 item commands of it_803F22A8 at 10-25.
+ * Bytes a handler reads one at a time ((u8*) cmd->u)[k] are the same in either
+ * byte order, so such a word is left alone (n == 0). */
+static const ft_cmd_layout it_cmd_layouts[] = {
+    /*  0 */ { 1, { OP1 } },                                 /* Command_00: end of script */
+    /*  1 */ { 1, { OP1 } },                                 /* Command_01: synchronous timer */
+    /*  2 */ { 1, { OP1 } },                                 /* Command_02: asynchronous timer */
+    /*  3 */ { 1, { OP1 } },                                 /* Command_03: set loop */
+    /*  4 */ { 1, { OP1 } },                                 /* Command_04: execute loop */
+    /*  5 */ { 2, { OP1, PTR } },                            /* Command_05: subroutine */
+    /*  6 */ { 1, { OP1 } },                                 /* Command_06: return */
+    /*  7 */ { 2, { OP1, PTR } },                            /* Command_07: goto */
+    /*  8 */ { 1, { OP1 } },                                 /* Command_08: set timer animation */
+    /*  9 */ { 1, { OP(8, 18) } },                           /* Command_09 */
+    /* 10: it_80278F2C reads the first word as a raw u16 masked to 10 bits after
+     * the opcode, then four words of u16/s16 pairs; under TARGET_PC the first
+     * read goes through a bitfield struct with these widths. */
+    /* 10 */ { 5, { OP(10, 16), B(16, 16), B(16, 16), B(16, 16), B(16, 16) } },
+    /* 11 */ { 6, { OP(3, 3, 7, 13), B(16, 16), B(16, 16), B(9, 9, 9, 1, 1, 1, 1, 1),
+                    B(9, 5, 1, 8, 3, 4, 1, 1), { 0, { 0 } } } }, /* it_create_hitbox_0, spawn_hitbox_1..3,
+                                                                    it_create_hitbox_4, then bytes */
+    /* 12 */ { 1, { OP(3, 23) } },                           /* set_hitbox_damage (value masked under TARGET_PC) */
+    /* 13 */ { 1, { OP(3, 23) } },                           /* set_hitbox_scale */
+    /* 14 */ { 1, { OP1 } },                                 /* set_throw_flags.hit_idx */
+    /* 15 */ { 1, { OP1 } },                                 /* it_802796C4 */
+    /* 16: it_8027978C, a colour-animation command: itAnimlistCmdUnk (u16 bitfields
+     * 6/8/2 then a u16), then for sub-opcodes 0-2 and 10-11 a u32 and a word read
+     * as bytes; other sub-opcodes have only one extra word (it_cmd_nwords). */
+    /* 16 */ { 3, { OP(8, 2, 16), B(32), { 0, { 0 } } } },
+    /* 17 */ { 1, { OP1 } },                                 /* set_throw_flags.hit_idx -> xDAC */
+    /* 18 */ { 1, { OP1 } },                                 /* -> xDB0 */
+    /* 19 */ { 1, { OP1 } },                                 /* -> xDB4 */
+    /* 20 */ { 1, { OP1 } },                                 /* it_80279768 */
+    /* 21 */ { 1, { OP(13, 13) } },                          /* unk33: it_80273598 */
+    /* 22 */ { 1, { OP1 } },                                 /* it_80273600 */
+    /* 23 */ { 1, { OP(13, 13) } },                          /* unk33: it_80273648 */
+    /* 24 */ { 1, { OP(8, 18) } },                           /* unk13: it_80279B88 */
+    /* 25 */ { 1, { OP1 } },                                 /* it_80279BBC */
+};
+#define IT_CMD_OPCODES (sizeof it_cmd_layouts / sizeof it_cmd_layouts[0])
+
 #undef B
 #undef PTR
 #undef OP
 #undef OP1
+
+/* Item opcode 16 is two or three words depending on its own sub-opcode (bits
+ * 6-13 of the big-endian first word). */
+static unsigned it_cmd_nwords(unsigned op, const uint8_t* p)
+{
+    if (op == 16) {
+        unsigned sub = ((p[0] & 3u) << 6) | (p[1] >> 2);
+        return (sub <= 2 || sub == 10 || sub == 11) ? 3 : 2;
+    }
+    return 0;
+}
+
+/* One bytecode dialect: its opcode layouts and, for dialects with a
+ * variable-length command, how many words such a command occupies (0: as the
+ * table says). */
+typedef struct {
+    const char* tag;
+    const ft_cmd_layout* layouts;
+    unsigned nlayouts;
+    unsigned (*nwords)(unsigned op, const uint8_t* p);
+} cmd_set;
+
+static const cmd_set ft_cmd_set = { "ft_script", ft_cmd_layouts, FT_CMD_OPCODES, NULL };
+static const cmd_set it_cmd_set = { "it_script", it_cmd_layouts, IT_CMD_OPCODES, it_cmd_nwords };
 
 enum { FT_CMD_END = 0, FT_CMD_SUBROUTINE = 5, FT_CMD_RETURN = 6, FT_CMD_GOTO = 7 };
 
@@ -344,6 +410,9 @@ static int word_set_add(word_set* s, uintptr_t a) /* 1 if new, 0 if present, -1 
 
 typedef struct {
     const uint8_t* base;
+    const cmd_set* set;
+    void (*note_ptr)(void* user, const void* slot); /* a pointer word left alone (may be NULL) */
+    void* note_user;
     word_set seen;
     int errors;
 } ft_script_ctx;
@@ -365,7 +434,7 @@ static void convert_stream(ft_script_ctx* c, uint8_t* p, unsigned depth)
 {
     uint32_t walked = 0;
     if (depth > 64) {
-        port_log("ft_script: subroutines nested too deep at %p", (void*) p);
+        port_log("%s: subroutines nested too deep at %p", c->set->tag, (void*) p);
         c->errors++;
         return;
     }
@@ -378,13 +447,17 @@ static void convert_stream(ft_script_ctx* c, uint8_t* p, unsigned depth)
             return; /* converted by an earlier walk (or out of memory) */
         }
         unsigned op = p[0] >> 2; /* the top 6 bits of the big-endian word */
-        if (op >= FT_CMD_OPCODES) {
-            port_log("ft_script: unknown opcode %u at %p", op, (void*) p);
+        if (op >= c->set->nlayouts) {
+            port_log("%s: unknown opcode %u at %p", c->set->tag, op, (void*) p);
             c->errors++;
             return;
         }
-        const ft_cmd_layout* l = &ft_cmd_layouts[op];
-        for (unsigned k = 0; k < l->nwords; k++) {
+        const ft_cmd_layout* l = &c->set->layouts[op];
+        unsigned nwords = c->set->nwords != NULL ? c->set->nwords(op, p) : 0;
+        if (nwords == 0) {
+            nwords = l->nwords;
+        }
+        for (unsigned k = 0; k < nwords; k++) {
             if (k != 0) {
                 word_set_add(&c->seen, (uintptr_t) (p + 4 * k));
             }
@@ -396,15 +469,18 @@ static void convert_stream(ft_script_ctx* c, uint8_t* p, unsigned depth)
             return;
         }
         if (op == FT_CMD_SUBROUTINE || op == FT_CMD_GOTO) {
+            if (c->note_ptr != NULL) {
+                c->note_ptr(c->note_user, p + 4);
+            }
             convert_stream(c, resolve_slot(c, p + 4), depth + 1);
             if (op == FT_CMD_GOTO) {
                 return;
             }
         }
-        p += 4 * l->nwords;
-        walked += l->nwords;
+        p += 4 * nwords;
+        walked += nwords;
         if (walked > FT_SCRIPT_MAX_WORDS) {
-            port_log("ft_script: no end of script within %u words of %p", walked, (void*) p);
+            port_log("%s: no end of script within %u words of %p", c->set->tag, walked, (void*) p);
             c->errors++;
             return;
         }
@@ -428,11 +504,30 @@ void port_swap_ft_cmd_scripts(const void* base, void* entries_a, uint32_t count_
     ft_script_ctx c;
     memset(&c, 0, sizeof c);
     c.base = base;
+    c.set = &ft_cmd_set;
     convert_table(&c, entries_a, count_a);
     convert_table(&c, entries_b, count_b);
     if (c.errors != 0) {
         port_log("ft_script: %d problems converting %u+%u scripts", c.errors, (unsigned) count_a,
                  (unsigned) count_b);
+    }
+    free(c.seen.slots);
+}
+
+void port_swap_it_cmd_scripts(const void* base, const void* const* slots, uint32_t nslots,
+                              void (*note_ptr)(void* user, const void* slot), void* user)
+{
+    ft_script_ctx c;
+    memset(&c, 0, sizeof c);
+    c.base = base;
+    c.set = &it_cmd_set;
+    c.note_ptr = note_ptr;
+    c.note_user = user;
+    for (uint32_t i = 0; i < nslots; i++) {
+        convert_stream(&c, resolve_slot(&c, slots[i]), 0);
+    }
+    if (c.errors != 0) {
+        port_log("it_script: %d problems converting %u scripts", c.errors, (unsigned) nslots);
     }
     free(c.seen.slots);
 }

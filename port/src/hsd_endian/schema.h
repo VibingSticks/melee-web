@@ -20,8 +20,11 @@ typedef enum {
     F_BITS,      /* a bitfield storage unit: repacked MSB-first -> LSB-first */
     F_UNION,     /* discriminated union: case chosen by a sibling field */
     F_OPAQUE,    /* raw data (textures, display lists, vertex buffers): left big-endian */
-    F_WORD       /* 4-byte slot: a pointer when the relocation table names it (followed if
+    F_WORD,      /* 4-byte slot: a pointer when the relocation table names it (followed if
                     `type` is set), otherwise a u32/f32 scalar to swap */
+    F_PTR_LIST   /* pointer to an inline list of `len` pointers whose targets differ by index:
+                    element i is followed as disc_types[i] (NULL: left alone). For tables whose
+                    rows share a struct but not its payload (each item kind's attribute block). */
 } port_fkind;
 
 typedef enum {
@@ -32,9 +35,14 @@ typedef enum {
     LEN_NULL_TERM, /* elements until one whose first pointer-sized word is 0 */
     LEN_TERM_VALUE, /* elements until one whose first (big-endian) word equals len; the terminator is
                        converted too so the game can compare it natively */
-    LEN_RELOC_RUN   /* elements while each one still looks like an element: every pointer field is
+    LEN_RELOC_RUN,  /* elements while each one still looks like an element: every pointer field is
                        either null or a slot the relocation table named. Used for tables whose
                        length lives nowhere in the data (the effect descriptor tables). */
+    LEN_OBJECT_RUN  /* elements until the start of the next object: the first offset past the array
+                       that some relocated pointer in the archive targets. An element type that
+                       holds pointers must also look like one (as LEN_RELOC_RUN). For arrays the
+                       archive tool packed back to back with whatever it wrote next, and whose
+                       length lives nowhere (an item's state table, its attribute block). */
 } port_lenkind;
 
 typedef struct port_type port_type;
@@ -50,7 +58,7 @@ typedef struct {
     uint8_t nbits;                      /* F_BITS: number of widths */
     uint32_t disc_offset;               /* F_UNION: byte offset of the discriminator in the parent */
     const uint32_t* disc_values;        /* F_UNION: case values (compared after masking) */
-    const port_type* const* disc_types; /* F_UNION: case types */
+    const port_type* const* disc_types; /* F_UNION: case types; F_PTR_LIST: per-index targets */
     uint8_t ncases;
     uint8_t disc_size;                  /* F_UNION: 1, 2 or 4 bytes (0 means 4) */
     uint8_t disc_be;                    /* F_UNION: discriminator is still big-endian (it lies inside the union) */

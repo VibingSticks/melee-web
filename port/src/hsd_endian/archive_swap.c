@@ -104,8 +104,58 @@ int port_archive_fixup(uint8_t* f, uint32_t n, port_archive_hdr* h, uint32_t** r
 }
 
 /* --- step 2: root dispatch (plan Task 14) --- */
+#include "formats.h"
 #include "walker.h"
 #include "../port.h"
+
+/* --- bytecode reached through the walk ---
+ * Item state rows (ItemStateDesc) point at scripts the walk cannot describe:
+ * the words are bitfield commands whose layout depends on the opcode. The rows
+ * the walk visited are collected here and their scripts converted afterwards,
+ * while the context is alive to record the pointer words the converter leaves
+ * in place. */
+typedef struct {
+    const void** slots;
+    uint32_t n, cap;
+    int oom;
+} script_slots;
+
+static void collect_item_scripts(void* user, const uint8_t* obj, const port_type* t)
+{
+    script_slots* s = user;
+    if (strcmp(t->name, "ItemStateDesc") != 0) {
+        return;
+    }
+    if (s->n == s->cap) {
+        uint32_t ncap = s->cap != 0 ? s->cap * 2 : 256;
+        const void** p = realloc((void*) s->slots, ncap * sizeof *p);
+        if (p == NULL) {
+            s->oom = 1;
+            return;
+        }
+        s->slots = p;
+        s->cap = ncap;
+    }
+    s->slots[s->n++] = obj + 12; /* ItemStateDesc::xC_script */
+}
+
+static void note_script_ptr(void* user, const void* slot)
+{
+    port_walk_mark_slot(user, slot);
+}
+
+void port_archive_convert_scripts(port_walk_ctx* c, const char* name)
+{
+    script_slots s;
+    memset(&s, 0, sizeof s);
+    port_walk_visited_foreach(c, collect_item_scripts, &s);
+    if (s.oom) {
+        port_log("hsd_endian: out of memory collecting item scripts in %s", name);
+    } else if (s.n != 0) {
+        port_swap_it_cmd_scripts(c->base, s.slots, s.n, note_script_ptr, c);
+    }
+    free((void*) s.slots);
+}
 
 /* Longest prefix+suffix match of `sym` in port_roots; NULL when none matches. */
 static const port_root* find_root(const char* sym)
@@ -169,6 +219,7 @@ int port_archive_swap_roots(HSD_Archive* ar, const uint32_t* reloc_set, uint32_t
             }
         }
     }
+    port_archive_convert_scripts(&c, name);
     port_walk_ctx_free(&c);
     port_log("hsd_endian: converted %s (%u roots, %u bytes)", name, (unsigned) ar->header.nb_public,
              (unsigned) ar->header.data_size, (void*) ar->data);

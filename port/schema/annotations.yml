@@ -117,3 +117,89 @@ ftData_x30:
   inits: { ptr_array: ftHurtboxInit, len_field: count }
 port_EfDataTable:
   descs: { reloc_run: true }
+
+# --- ItCo.dat: item common data ------------------------------------------------
+# The root is the six-pointer struct iteffect.c copies into the it_804D6D* globals.
+# The three Article tables are indexed by item kind (item.c Item_80267978): 43
+# common items, 118 character items (only Kuriboh..Ottosea, Unk4 and Coin live in
+# ItCo.dat; the fighters' own PlXx.dat articles are registered at load), and 47
+# Poke Ball Pokemon. Each Article::x4_specialAttributes is a different struct per
+# kind, given here where a kind's code names it and the struct's size matches the
+# block in the archive (port/tools: the block runs to the next object). A ~ leaves
+# that block big-endian: the code reads it through a run-time struct, the sizes
+# disagree, or nothing reads it.
+it_804D6D20_t:
+  x4:
+    ptr_list: Article
+    len_const: 43
+    elem_field: x4_specialAttributes
+    elem_types: [
+      ItCapsuleAttr, itBoxAttributes, itTaruAttributes, ~, itKusudamaAttributes,
+      itTaruCann_DatAttrs, ~, itDoseiAttributes, HeartContainerAttr, MaximTomatoSpecialAttr,
+      itStar_ItemVars, itBatAttributes, itSword_UnkArticle1, port_F32Run, port_itGShell_Attrs,
+      port_itRShell_Attrs, ItLGunAttr, itUnkAttributes, { x4_specialAttributes: port_itFoodsAttrs, x10_modelDesc: port_ItemModelDescJoints }, port_itMsBomb_Attrs,
+      itFlipper_DatAttrs, itSScopeAttributes, port_StarRodAttributes, itLipstickAttributes,
+      itHarisen_DatAttrs, FFlowerAttr, port_KinokoAttrs, port_KinokoAttrs, port_itHammerData,
+      { x4_specialAttributes: itWstarAttributes, x10_modelDesc: port_ItemModelDescAnims }, ~, ~, ~, ~, itMBallAttributes, ItLGunRayAttr, port_StarRodStarAttrs,
+      itLipstickSporeAttributes, ScopeBeamAttrs, ItLGunBeamAttr, itHammerheadAttributes,
+      port_F32Run, itEvYoshiEgg_DatAttrs ]
+  x8:
+    ptr_list: Article
+    len_const: 118
+    elem_field: x4_specialAttributes
+    elem_types: [
+      ~, itLeadeadAttributes, itOctarockAttributes, itOldottoseaAttributes, ~, ~, ~, ~, ~, ~, ~, ~,
+      ~, ~, ~, ~, ~, ~, ~, ~, ~, ~, ~, ~, ~, ~, ~, ~, ~, ~, ~, ~, ~, ~, ~, ~, ~, ~, ~, ~, ~, ~, ~,
+      ~, ~, ~, ~, ~, ~, ~, ~, ~, ~, ~, ~, ~, ~, ~, ~, ~, ~, ~, ~, ~, ~, ~, ~, ~, ~, ~, ~, ~, ~, ~,
+      ~, ~, ~, ~, ~, ~, ~, ~, ~, ~, ~, ~, ~, ~, ~, ~, ~, ~, ~, ~, ~, ~, ~, ~, ~, ~, ~, ~, ~, ~, ~,
+      ~, ~, ~, ~, ~, ~, ~, ~, ~, ~, it_2E5A_Attrs, itCoinAttributes, ~ ]
+  xC:
+    ptr_list: Article
+    len_const: 47
+    elem_field: x4_specialAttributes
+    elem_types: [
+      itTosakinto_Attrs, itChicoritaLeafAttr, itKabigonAttributes, itKamexAttributes,
+      itMatadogasAttributes, itLizardonAttributes, itFireAttributes, itThunderPokemonAttributes,
+      itFreezerAttributes, itsonansAttributes, ~, { x4_specialAttributes: itUnknownAttributes, x10_modelDesc: port_ItemModelDescJoints }, ~, ~, ~,
+      itkireihanaAttributes, ~, itLugiaAttributes, itHououAttr, ~, itPokemonAttributes,
+      itPokemonAttributes, MewVars, port_F32Run, itHitodemanAttributes, itLuckyAttributes, ~, ~,
+      itMarilAttributes, itFushigibanaAttributes, ~, ~, ~, ~, ~, ~, ~, ~, itUnknownAttributes,
+      port_F32Run, port_F32Run, port_F32Run, ~, ~, ~, ~, ~ ]
+  # colour-animation table (lb_013B.c): {script, priority, enable} rows indexed
+  # by colanim id; the scripts are a third bytecode, left big-endian for now.
+  x14: { ptr_array: Fighter_804D653C_t, object_run: true }
+Article:
+  # ItemStateDesc rows indexed by animation id; nothing records the count and
+  # the archive packs the Article itself right after the rows.
+  xC_itemStates: { ptr_array: ItemStateDesc, object_run: true }
+  x14_dynamics:  { ptr: port_ItemDynamics }
+ItemStateDesc:
+  # a shape animation for most kinds; the Fire Flower's rows carry an integer
+  # (0x3908, then -1) here instead
+  x8_parameters: { word: { ptr: HSD_ShapeAnimJoint } }
+ItHurtBoneList:
+  descs: { ptr_array: ItHurtBoneDesc, len_field: count }
+port_ItemDynamics:
+  dyn_descs:  { ptr_array: BoneDynamicsDesc, len_field: count }
+  coll_descs: { ptr_array: port_ItCollDynamicsDesc, len_field: coll_count }
+# lb_80011710 reads DynamicsDesc::data as `count` lb_00F9_UnkDesc1Inner rows
+# (the run-time DynamicsData is a different, allocated struct).
+DynamicsDesc:
+  data: { ptr_array: lb_00F9_UnkDesc1Inner, len_field: count }
+# ftdynamics.c reads dynamicsNum rows of ftDynamicBones; the header's
+# ArticleDynamicBones declares the maximum (10), and the rows past the count
+# are whatever the archive packed next.
+ftDynamics__anon0:
+  ftDynamicBones: { ptr_array: BoneDynamicsDesc, len_field: dynamicsNum }
+itWstarAttributes:
+  x28_entries: { object_run: true }   # x24_count rows, declared [1]
+port_itFoodsAttrs:
+  rows: { object_run: true }
+port_F32Run:
+  v: { object_run: true }
+port_KinokoAttrs:
+  anims: { object_run: true }
+port_ItemModelDescJoints:
+  joints: { object_run: true }
+port_ItemModelDescAnims:
+  anims: { object_run: true }

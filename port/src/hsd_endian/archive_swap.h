@@ -32,6 +32,14 @@ int port_archive_fixup(uint8_t* file, uint32_t file_size, port_archive_hdr* hdr,
  * Implemented by plan Task 14; until then a no-op returning 0. */
 int port_archive_swap_roots(HSD_Archive* archive, const uint32_t* reloc_set, uint32_t reloc_count);
 
+/* The bytecode the walk reached but cannot describe (item scripts behind the
+ * ItemStateDesc rows it visited): converted after the roots, with the pointer
+ * words it leaves in place recorded in `ctx` as reached. port_archive_swap_roots
+ * does this itself; a caller that drives port_walk directly (the coverage tool)
+ * calls it before reading the visited set. */
+struct port_walk_ctx_s;
+void port_archive_convert_scripts(struct port_walk_ctx_s* ctx, const char* archive_name);
+
 /* Replacement for the tail of HSD_ArchiveLocateExtern: the in-data chain of
  * reference sites is big-endian and not covered by the relocation table. */
 uint32_t port_archive_read_be32(const void* p);

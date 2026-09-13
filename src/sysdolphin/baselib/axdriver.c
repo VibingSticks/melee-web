@@ -490,6 +490,16 @@ static void fn_8038CC1C(void)
     }
 }
 
+#ifdef TARGET_PC
+/* The synth calls this 0-argument function through a one-argument pointer
+ * (driverMasterClockCallback is void(*)(int)); see PORT_FNCAST. */
+static void fn_8038CC1C__as_master_clock(int unused)
+{
+    (void) unused;
+    fn_8038CC1C();
+}
+#endif
+
 static void fn_8038CEA4(s32 vID)
 {
     HSD_SM* v;
@@ -1164,7 +1174,8 @@ void AXDriver_8038E498(int voices, int priority, int sample_rate,
     }
 
     HSD_SynthInit(voices, priority, sample_rate, aram_size);
-    HSD_SynthSFXSetDriverMasterClockCallback(fn_8038CC1C);
+    HSD_SynthSFXSetDriverMasterClockCallback(
+        PORT_FNCAST(fn_8038CC1C__as_master_clock, fn_8038CC1C));
     HSD_SynthSFXSetDriverInactivatedCallback(fn_8038CEA4);
     HSD_SynthSFXSetDriverPauseCallback(fn_8038CF48);
 

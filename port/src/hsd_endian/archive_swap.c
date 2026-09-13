@@ -171,6 +171,6 @@ int port_archive_swap_roots(HSD_Archive* ar, const uint32_t* reloc_set, uint32_t
     }
     port_walk_ctx_free(&c);
     port_log("hsd_endian: converted %s (%u roots, %u bytes)", name, (unsigned) ar->header.nb_public,
-             (unsigned) ar->header.data_size);
+             (unsigned) ar->header.data_size, (void*) ar->data);
     return rc;
 }

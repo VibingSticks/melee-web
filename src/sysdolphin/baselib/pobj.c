@@ -438,20 +438,39 @@ void HSD_ClearVtxDesc(void)
 }
 
 #ifdef TARGET_PC
+/// Byte size last passed to GXSetArray for each attribute of
+/// #prev_vtxdesclist_array. PObjs commonly share one HSD_VtxDescList (and the
+/// arrays it points at) while indexing different ranges of them, so the size
+/// computed from one PObj's display list is not enough for its siblings.
+static u32 prev_array_sizes[GX_VA_MAX_ATTR];
+
 static void setupArrayDesc(HSD_PObj* pobj)
 {
     HSD_VtxDescList* desc_list = pobj->verts;
     HSD_VtxDescList* desc;
+    bool new_list = prev_vtxdesclist_array != desc_list;
 
-    if (prev_vtxdesclist_array != desc_list) {
-        for (desc = desc_list; desc->attr != GX_VA_NULL; desc++) {
-            if (desc->attr_type != GX_DIRECT) {
-                GXSetArray(desc->attr, desc->vertex,
-                           port_pobj_array_size(pobj, desc), desc->stride,
-                           false);
-            }
-        }
+    if (new_list) {
+        memset(prev_array_sizes, 0, sizeof(prev_array_sizes));
         prev_vtxdesclist_array = desc_list;
+    }
+    for (desc = desc_list; desc->attr != GX_VA_NULL; desc++) {
+        u32 size;
+        if (desc->attr_type == GX_DIRECT) {
+            continue;
+        }
+        size = port_pobj_array_size(pobj, desc);
+        if (desc->attr < GX_VA_MAX_ATTR) {
+            /* Only grow: a later PObj that needs more of a shared array
+             * re-registers it; a smaller one keeps the larger upload. */
+            if (!new_list && size <= prev_array_sizes[desc->attr]) {
+                continue;
+            }
+            prev_array_sizes[desc->attr] = size;
+        } else if (!new_list) {
+            continue;
+        }
+        GXSetArray(desc->attr, desc->vertex, size, desc->stride, false);
     }
 #else
 static void setupArrayDesc(HSD_VtxDescList* desc_list)

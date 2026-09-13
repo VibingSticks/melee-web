@@ -297,8 +297,8 @@ void hsd_80391E18(const u8* list, f32 x1, f32 y1, f32 x2, f32 y2)
 
         GXBegin(0xA8, 0, 2);
 
-        GXWGFifo.f32 = prev_x;
-        GXWGFifo.f32 = prev_y;
+        GX_WGPIPE_F32(prev_x);
+        GX_WGPIPE_F32(prev_y);
 
         prev_x = t * dx + x1;
         prev_y = t * dy + y1;
@@ -416,9 +416,14 @@ GlyphEntry lbl_80408898[4] = {
     { 0xB3808000, hsd_80392194 },
 };
 
+#ifdef TARGET_PC
+/* Filled from the player's disc at startup; see port/src/font_dol.c. */
+DebugFontGlyph HSD_DebugFontAtlas[128];
+#else
 DebugFontGlyph HSD_DebugFontAtlas[] = {
 #include <sysdolphin/baselib/debug_font.inc>
 };
+#endif
 
 void hsd_803921B8(void* bitmap, s32 x, s32 y, s32 dst, s32 w, s32 h,
                   s32 stride, void* tbl)

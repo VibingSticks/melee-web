@@ -61,14 +61,9 @@ int FIOFopen(const char* filename, u32 mode) { (void) filename; (void) mode; ret
 int FIOFclose(int handle) { (void) handle; return 0; }
 u32 FIOFwrite(int handle, void* data, u32 size) { (void) handle; (void) data; (void) size; return 0; }
 
-/* --- debug console drawing (debugconsole_main.c is excluded) --- */
-#include <dolphin/gx.h>
-void DrawRectangle(float x, float y, float w, float h, GXColor* color) { (void) x; (void) y; (void) w; (void) h; (void) color; }
-f32 DrawASCII(int chr, float x, float y, GXColor* color) { (void) chr; (void) y; (void) color; return x; }
-void hsd_80391A04(float sx, float sy, int lw) { (void) sx; (void) sy; (void) lw; }
-s32 hsd_80391AC8(char* s, GXColor* c, f32 x, f32 y) { (void) s; (void) c; (void) x; (void) y; return 0; }
-void hsd_80391E18(const u8* list, f32 x1, f32 y1, f32 x2, f32 y2) { (void) list; (void) x1; (void) y1; (void) x2; (void) y2; }
-void hsd_80391F28(GXColor* c, f32 a, f32 b, f32 d, f32 e, f32 f) { (void) c; (void) a; (void) b; (void) d; (void) e; (void) f; }
+/* hsd_3915.c draws these for real now that the font atlas is loaded from the
+ * disc at startup (port/src/font_dol.c); the stubs that stood in for it while
+ * it was excluded from the build have gone. */
 void HSD_LogInit(void) {}
 void db_ClearFPUExceptions(void) {}
 

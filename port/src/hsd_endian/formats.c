@@ -67,7 +67,12 @@ size_t port_swap_sem_header(uint32_t* file)
  *
  * Texture bank: u32 group_count, u32 offsets[group_count], each naming an
  * HSD_PSTexGroup: five u32 (num, fmt, tlutfmt, width, height), u16 palnum,
- * u16 palflag, then the texel/palette offset table. */
+ * u16 palflag, then the texel/palette offset table.
+ *
+ * Form bank: offsets indexed 1..group_count (index 0 is unused), each naming an
+ * HSD_PSFormGroup: u32 num, then num offsets to byte-code texture forms. It has
+ * no count of its own; psInitDataBankLocate walks it with the texture bank's
+ * group count. */
 static void swap_cmd_list(uint8_t* base, uint32_t offset, uint32_t size)
 {
     if (offset == 0 || offset + 0x3C > size) {
@@ -76,6 +81,19 @@ static void swap_cmd_list(uint8_t* base, uint32_t offset, uint32_t size)
     uint32_t* p = (uint32_t*) (base + offset);
     port_swap_u16_array((uint16_t*) p, 4);  /* type, texGroup, genLife, life */
     port_swap_u32_array(p + 2, 13);         /* kind, then twelve floats */
+}
+
+static void swap_form_group(uint8_t* base, uint32_t offset, uint32_t size)
+{
+    if (offset == 0 || offset + 4 > size) {
+        return;
+    }
+    uint32_t* g = (uint32_t*) (base + offset);
+    g[0] = bswap32(g[0]);
+    uint32_t num = g[0];
+    if (num < 0x10000 && offset + 4 + num * 4 <= size) {
+        port_swap_u32_array(g + 1, num);
+    }
 }
 
 static void swap_tex_group(uint8_t* base, uint32_t offset, uint32_t size)
@@ -99,7 +117,7 @@ static void swap_tex_group(uint8_t* base, uint32_t offset, uint32_t size)
     }
 }
 
-void port_swap_ptcl_banks(void* cmd_bank, void* tex_bank)
+void port_swap_ptcl_banks(void* cmd_bank, void* tex_bank, void* form_bank)
 {
     /* The banks sit inside an archive whose size we do not know here; the
      * offsets are bounded by the largest one seen, which is enough to keep a
@@ -143,6 +161,14 @@ void port_swap_ptcl_banks(void* cmd_bank, void* tex_bank)
             for (uint32_t i = 0; i < groups; i++) {
                 swap_tex_group(base, w[1 + i], kMaxBank);
             }
+            if (form_bank != NULL) {
+                uint8_t* fbase = form_bank;
+                uint32_t* f = form_bank;
+                port_swap_u32_array(f + 1, groups); /* index 0 is unused */
+                for (uint32_t i = 1; i <= groups; i++) {
+                    swap_form_group(fbase, f[i], kMaxBank);
+                }
+            }
         }
     }
 }
@@ -158,5 +184,78 @@ void port_swap_ft_anim_entries(void* entries, uint32_t count)
         e[2] = bswap32(e[2]); /* x8 */
         e[4] = bswap32(e[4]); /* x10 */
         e[5] = bswap32(e[5]); /* x14 */
+    }
+}
+
+/* Remembers a block that has already been converted; returns 0 when it has.
+ * The table is small and the block counts are tiny, so a linear scan is fine. */
+static int mark_seen(const void** seen, unsigned* n, const void* p)
+{
+    for (unsigned i = 0; i < *n; i++) {
+        if (seen[i] == p) {
+            return 0;
+        }
+    }
+    if (*n < 512) {
+        seen[(*n)++] = p;
+    }
+    return 1;
+}
+
+void port_swap_ft_costume_tobjs(void* ftdata_x8, uint32_t costumes)
+{
+    if (ftdata_x8 == NULL) {
+        return;
+    }
+    /* ftData_x8: FtPartsDesc x0 (8 bytes), then { u32 count; u16** lists } */
+    uint32_t count = ((uint32_t*) ftdata_x8)[2];
+    uint16_t** lists = (uint16_t**) ((uint32_t*) ftdata_x8)[3];
+    if (lists == NULL || count == 0 || count > 0x1000) {
+        return;
+    }
+    for (uint32_t c = 0; c < costumes; c++) {
+        if (lists[c] != NULL) {
+            port_swap_u16_array(lists[c], count);
+        }
+    }
+}
+
+void port_swap_ft_parts_vis(void* ftdata_x8, uint32_t costumes)
+{
+    if (ftdata_x8 == NULL) {
+        return;
+    }
+
+    /* FtPartsDesc: { u32 model_num; void* (*vis_table)[4] } */
+    uint32_t* desc = ftdata_x8;
+    uint32_t model_num = desc[0];
+    uint32_t** rows = (uint32_t**) (uintptr_t) desc[1];
+    if (rows == NULL || model_num == 0 || model_num > 64) {
+        return;
+    }
+
+    /* Costumes and slots share both the per-model tables and the entry lists
+     * inside them, so every block is converted exactly once. */
+    const void* seen[512];
+    unsigned nseen = 0;
+    for (uint32_t c = 0; c < costumes; c++) {
+        for (unsigned slot = 0; slot < 4; slot++) {
+            uint32_t* lookup = rows[c * 4 + slot];
+            if (lookup == NULL || !mark_seen(seen, &nseen, lookup)) {
+                continue;
+            }
+            for (uint32_t m = 0; m < model_num; m++) {
+                uint32_t* entry = lookup + m * 2; /* { s32 count; TempS* list } */
+                entry[0] = bswap32(entry[0]);
+                uint32_t n = entry[0];
+                uint32_t* list = (uint32_t*) (uintptr_t) entry[1];
+                if (list == NULL || n > 0x1000 || !mark_seen(seen, &nseen, list)) {
+                    continue;
+                }
+                for (uint32_t j = 0; j < n; j++) {
+                    list[j * 2] = bswap32(list[j * 2]); /* { s32 count; u8* } */
+                }
+            }
+        }
     }
 }

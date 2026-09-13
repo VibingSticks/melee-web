@@ -6,6 +6,10 @@ set(GAME_ROOT ${CMAKE_CURRENT_SOURCE_DIR}/..)
 
 option(PORT_BUILD_TESTS "Build host unit tests" OFF)
 option(PORT_SINGLE_FILE "Embed the wasm in the JS (-sSINGLE_FILE)" OFF)
+# The AX mixer runs the game's synth engine, which currently wedges the scene
+# load (see docs/milestones.md, M4 audio). Off until that is fixed; the stub
+# keeps the game silent but running.
+option(PORT_AUDIO "Mix AX voices instead of running silent" OFF)
 
 if (PORT_BUILD_TESTS)
     enable_testing()
@@ -15,7 +19,7 @@ endif ()
 if (EMSCRIPTEN)
     # Endian-conversion schema tables, generated from the game's headers (plan Task 13/14).
     set(SCHEMA_TABLES ${CMAKE_BINARY_DIR}/schema_tables.c)
-    file(GLOB_RECURSE SCHEMA_HEADERS CONFIGURE_DEPENDS ${GAME_ROOT}/src/sysdolphin/baselib/*.h ${GAME_ROOT}/src/melee/*/types.h)
+    file(GLOB_RECURSE SCHEMA_HEADERS CONFIGURE_DEPENDS ${GAME_ROOT}/src/sysdolphin/baselib/*.h ${GAME_ROOT}/src/melee/*.h)
     add_custom_command(OUTPUT ${SCHEMA_TABLES}
         COMMAND python3 ${CMAKE_CURRENT_SOURCE_DIR}/tools/gen_schema.py
             --header ${CMAKE_CURRENT_SOURCE_DIR}/schema/all_headers.h
@@ -25,7 +29,9 @@ if (EMSCRIPTEN)
             --clang-arg=-I${PORT_SRC_DIR}/compat --clang-arg=-I${PORT_SRC_DIR} --clang-arg=-I${CMAKE_CURRENT_SOURCE_DIR}/schema
             --clang-arg=-DVERSION_GALE01 --clang-arg=-DBUILD_VERSION=0 --clang-arg=--sysroot=${EMSCRIPTEN_SYSROOT}
             ${SCHEMA_TABLES}
-        DEPENDS tools/gen_schema.py schema/all_headers.h schema/mirrors.h schema/annotations.yml schema/roots.yml ${SCHEMA_HEADERS}
+        DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/tools/gen_schema.py ${CMAKE_CURRENT_SOURCE_DIR}/schema/all_headers.h
+            ${CMAKE_CURRENT_SOURCE_DIR}/schema/mirrors.h ${CMAKE_CURRENT_SOURCE_DIR}/schema/annotations.yml
+            ${CMAKE_CURRENT_SOURCE_DIR}/schema/roots.yml ${SCHEMA_HEADERS}
         COMMENT "Generating archive endian schema tables")
     include(cmake/game_sources.cmake)
 
@@ -37,8 +43,9 @@ if (EMSCRIPTEN)
         src/dvd_web/fst.c
         src/dvd_web/dvd_web.c
         src/vi_shim.c src/pad_web.c
+        src/font_dol.c
         src/gx_shim.c
-        src/ax_hle/ax_stub.c
+        $<IF:$<BOOL:${PORT_AUDIO}>,src/ax_hle/ax_hle.c,src/ax_hle/ax_stub.c>
         src/game_stubs.c
         src/hsd_endian/walker.c)
     target_include_directories(melee_port PUBLIC src extern/aurora/include)

@@ -488,6 +488,15 @@ void fn_8016B784(void)
     grStadium_801D4150();
 }
 
+#ifdef TARGET_PC
+/* The status-banner table calls this 0-argument function through a
+ * one-argument pointer (see PORT_FNCAST). */
+static void fn_8016B784__as_status_cb(s32 unused)
+{
+    fn_8016B784();
+}
+#endif
+
 void fn_8016B7B4(int arg0)
 {
     Ground_801C1154();
@@ -508,12 +517,20 @@ void fn_8016B7F8(void)
     Stage_802252E4(tmp->start.stkind, NULL);
     grStadium_801D4040();
     if (!tmp->start.x1_3) {
-        ifStatus_802F6EA4(4, -1, -1, 0, NULL, fn_8016B784);
+        ifStatus_802F6EA4(4, -1, -1, 0, NULL, (Event) PORT_FNCAST(fn_8016B784__as_status_cb, fn_8016B784));
     } else {
-        ifStatus_802F6EA4(8, -1, -1, 0, NULL, fn_8016B784);
+        ifStatus_802F6EA4(8, -1, -1, 0, NULL, (Event) PORT_FNCAST(fn_8016B784__as_status_cb, fn_8016B784));
     }
     un_802FD428();
 }
+
+#ifdef TARGET_PC
+/* Likewise called through a one-argument pointer (see PORT_FNCAST). */
+static void fn_8016B7F8__as_status_cb(s32 unused)
+{
+    fn_8016B7F8();
+}
+#endif
 
 void fn_8016B88C(int arg0)
 {
@@ -2047,9 +2064,9 @@ void gm_Scene_Vs_OnEnter(void* arg0)
     StartMeleeData* tmp = arg0;
     fn_8016E730(tmp);
     if (tmp->rules.x1_2) {
-        ifStatus_802F6EA4(8, -1, -1, 0, (void*) fn_8016B7B4, fn_8016B7F8);
+        ifStatus_802F6EA4(8, -1, -1, 0, (void*) fn_8016B7B4, (Event) PORT_FNCAST(fn_8016B7F8__as_status_cb, fn_8016B7F8));
     } else {
-        ifStatus_802F6EA4(3, -1, -1, 0, (void*) fn_8016B7B4, fn_8016B7F8);
+        ifStatus_802F6EA4(3, -1, -1, 0, (void*) fn_8016B7B4, (Event) PORT_FNCAST(fn_8016B7F8__as_status_cb, fn_8016B7F8));
     }
     ifTime_CreateTimers();
     ifStatus_802F665C(tmp->rules.x0_3);
@@ -2130,7 +2147,7 @@ void gm_Scene_SuddenDeath_OnEnter(void* user_data)
     StartMeleeData* data = user_data;
     data->rules.x6 = true;
     fn_8016E730(data);
-    ifStatus_802F6EA4(1, -1, -1, 0, (void*) fn_8016B7B4, fn_8016B7F8);
+    ifStatus_802F6EA4(1, -1, -1, 0, (void*) fn_8016B7B4, (Event) PORT_FNCAST(fn_8016B7F8__as_status_cb, fn_8016B7F8));
     ifTime_CreateTimers();
     ifStatus_802F665C(data->rules.x0_3);
 }
@@ -2149,9 +2166,9 @@ void gm_Scene_Training_OnEnter(void* user_data)
     Stage_802252E4(tmp2->start.stkind, NULL);
     grStadium_801D4040();
     if (!controller.start.x1_3) {
-        ifStatus_802F6EA4(4, -1, -1, 0, 0, fn_8016B784);
+        ifStatus_802F6EA4(4, -1, -1, 0, 0, (Event) PORT_FNCAST(fn_8016B784__as_status_cb, fn_8016B784));
     } else {
-        ifStatus_802F6EA4(8, -1, -1, 0, 0, fn_8016B784);
+        ifStatus_802F6EA4(8, -1, -1, 0, 0, (Event) PORT_FNCAST(fn_8016B784__as_status_cb, fn_8016B784));
     }
     un_802FD428();
     ifStatus_802F665C(data->rules.x0_3);

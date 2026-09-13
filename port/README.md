@@ -26,6 +26,31 @@ cmake --preset web-debug && cmake --build --preset web-debug
 python3 -m http.server -d build/web-debug 8080
 ```
 
+## Offline file
+
+One HTML file that runs from `file://` with nothing beside it. The wasm, the
+JavaScript and naga's translator are all inlined; the player still picks their
+own disc image at runtime, and it is never part of the file.
+
+```sh
+cd port
+cmake --preset web-single && cmake --build --preset web-single
+python3 tools/pack_single_html.py build/web-single -o melee-offline.html
+```
+
+`web-single` is the release preset plus `-sSINGLE_FILE` (the wasm becomes a
+base64 data URL inside `melee.js`). The packer refuses to write a page that
+still reaches for a second file -- a `<script src>`, a `<link href>`, a
+non-`data:` `fetch` -- so the check travels with the build rather than living
+in someone's head. `tests/pack_test.py` covers it against a fixture.
+
+To drive the packed file the same way as the hosted page, hand the probe the
+HTML instead of a build directory:
+
+```sh
+node tests/browser/boot_probe.mjs melee-offline.html /path/to/GALE01.iso 20 --headed
+```
+
 ## Boot smoke test without a real disc
 
 ```sh

@@ -206,6 +206,32 @@ index db6d9d0..9dc5253 100644
  void GXSetBlendMode(GXBlendMode type, GXBlendFactor src_factor, GXBlendFactor dst_factor, GXLogicOp op);
  void GXSetColorUpdate(GXBool update_enable);
  void GXSetAlphaUpdate(GXBool update_enable);
+diff --git a/include/dolphin/gx/GXVert.h b/include/dolphin/gx/GXVert.h
+index 05da161..8705abb 100644
+--- a/include/dolphin/gx/GXVert.h
++++ b/include/dolphin/gx/GXVert.h
+@@ -78,8 +78,21 @@ void GXTexCoord1x16(u16 index);
+ 
+ extern void GXEnd(void);
+ 
++/* The write-gather pipe is a hardware address, which a hosted build has no way
++ * to trap. A few call sites store to it directly, for vertex components GX has
++ * no named entry point for (psdisp.c, hsd_3915.c, gm_1832.c); they go through
++ * these macros so the store becomes a FIFO write here and stays a pipe store
++ * on the GameCube. */
++void GXWGFifoF32(f32 value);
++void GXWGFifoU8(u8 value);
++#define GX_WGPIPE_F32(v) GXWGFifoF32(v)
++#define GX_WGPIPE_U8(v) GXWGFifoU8((u8) (v))
++
+ #else
+ 
++#define GX_WGPIPE_F32(v) (GXWGFifo.f32 = (v))
++#define GX_WGPIPE_U8(v) (GXWGFifo.u8 = (v))
++
+ static inline void GXPosition2f32(const f32 x, const f32 y) {
+   GXWGFifo.f32 = x;
+   GXWGFifo.f32 = y;
 diff --git a/include/dolphin/os.h b/include/dolphin/os.h
 index cfc801b..319653a 100644
 --- a/include/dolphin/os.h
@@ -335,10 +361,10 @@ index 447ead8..3b49f41 100644
  #else
    const auto props = SDL_GetWindowProperties(window);
 diff --git a/lib/dolphin/AR.cpp b/lib/dolphin/AR.cpp
-index 0468650..17950b4 100644
+index 0468650..1b12568 100644
 --- a/lib/dolphin/AR.cpp
 +++ b/lib/dolphin/AR.cpp
-@@ -82,6 +82,9 @@ u32 ARGetSize(void) { return aurora::g_config.mem2Size; }
+@@ -82,8 +82,21 @@ u32 ARGetSize(void) { return aurora::g_config.mem2Size; }
  #if !defined(_MSC_VER)
  #pragma mark ARQ
  #endif
@@ -347,8 +373,20 @@ index 0468650..17950b4 100644
 +
  void ARQPostRequest(ARQRequest* request, u32 owner, u32 type, u32 priority, uintptr_t source, uintptr_t dest,
                      u32 length, ARQCallback callback) {
++  // Record the request the way the SDK does: callers read these fields back in
++  // their completion callback (melee's lbArq keeps a back-pointer to its queue
++  // node in `owner`), so leaving them unset strands the request forever.
++  request->owner = owner;
++  request->type = type;
++  request->priority = priority;
++  request->source = static_cast<u32>(source);
++  request->dest = static_cast<u32>(dest);
++  request->length = length;
++
    // Emulate ARAM DMA transfers using memcpy.
-@@ -102,9 +105,33 @@ void ARQPostRequest(ARQRequest* request, u32 owner, u32 type, u32 priority, uint
+   // type 0 = MRAM -> ARAM, type 1 = ARAM -> MRAM
+   if (type == ARAM_DIR_MRAM_TO_ARAM) {
+@@ -102,9 +115,33 @@ void ARQPostRequest(ARQRequest* request, u32 owner, u32 type, u32 priority, uint
      }
    }
  
@@ -535,6 +573,61 @@ index 25f74df..f9312d1 100644
    return res;
  }
  }
+diff --git a/lib/dolphin/gx/GXVert.cpp b/lib/dolphin/gx/GXVert.cpp
+index 789ed14..59653f9 100644
+--- a/lib/dolphin/gx/GXVert.cpp
++++ b/lib/dolphin/gx/GXVert.cpp
+@@ -2,6 +2,8 @@
+ #include "__gx.h"
+ #include "../../gx/fifo.hpp"
+ 
++extern "C" void GXEnd();
++
+ namespace {
+ // Track vertex count between GXBegin/GXEnd for mismatch detection
+ u16 sBeginNVerts = 0;
+@@ -10,9 +12,18 @@ bool sInBegin = false;
+ // GX_AUTO: offset of the u32 byte-length placeholder to patch in GXEnd
+ u32 sBeginSizeOffset = 0;
+ bool sBeginAuto = false;
++// Set while GXBegin is closing a primitive the caller never closed itself.
++bool sImplicitEnd = false;
+ 
+ void pre_begin() {
+-  CHECK(!sInBegin, "GXBegin: called without matching GXEnd");
++  // GXEnd is a no-op on hardware and plenty of callers never write one --
++  // sysdolphin's particle renderer opens 28 primitives and closes none. A new
++  // GXBegin ends whatever is still open, which is what the FIFO does anyway.
++  if (sInBegin) {
++    sImplicitEnd = true;
++    GXEnd();
++    sImplicitEnd = false;
++  }
+ 
+   // Flush dirty state before starting a draw
+   if (__gx->dirtyState != 0) {
+@@ -79,7 +90,9 @@ void GXEnd() {
+     if (sBeginAuto) {
+       aurora::gx::fifo::patch_u32(sBeginSizeOffset, bytesWritten);
+       sBeginAuto = false;
+-    } else if (sBeginNVerts > 0 && bytesWritten > 0) {
++    } else if (sBeginNVerts > 0 && bytesWritten > 0 && !sImplicitEnd) {
++      // An implicit close counts any state commands the caller wrote between
++      // the two GXBegins, so the total is not a whole number of vertices.
+       // We don't know the vertex size without processing the FIFO for vtxFmt changes
+       // so this is just a best-effort check to find obvious issues
+       if (bytesWritten % sBeginNVerts != 0) {
+@@ -91,6 +104,10 @@ void GXEnd() {
+   }
+ }
+ 
++void GXWGFifoF32(f32 value) { GX_WRITE_F32(value); }
++
++void GXWGFifoU8(u8 value) { GX_WRITE_U8(value); }
++
+ void GXPosition3f32(f32 x, f32 y, f32 z) {
+   GX_WRITE_F32(x);
+   GX_WRITE_F32(y);
 diff --git a/lib/dolphin/os/OSMemory.cpp b/lib/dolphin/os/OSMemory.cpp
 index 2a963a5..59bfcdf 100644
 --- a/lib/dolphin/os/OSMemory.cpp

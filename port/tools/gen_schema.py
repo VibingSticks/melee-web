@@ -23,8 +23,10 @@ annotations.yml (per struct name):
     ptr_array/elem_ptr targets may also be the scalar helpers u16, u32, u64, f32, f64, ptr, word,
     or "T*" for an array of pointers to T;
     union_on may add mask: 0x30 to compare only those bits of the discriminator;
-  roots.yml entries: { prefix|suffix, type, array: null_term | { term_value: N } }
+  roots.yml entries: { prefix|suffix, type, array: null_term | { term_value: N },
+                      field_types: { <field>: T } to aim a pointer field at T for this root }
     term_value: 0x83D60                    pointer array ends at the element whose first word is this
+    reloc_run: true                        inline array runs while each element's pointers are relocated
   __union__: { disc_offset: 4, cases: {...} }   the struct itself is a union chosen by a word inside it
 """
 import argparse
@@ -77,6 +79,7 @@ class Gen:
         self.out = []       # field arrays and helper tables
         self.order = []     # port_type definitions
         self.helpers = set()
+        self.variants = {}
         self.warned = set()
 
     # --- collection ------------------------------------------------------
@@ -174,6 +177,25 @@ class Gen:
             self.emit(decl, name)
         return f"&port_T_{self.emitted[usr]}"
 
+    def variant(self, base, overrides):
+        """A copy of `base` with some pointer fields aimed at different types.
+        Root symbols that share a struct but not its payload (every fighter's
+        ftData, whose ext_attr is that character's own attribute block) need
+        this."""
+        key = base + "__" + "_".join(f"{f}_{t}" for f, t in sorted(overrides.items()))
+        if key in self.variants:
+            return self.variants[key]
+        decl = self.by_name.get(base)
+        if decl is None:
+            raise SystemExit(f"gen_schema: unknown type '{base}' in a root override")
+        merged = dict(self.annotations_for(decl, base))
+        for field, target in overrides.items():
+            merged[field] = dict(merged.get(field) or {}, ptr=target)
+        self.ann[key] = merged
+        self.variants[key] = f"&port_T_{key}"
+        self.emit(decl, key)
+        return self.variants[key]
+
     # --- emission --------------------------------------------------------
     def emit(self, decl, name):
         size = decl.type.get_size()
@@ -181,7 +203,9 @@ class Gen:
         if a.get("__opaque__"):
             self.order.append(f'const port_type port_T_{name} = {{ "{name}", {size}, NULL, 0 }};')
             return
-        kids = [f for f in decl.get_children() if f.kind == K.FIELD_DECL]
+        # get_fields() rather than get_children(): a C11 anonymous struct or
+        # union member appears only in the former, as an unnamed field.
+        kids = list(decl.type.get_fields())
         if "__union__" in a:
             u = a["__union__"]
             fields = [self.union_desc(name, 0, int(u["disc_offset"]), int(u.get("disc_size", 4)), 1, u.get("mask", 0), u["cases"])]
@@ -248,13 +272,17 @@ class Gen:
                 fields.append(named(f"{{F_BITS, {unit}, NULL, 0, 0, {storage}, bits_{name}_{unit}, {len(widths)}}}", f.spelling))
                 continue
             i += 1
-            fld = self.field(decl, name, kids, f, off, fa)
+            # a C11 anonymous member: no name of its own (a *named* field whose
+            # type happens to be an anonymous struct is not one)
+            anon = not f.spelling or '(anonymous' in f.spelling
+            fld = self.field(decl, name, kids, f, off, {} if anon else fa, anon)
             if fld:
-                fields.append(named(fld, f.spelling))
+                fields.append(fld if anon else named(fld, f.spelling))
         self.out.extend(bits_defs)
         return fields
 
-    def field(self, decl, name, kids, f, off, fa):
+    def field(self, decl, name, kids, f, off, fa, anon=False):
+        member = ('anon%d' % off) if anon else (f.spelling or 'anon')
         if fa.get("opaque"):
             return f"{{F_OPAQUE, {off}}}"
         if "union_on" in fa:
@@ -277,7 +305,7 @@ class Gen:
             pt = t.get_pointee().get_canonical()
             pd = self.definition(pt) if pt.kind == T.RECORD else None
             if pd is not None:
-                return f"{{F_PTR, {off}, {self.need(pd, f'{name}__{f.spelling}')}}}"
+                return f"{{F_PTR, {off}, {self.need(pd, f'{name}__{member}')}}}"
             if pt.kind not in (T.VOID, T.FUNCTIONPROTO, T.FUNCTIONNOPROTO, T.RECORD) and scalar_kind(pt) not in (None, "F_U8"):
                 self.warn(f"{name}.{f.spelling}: pointer to {pt.spelling} with unknown length; target left big-endian (add ptr_array)")
             if pt.kind == T.RECORD:
@@ -295,10 +323,12 @@ class Gen:
             lk, lv = "LEN_CONST", n
             if fa.get("null_term"):
                 lk, lv = "LEN_NULL_TERM", 0
+            elif fa.get("reloc_run"):
+                lk, lv = "LEN_RELOC_RUN", 0
             elif "term_value" in fa:
                 lk, lv = "LEN_TERM_VALUE", f"{int(fa['term_value'])}u"
             if et.kind == T.RECORD:
-                return f"{{F_ARRAY, {off}, {self.need(self.definition(et), f'{name}__{f.spelling}')}, {lk}, {lv}}}"
+                return f"{{F_ARRAY, {off}, {self.need(self.definition(et), f'{name}__{member}')}, {lk}, {lv}}}"
             if et.kind == T.POINTER:
                 if "elem_ptr" in fa:
                     target = self.need_name(fa["elem_ptr"])[len("&port_T_"):]
@@ -317,7 +347,7 @@ class Gen:
             return f"{{F_ARRAY, {off}, {self.helper('__' + sk[2:].lower())}, {lk}, {lv}}}"
         if t.kind == T.RECORD:
             d = self.definition(t)
-            return f"{{F_STRUCT, {off}, {self.need(d, f'{name}__{f.spelling or 'anon'}')}}}"
+            return f"{{F_STRUCT, {off}, {self.need(d, f'{name}__{member}')}}}"
         sk = scalar_kind(t)
         if sk is None:
             raise SystemExit(f"gen_schema: {name}.{f.spelling}: unsupported type {t.spelling}; add an annotation")
@@ -330,6 +360,8 @@ class Gen:
             return "LEN_NULL_TERM", 0
         if "term_value" in fa:
             return "LEN_TERM_VALUE", f"{int(fa['term_value'])}u"
+        if fa.get("reloc_run"):
+            return "LEN_RELOC_RUN", 0
         k = next(k for k in kids if k.spelling == fa["len_field"])
         return {4: "LEN_FIELD_U32", 2: "LEN_FIELD_U16", 1: "LEN_FIELD_U8"}[k.type.get_size()], k.get_field_offsetof() // 8
 
@@ -372,6 +404,8 @@ def main():
         if "prefix" not in r and "suffix" not in r:
             raise SystemExit(f"gen_schema: root {r} needs a prefix and/or suffix")
         t = g.need_name(r["type"])
+        if "field_types" in r:
+            t = g.variant(r["type"], r["field_types"])
         if "array" in r:  # the symbol is an inline list of `type`: null_term or term_value:N
             elem = t[len("&port_T_"):]
             spec = r["array"]
@@ -383,7 +417,8 @@ def main():
                 g.order.append(f'const port_type port_T_{wname} = {{ "{elem}[]", 0, fields_{wname}, 1 }};')
             t = f"&port_T_{wname}"
         root_refs.append((r.get("prefix"), r.get("suffix"), t))
-    fwd = [f"extern const port_type port_T_{n};" for n in list(g.emitted.values()) + sorted(g.helpers)]
+    fwd = [f"extern const port_type port_T_{n};"
+           for n in list(g.emitted.values()) + sorted(g.helpers) + sorted(g.variants)]
     body = ["#include <stddef.h>", "#include \"hsd_endian/schema.h\"", "/* GENERATED by port/tools/gen_schema.py; do not edit */"] + fwd + g.out + g.order
     cstr = lambda x: f'"{x}"' if x is not None else "NULL"
     body.append("const port_root port_roots[] = { " + "".join(f"{{ {cstr(p)}, {cstr(sfx)}, {t} }}, " for p, sfx, t in root_refs)

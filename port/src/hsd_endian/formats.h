@@ -30,7 +30,7 @@ size_t port_swap_sem_header(uint32_t* file);
  * psInitDataBankLocate() rewrites into pointers, so every word it treats as an
  * integer must be native first. Converts both banks in place; either may be
  * NULL. Call once per bank, immediately before the relocation. */
-void port_swap_ptcl_banks(void* cmd_bank, void* tex_bank);
+void port_swap_ptcl_banks(void* cmd_bank, void* tex_bank, void* form_bank);
 
 /* Fighter animation tables (ftData::xC / ::x14): arrays of
  * { char* name; s32 x4; s32 x8; CmdUnion* cmds; s32 flags; u32 x14 }
@@ -38,5 +38,17 @@ void port_swap_ptcl_banks(void* cmd_bank, void* tex_bank);
  * schema walker cannot reach them. Swaps the four scalar words of each entry
  * and leaves the two relocated pointers alone. */
 void port_swap_ft_anim_entries(void* entries, uint32_t count);
+
+/* Per-costume texture-animation id lists (ftData::x8->x8.xC): an array of
+ * `costumes` pointers, each to `count` u16 ids. Their lengths come from the
+ * costume table in the code, so the schema walker cannot reach them. Call once
+ * per archive load: the caller owns that, since converting twice would undo it. */
+void port_swap_ft_costume_tobjs(void* ftdata_x8, uint32_t costumes);
+
+/* Per-costume model visibility tables (FtPartsDesc::vis_table): rows of four
+ * pointers, each to `model_num` { count, entries } pairs, each entry itself a
+ * { count, u8* } pair. Rows share tables, so each distinct one is converted
+ * once within the call. Call once per archive load, as above. */
+void port_swap_ft_parts_vis(void* ftdata_x8, uint32_t costumes);
 
 #endif

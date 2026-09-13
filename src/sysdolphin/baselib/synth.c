@@ -246,6 +246,9 @@ void HSD_SynthSFXWaitForLoadCompletion(void (*callback)(void))
 {
     while (HSD_Synth_804D772C != 0) {
         callback();
+#ifdef TARGET_PC
+        port_yield(); /* the bank's ARAM DMA completes from the host pump */
+#endif
     }
 }
 

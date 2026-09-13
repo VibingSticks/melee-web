@@ -10,7 +10,6 @@ file(GLOB_RECURSE GAME_SOURCES CONFIGURE_DEPENDS
 
 set(GAME_EXCLUDE
     dberror.c debug.c debugconsole_main.c   # PPC register dumps / debug console thread (never)
-    hsd_3915.c sislib_font.c                # font atlases extracted from the DOL (Task 17)
 
 )
 foreach (x IN LISTS GAME_EXCLUDE)

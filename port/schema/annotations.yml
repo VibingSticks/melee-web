@@ -92,9 +92,28 @@ port_PlLoadCommonDataRef:
 port_StageJointMap:
   pairs: { ptr_array: port_StageJointPair, len_field: pair_count }
 port_FtLoadCommonData:
-  parts_tables: { ptr_array: "FighterPartsTable*", len_const: 33 }   # CharacterKind count
+  # tables indexed by fighter kind (Ft_Kind_Max)
+  float5_rows:     { ptr_array: port_Float5, len_const: 33 }
+  per_kind_floats: { ptr_array: f32, len_const: 33 }
+  parts_tables:    { ptr_array: "FighterPartsTable*", len_const: 33 }
+  virtual_parts:   { ptr_array: "Fighter_804D6540_t*", len_const: 33 }
+Fighter_804D6540_t:
+  x0: { ptr_array: Fighter_804D6540_x0_t, len_field: x4 }
+Fighter_ShakeTable_t:
+  x0: { ptr_array: Vec2, len_field: x4 }
 ftData:
   # These animation tables are converted where the game reads them
   # (ftData_80085A14): their length is a table in the code, not in the archive.
   xC:  { ptr: opaque }
   x14: { ptr: opaque }
+  # Wait-animation weight tables, read until an entry whose first word is -1
+  # (ftwaitanim.c getAnimID). x24 is UNK_T in the headers but the two callers
+  # in ft_0D4D.c pass it straight to ftCo_8008A7A8(WaitStruct*).
+  x24: { ptr_array: port_WaitEntry, term_value: 0xFFFFFFFF }
+  x28: { ptr_array: port_WaitEntry, term_value: 0xFFFFFFFF }
+Fighter_804D64FC_t:
+  x20: { ptr_array: f32, len_const: 33 }   # per-fighter distance thresholds
+ftData_x30:
+  inits: { ptr_array: ftHurtboxInit, len_field: count }
+port_EfDataTable:
+  descs: { reloc_run: true }

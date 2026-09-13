@@ -3,7 +3,8 @@
  *
  * Rules:
  *  - every (address, type) pair is visited once, so shared sub-objects are
- *    converted exactly once;
+ *    walked exactly once, and every byte is swapped at most once even when two
+ *    descriptors reach it by different paths;
  *  - pointer slots (those in the relocation set) are never swapped here, they
  *    were relocated by port_archive_fixup; in strict mode a scalar descriptor
  *    landing on a relocation slot is an error;
@@ -24,6 +25,7 @@ typedef struct {
     uint32_t reloc_count;
     int strict;
     void* visited;
+    uint8_t* converted; /* one bit per byte of `base`: scalars are swapped once */
     const char* error; /* description of the first strict-mode violation */
     const port_type* cur_type;   /* diagnostics: where the walker is */
     const port_field* cur_field;

@@ -8,6 +8,11 @@ set(PORT_LINK_FLAGS
     -sMAXIMUM_MEMORY=2048MB
     -sSTACK_SIZE=4MB                   # PAD_STACK arrays and large locals
     -sNO_EXIT_RUNTIME=1
+    # A factory rather than a self-starting script: boot.js needs the disc before
+    # the runtime starts, and the packed offline file has no separate melee.js to
+    # append (see tools/pack_single_html.py).
+    -sMODULARIZE=1
+    -sEXPORT_NAME=createMelee
     -sEXPORTED_FUNCTIONS=_main,_port_dvd_init,_port_pad_virtual,_port_pad_virtual_clear,_port_debug_start_vs,_malloc,_free
     -sEXPORTED_RUNTIME_METHODS=ccall,cwrap,callMain,HEAPU8,HEAPF32
     --js-library ${CMAKE_CURRENT_SOURCE_DIR}/web/js/imports.js

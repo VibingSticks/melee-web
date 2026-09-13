@@ -16,6 +16,7 @@ port_add_test(dvd_web_test dvd_web_test.c ${PORT_SRC_DIR}/dvd_web/dvd_web.c
 port_add_test(walker_test walker_test.c ${PORT_SRC_DIR}/hsd_endian/walker.c)
 port_add_test(formats_test formats_test.c ${PORT_SRC_DIR}/hsd_endian/formats.c)
 add_test(NAME gen_schema_test COMMAND python3 ${CMAKE_CURRENT_SOURCE_DIR}/gen_schema_test.py)
+add_test(NAME pack_test COMMAND python3 ${CMAKE_CURRENT_SOURCE_DIR}/pack_test.py)
 
 # Tests for helpers compiled inside the game library: game headers, compat
 # headers (4-byte bool), no LINT (the layout asserts assume 4-byte pointers).
@@ -39,7 +40,7 @@ port_add_game_test(archive_roots_test archive_roots_test.c ${PORT_SRC_DIR}/hsd_e
 # on-disc layout); only the sysroot for the parse comes from the local emsdk.
 set(HOST_SCHEMA_TABLES ${CMAKE_BINARY_DIR}/schema_tables.c)
 set(EMSDK_SYSROOT ${CMAKE_SOURCE_DIR}/extern/emsdk/upstream/emscripten/cache/sysroot)
-file(GLOB_RECURSE SCHEMA_HEADERS CONFIGURE_DEPENDS ${GAME_ROOT}/src/sysdolphin/baselib/*.h ${GAME_ROOT}/src/melee/*/types.h)
+file(GLOB_RECURSE SCHEMA_HEADERS CONFIGURE_DEPENDS ${GAME_ROOT}/src/sysdolphin/baselib/*.h ${GAME_ROOT}/src/melee/*.h)
 add_custom_command(OUTPUT ${HOST_SCHEMA_TABLES}
     COMMAND python3 ${CMAKE_SOURCE_DIR}/tools/gen_schema.py
         --header ${CMAKE_SOURCE_DIR}/schema/all_headers.h

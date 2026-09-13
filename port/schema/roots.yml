@@ -38,8 +38,26 @@
 - { prefix: ALDYakuAll, type: opaque }      # pointer table; element type not known yet
 - { prefix: yakumono_param, type: opaque }
 - { prefix: plLoadCommonData, type: port_PlLoadCommonDataRef }
-- { prefix: eff, type: opaque }            # effect data tables: the particle banks they point at are converted in particle.c
+- { prefix: eff, suffix: DataTable, type: port_EfDataTable }
 - { prefix: itPublicData, type: opaque }   # item tables: element type not known yet
 - { prefix: lbRefData, type: opaque }      # LbRf.dat refraction parameters: float array length not known yet
 - { prefix: ftData, type: ftData }
 - { prefix: ftLoadCommonData, type: port_FtLoadCommonData }
+# Each fighter's ext_attr points at that character's own attribute block.
+- { prefix: ftDataCaptain, type: ftData, field_types: { ext_attr: ftCaptain_DatAttrs } }
+- { prefix: ftDataCrazyhand, type: ftData, field_types: { ext_attr: ftCrazyHand_DatAttrs } }
+- { prefix: ftDataFox, type: ftData, field_types: { ext_attr: ftFox_DatAttrs } }
+- { prefix: ftDataKirby, type: ftData, field_types: { ext_attr: ftKb_DatAttrs } }
+- { prefix: ftDataLink, type: ftData, field_types: { ext_attr: ftLk_DatAttrs } }
+- { prefix: ftDataMario, type: ftData, field_types: { ext_attr: ftMario_DatAttrs } }
+- { prefix: ftDataPeach, type: ftData, field_types: { ext_attr: ftPe_DatAttrs } }
+- { prefix: ftDataSamus, type: ftData, field_types: { ext_attr: ftSs_DatAttrs } }
+- { prefix: ftDataYoshi, type: ftData, field_types: { ext_attr: ftYs_DatAttrs } }
+- { prefix: ftDataZelda, type: ftData, field_types: { ext_attr: ftZelda_DatAttrs } }
+- { suffix: _figatree, type: FigaTree }
+- { prefix: lbBgFlashColAnimData, type: opaque }   # {void*, u8, u8} rows; pointers already relocated
+# HUD model lists (ifstock, if_2FD9, iftime, ifmagnify).
+- { prefix: Stc_scemdls, type: "DynamicModelDesc*", array: null_term }
+- { prefix: Stc_rarwmdls, type: "DynamicModelDesc*", array: null_term }
+- { prefix: tdsce, type: "DynamicModelDesc*", array: null_term }
+- { prefix: lupe, type: "DynamicModelDesc*" }   # ifmagnify.c dereferences the symbol twice

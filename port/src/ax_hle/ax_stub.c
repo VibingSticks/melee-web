@@ -1,11 +1,14 @@
 /* Silent audio: stubs for the AX, AXFX and AI entry points the game calls.
- * Plan Task 18 replaces this file with the DSP-side mixer. Voices are handed
- * out from a small pool so the game's voice management runs normally. */
+ * ax_hle.c is the real mixer; build with -DPORT_AUDIO=ON to use it instead.
+ * Voices are handed out from a small pool so the game's voice management runs
+ * normally, but nothing they are set to is kept and nothing is ever mixed. */
 #include <dolphin/ai.h>
 #include <dolphin/ax.h>
 #include <dolphin/axfx.h>
 #include <stddef.h>
 #include <string.h>
+
+#include "ax_hle.h"
 
 /* --- AI --- */
 void AIInit(u8* stack) { (void) stack; }
@@ -86,3 +89,7 @@ void AXFXChorusCallback(struct AXFX_BUFFERUPDATE* b, struct AXFX_CHORUS* c) { (v
 void AXFXDelayCallback(struct AXFX_BUFFERUPDATE* b, struct AXFX_DELAY* d) { (void) b; (void) d; }
 void AXFXReverbHiCallback(struct AXFX_BUFFERUPDATE* b, struct AXFX_REVERBHI* r) { (void) b; (void) r; }
 void AXFXReverbStdCallback(struct AXFX_BUFFERUPDATE* b, struct AXFX_REVERBSTD* r) { (void) b; (void) r; }
+
+/* --- the port's side (no-ops here; see ax_hle.c) --- */
+void port_ax_init(void) {}
+void port_ax_pump(int from_frame) { (void) from_frame; }

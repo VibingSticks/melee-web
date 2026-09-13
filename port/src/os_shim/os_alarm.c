@@ -9,7 +9,24 @@
 static OSAlarm* g_head;
 static OSTime g_now;
 
-static int is_linked(const OSAlarm* a) { return a->prev != NULL || a->next != NULL || g_head == a; }
+/* Is `a` in the queue? Walking the list is the only safe test: the game
+ * declares alarms as plain locals and statics and hands them to OSCreateAlarm
+ * before anything has written their links, so reading a->prev/a->next here
+ * would follow stack garbage. The queue is a handful of entries. */
+static int is_linked(const OSAlarm* a)
+{
+    unsigned steps = 0;
+    for (const OSAlarm* cur = g_head; cur != NULL; cur = cur->next) {
+        if (cur == a) {
+            return 1;
+        }
+        if (++steps > 4096) {
+            port_log("os_alarm: queue is cyclic (scanning for %p)", (const void*) a);
+            abort();
+        }
+    }
+    return 0;
+}
 
 static void unlink_alarm(OSAlarm* a)
 {

@@ -1,7 +1,9 @@
 // Open the hosted build in Chrome, feed it a disc image, and print the console.
-// Usage: node boot_probe.mjs <build-dir> <disc.iso> [seconds] [--headed] [--query=gpu=compat] [--browser=chromium|firefox] [--stack-after=N] [--trace-after=N] [--press=START@3,A@4.5]
+// Usage: node boot_probe.mjs <build-dir|page.html> <disc.iso> [seconds] [--headed] [--query=gpu=compat] [--browser=chromium|firefox] [--stack-after=N] [--trace-after=N] [--press=START@3,A@4.5]
 // Firefox has no WebGPU on Linux, so it exercises the automatic WebGL2 fallback.
-// Serves <build-dir> on a local port for the run.
+// A build directory is served on a local port for the run; a path ending in
+// .html is opened straight from file://, which is how the packed offline file
+// has to work (tools/pack_single_html.py).
 import { createRequire } from 'node:module';
 import { spawn } from 'node:child_process';
 import path from 'node:path';
@@ -45,8 +47,12 @@ const browserName = process.argv.find(a => a.startsWith('--browser='))?.slice(10
 if (!['chromium', 'firefox'].includes(browserName)) throw new Error(`unknown browser ${browserName}`);
 const port = 8766;
 
-const server = spawn('python3', ['-m', 'http.server', '-d', path.resolve(buildDir), String(port)], { stdio: 'ignore' });
-await new Promise(r => setTimeout(r, 800));
+const asFile = buildDir.endsWith('.html');
+const server = asFile ? null
+  : spawn('python3', ['-m', 'http.server', '-d', path.resolve(buildDir), String(port)], { stdio: 'ignore' });
+if (server) await new Promise(r => setTimeout(r, 800));
+const pageUrl = (asFile ? 'file://' + path.resolve(buildDir) : `http://localhost:${port}/index.html`)
+  + (query ? '?' + query : '');
 
 const browser = await playwright[browserName].launch(browserName === 'chromium' ? {
   executablePath: '/opt/google/chrome/chrome',
@@ -67,7 +73,7 @@ try {
   if (process.argv.includes('--asserts-fatal')) {
     await page.addInitScript(() => { window.Module = Object.assign(window.Module ?? {}, { assertsFatal: true }); });
   }
-  await page.goto(`http://localhost:${port}/index.html${query ? '?' + query : ''}`, { waitUntil: 'domcontentloaded' });
+  await page.goto(pageUrl, { waitUntil: 'domcontentloaded' });
   await page.bringToFront();
   let cdp = null;
   if (stackAfter > 0 && browserName === 'chromium') {
@@ -143,5 +149,5 @@ try {
   logs.push('[runner] ' + String(e.message).split('\n')[0]);
 }
 await browser.close().catch(() => {});
-server.kill();
-for (const l of logs) console.log(l.slice(0, 400));
+server?.kill();
+for (const l of logs) console.log(l.slice(0, 2000));

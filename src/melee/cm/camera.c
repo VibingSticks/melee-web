@@ -917,12 +917,23 @@ void Camera_ApplyQuake(CameraBounds* bounds, CameraTransformState* state)
     f32 input_x;
     f32 input_y;
     f32 depth_ratio;
+#ifdef TARGET_PC
+    /* The cast below reaches the camera descriptor by walking off the end of
+     * cm_803BCB18, which only works because the retail link placed these four
+     * statics back to back. Another toolchain is free to order and pad them
+     * however it likes -- and reading a zero viewport height here divides by
+     * zero, which then multiplies into a NaN camera position. Name the
+     * descriptor instead. */
+    HSD_CameraDescPerspective* const desc = &cm_803BCB64;
+#else
     struct CameraStaticData {
         CameraModeCallbacks callbacks;
         HSD_WObjDesc interest;
         HSD_WObjDesc eyepos;
         HSD_CameraDescPerspective desc;
     }* data = (struct CameraStaticData*) &cm_803BCB18;
+    HSD_CameraDescPerspective* const desc = &data->desc;
+#endif
 
     input_x = game_camera.quake_offset.x * game_camera.quake_scale;
     input_y = game_camera.quake_offset.y * game_camera.quake_scale;
@@ -939,12 +950,12 @@ void Camera_ApplyQuake(CameraBounds* bounds, CameraTransformState* state)
     half_view_height =
         bounds->z_pos * tanf(0.5f * (0.017453292f * state->fov));
     viewport_x_scale =
-        data->desc.aspect *
+        desc->aspect *
         (half_view_height /
-         (0.5f * (f32) (data->desc.viewport.xmax - data->desc.viewport.xmin)));
+         (0.5f * (f32) (desc->viewport.xmax - desc->viewport.xmin)));
     viewport_y_scale =
         half_view_height /
-        (0.5f * (f32) (data->desc.viewport.ymax - data->desc.viewport.ymin));
+        (0.5f * (f32) (desc->viewport.ymax - desc->viewport.ymin));
     depth_factor_y = Stage_GetCamZoomRate();
     depth_factor_x = Stage_GetCamMaxDepth() - depth_factor_y;
 

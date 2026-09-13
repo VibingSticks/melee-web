@@ -17,9 +17,12 @@
 #include <stdarg.h>
 #include <stdbool.h>
 #include <stdio.h>
+#include <malloc.h>
 #include <stdlib.h>
 
+#include "ax_hle/ax_hle.h"
 #include "dvd_web/dvd_web.h"
+#include "font_dol.h"
 #include "os_shim/os_alarm.h"
 #include "port.h"
 #include "pad_web.h"
@@ -53,6 +56,7 @@ static void reserve_low_heap(void)
 }
 
 static bool g_frame_active;
+static unsigned* g_yields_since_frame;
 static bool g_exit_requested;
 static bool g_paused;
 static double g_next_vblank_ms;
@@ -118,16 +122,25 @@ static void begin_frame_blocking(void)
 
 void port_yield(void)
 {
+    /* A wait loop that never reaches a frame means something it is waiting for
+     * never completes; say so rather than hanging silently. */
+    static unsigned s_since_frame;
+    if (++s_since_frame % 20000 == 0) {
+        port_log("stuck: %u yields without a frame (%u disc reads in flight)", s_since_frame, port_dvd_pending());
+    }
+    g_yields_since_frame = &s_since_frame;
     emscripten_sleep(0);
     port_dvd_pump();
+    port_ax_pump(0); /* keep audio flowing while the game blocks on a load */
 }
 
 void port_vblank(void)
 {
-    static bool s_keyboard_bound;
-    if (!s_keyboard_bound) { /* after the game's PADInit, which resets Aurora's bindings */
-        s_keyboard_bound = true;
+    static bool s_devices_bound;
+    if (!s_devices_bound) { /* after the game's PADInit, which resets Aurora's bindings */
+        s_devices_bound = true;
         port_pad_install_keyboard();
+        port_ax_init();
     }
     if (g_frame_active) {
         aurora_end_frame();
@@ -151,15 +164,35 @@ void port_vblank(void)
     }
     g_next_vblank_ms += kFrameMs;
 
+    if (g_yields_since_frame != NULL) {
+        *g_yields_since_frame = 0;
+    }
     port_dvd_pump();
     port_alarm_tick(OSGetTime());
     port_vi_retrace(); /* pad queue, XFB flip bookkeeping */
+    port_ax_pump(1);   /* AX frames due this video frame, mixed and queued */
     begin_frame_blocking();
 
     /* Once a second: frame count and wasm heap size, to spot runaway growth. */
     static unsigned s_frames;
     if (++s_frames % 60 == 0) {
-        port_log("frame %u heap=%u MB", s_frames, (unsigned) (emscripten_get_heap_size() >> 20));
+        struct mallinfo mi = mallinfo();
+        port_log("frame %u heap=%u MB malloc=%u MB", s_frames, (unsigned) (emscripten_get_heap_size() >> 20),
+                 (unsigned) ((unsigned) mi.uordblks >> 20));
+    }
+    {
+        /* The wasm heap only ever grows, so report every step: a jump that is
+         * not matched by malloc came from somewhere other than the C heap. */
+        static size_t s_heap;
+        size_t now = emscripten_get_heap_size();
+        if (now != s_heap) {
+            struct mallinfo mi = mallinfo();
+            port_log("heap grew %u -> %u MB at frame %u (malloc in use %u, free %u, mmapped %u MB)",
+                     (unsigned) (s_heap >> 20), (unsigned) (now >> 20), s_frames,
+                     (unsigned) ((unsigned) mi.uordblks >> 20), (unsigned) ((unsigned) mi.fordblks >> 20),
+                     (unsigned) ((unsigned) mi.hblkhd >> 20));
+            s_heap = now;
+        }
     }
 }
 
@@ -183,6 +216,7 @@ int main(int argc, char** argv)
     };
     reserve_low_heap();
     aurora_initialize(argc, argv, &cfg);
+    port_font_load_from_dol();
     port_log("Aurora initialized; starting the game");
     begin_frame_blocking();
     int rc = melee_main(); /* never returns on hardware; scene loops run inside */

@@ -38,7 +38,8 @@ s32 HSD_ArchiveParse(HSD_Archive* archive, u8* src, size_t file_size)
     port_archive_hdr port_hdr;
     uint32_t* port_reloc_set = NULL;
     uint32_t port_reloc_count = 0;
-    if (port_archive_fixup(src, file_size, &port_hdr, &port_reloc_set, &port_reloc_count) < 0) {
+    int port_converted = port_archive_fixup(src, file_size, &port_hdr, &port_reloc_set, &port_reloc_count);
+    if (port_converted < 0) {
         OSReport("HSD_ArchiveParse: malformed archive (%u bytes)\n", (unsigned) file_size);
         return -1;
     }
@@ -81,8 +82,13 @@ s32 HSD_ArchiveParse(HSD_Archive* archive, u8* src, size_t file_size)
 
     archive->top_ptr = (void*) src;
 #ifdef TARGET_PC
-    /* Pointers were relocated by port_archive_fixup; now convert the scalars. */
-    port_archive_swap_roots(archive, port_reloc_set, port_reloc_count);
+    /* Pointers were relocated by port_archive_fixup; now convert the scalars.
+     * A preloaded archive can be parsed again over the same buffer, and the
+     * fixup reports that (1) rather than converting twice; converting the
+     * scalars again would swap them straight back to big-endian. */
+    if (port_converted == 0) {
+        port_archive_swap_roots(archive, port_reloc_set, port_reloc_count);
+    }
     free(port_reloc_set);
 #else
     Locate(archive);

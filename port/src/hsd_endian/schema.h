@@ -30,8 +30,11 @@ typedef enum {
     LEN_FIELD_U16, /* ... u16 count */
     LEN_FIELD_U8,  /* ... u8 count */
     LEN_NULL_TERM, /* elements until one whose first pointer-sized word is 0 */
-    LEN_TERM_VALUE /* elements until one whose first (big-endian) word equals len; the terminator is
-                      converted too so the game can compare it natively */
+    LEN_TERM_VALUE, /* elements until one whose first (big-endian) word equals len; the terminator is
+                       converted too so the game can compare it natively */
+    LEN_RELOC_RUN   /* elements while each one still looks like an element: every pointer field is
+                       either null or a slot the relocation table named. Used for tables whose
+                       length lives nowhere in the data (the effect descriptor tables). */
 } port_lenkind;
 
 typedef struct port_type port_type;

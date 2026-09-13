@@ -73,7 +73,8 @@ int port_walk_ctx_init(port_walk_ctx* c, const uint8_t* base, uint32_t size, con
     c->reloc_count = rn;
     c->strict = strict;
     c->visited = calloc(1, sizeof(vset));
-    return c->visited != NULL ? 0 : -1;
+    c->converted = calloc((size + 7) / 8 + 1, 1);
+    return (c->visited != NULL && c->converted != NULL) ? 0 : -1;
 }
 
 void port_walk_ctx_free(port_walk_ctx* c)
@@ -84,6 +85,8 @@ void port_walk_ctx_free(port_walk_ctx* c)
         free(s);
     }
     c->visited = NULL;
+    free(c->converted);
+    c->converted = NULL;
 }
 
 /* --- helpers --- */
@@ -101,6 +104,24 @@ static int in_reloc(const port_walk_ctx* c, uint32_t off)
         }
     }
     return 0;
+}
+
+/* Claims `n` bytes at `p` for conversion. Returns 0 when any of them has been
+ * converted already: two descriptors can reach the same bytes by different
+ * paths (a union case, a shared table), and swapping twice restores the
+ * original byte order. */
+static int claim(port_walk_ctx* c, const uint8_t* p, uint32_t n)
+{
+    uint32_t off = (uint32_t) (p - c->base);
+    for (uint32_t i = 0; i < n; i++) {
+        if (c->converted[(off + i) >> 3] & (1u << ((off + i) & 7))) {
+            return 0;
+        }
+    }
+    for (uint32_t i = 0; i < n; i++) {
+        c->converted[(off + i) >> 3] |= (uint8_t) (1u << ((off + i) & 7));
+    }
+    return 1;
 }
 
 static int inside(const port_walk_ctx* c, const void* p, uint32_t n)
@@ -210,21 +231,90 @@ static uint32_t read_len(const port_field* f, const uint8_t* obj)
     }
     case LEN_FIELD_U8: return obj[f->len];
     case LEN_NULL_TERM:
-    case LEN_TERM_VALUE: return 0xFFFFFFFFu;
+    case LEN_TERM_VALUE:
+    case LEN_RELOC_RUN: return 0xFFFFFFFFu;
     }
     return 0;
 }
 
-static int fail(port_walk_ctx* c, const char* what)
+/* Does `obj` still look like an instance of `t`? Every pointer it holds,
+ * including the ones in nested structs and arrays, must be null or a slot the
+ * archive's relocation table named. Pointers are the only evidence available,
+ * so a type that contains none cannot be recognised at all: looks_like() then
+ * reports failure rather than accepting every byte pattern. */
+static int looks_like_rec(const port_walk_ctx* c, const port_type* t, const uint8_t* obj, unsigned depth,
+                          int* saw_pointer)
+{
+    if (t == NULL || depth > 8 || !inside(c, obj, t->size)) {
+        return 0;
+    }
+    for (uint32_t i = 0; i < t->nfields; i++) {
+        const port_field* f = &t->fields[i];
+        const uint8_t* p = obj + f->offset;
+        switch (f->kind) {
+        case F_PTR:
+        case F_PTR_ARRAY: {
+            uint32_t n = f->kind == F_PTR ? 1 : read_len(f, obj);
+            if (n == 0xFFFFFFFFu) {
+                n = 1;
+            }
+            for (uint32_t k = 0; k < n; k++) {
+                const uint8_t* q = p + 4 * k;
+                uint32_t v;
+                if (!inside(c, q, 4)) {
+                    return 0;
+                }
+                memcpy(&v, q, 4);
+                *saw_pointer = 1;
+                if (v != 0 && !in_reloc(c, (uint32_t) (q - c->base))) {
+                    return 0;
+                }
+            }
+            break;
+        }
+        case F_STRUCT:
+            if (!looks_like_rec(c, f->type, p, depth + 1, saw_pointer)) {
+                return 0;
+            }
+            break;
+        case F_ARRAY: {
+            uint32_t n = read_len(f, obj);
+            if (f->type == NULL || n == 0xFFFFFFFFu) {
+                break;
+            }
+            for (uint32_t k = 0; k < n; k++) {
+                if (!looks_like_rec(c, f->type, p + (size_t) k * f->type->size, depth + 1, saw_pointer)) {
+                    return 0;
+                }
+            }
+            break;
+        }
+        default: break;
+        }
+    }
+    return 1;
+}
+
+static int looks_like(const port_walk_ctx* c, const port_type* t, const uint8_t* obj)
+{
+    int saw_pointer = 0;
+    return looks_like_rec(c, t, obj, 0, &saw_pointer) && saw_pointer;
+}
+
+/* `slot` is the byte the walk choked on; its archive offset is what you need to
+ * go look at the data, so the message carries it. */
+static int fail(port_walk_ctx* c, const char* what, const void* slot)
 {
     if (c->error == NULL) {
         c->error = what;
     }
     if (c->nlogged < 16) {
+        const uint8_t* q = slot;
         c->nlogged++;
-        port_log("hsd_endian: %s at %s.%s+%u", what, c->cur_type != NULL ? c->cur_type->name : "?",
+        port_log("hsd_endian: %s at %s.%s+%u (archive +0x%x)", what, c->cur_type != NULL ? c->cur_type->name : "?",
                  c->cur_field != NULL && c->cur_field->name != NULL ? c->cur_field->name : "?",
-                 c->cur_field != NULL ? (unsigned) c->cur_field->offset : 0u);
+                 c->cur_field != NULL ? (unsigned) c->cur_field->offset : 0u,
+                 q != NULL ? (unsigned) (q - c->base) : 0u);
     }
     return c->strict ? -1 : 0;
 }
@@ -246,10 +336,19 @@ static int walk_field(port_walk_ctx* c, const port_field* f, uint8_t* obj)
     case F_F64:
     case F_BITS:
         if (!inside(c, p, 1)) {
-            return fail(c, "scalar outside the archive");
+            return fail(c, "scalar outside the archive", p);
         }
         if (in_reloc(c, (uint32_t) (p - c->base))) {
-            return fail(c, "scalar descriptor on a pointer slot");
+            return fail(c, "scalar descriptor on a pointer slot", p);
+        }
+        {
+            uint32_t width = f->kind == F_U16 ? 2
+                             : (f->kind == F_U64 || f->kind == F_F64) ? 8
+                             : f->kind == F_BITS ? f->bits_storage
+                                                 : 4;
+            if (!inside(c, p, width) || !claim(c, p, width)) {
+                return 0;
+            }
         }
         if (f->kind == F_U16) {
             swap16(p);
@@ -264,10 +363,12 @@ static int walk_field(port_walk_ctx* c, const port_field* f, uint8_t* obj)
     case F_WORD: {
         uint8_t* q;
         if (!inside(c, p, 4)) {
-            return fail(c, "word outside the archive");
+            return fail(c, "word outside the archive", p);
         }
         if (!in_reloc(c, (uint32_t) (p - c->base))) {
-            swap32(p);
+            if (claim(c, p, 4)) {
+                swap32(p);
+            }
             return 0;
         }
         if (f->type == NULL) {
@@ -278,7 +379,7 @@ static int walk_field(port_walk_ctx* c, const port_field* f, uint8_t* obj)
             return 0;
         }
         if (r < 0) {
-            return fail(c, "word pointer outside the archive");
+            return fail(c, "word pointer outside the archive", p);
         }
         return walk_obj(c, f->type, q);
     }
@@ -286,7 +387,12 @@ static int walk_field(port_walk_ctx* c, const port_field* f, uint8_t* obj)
         return walk_obj(c, f->type, p);
     case F_ARRAY: {
         uint32_t n = read_len(f, obj);
-        if (f->len_kind == LEN_NULL_TERM || f->len_kind == LEN_TERM_VALUE) {
+        if (f->len_kind == LEN_RELOC_RUN) {
+            n = 0;
+            while (n < 0x1000 && looks_like(c, f->type, p + n * f->type->size)) {
+                n++;
+            }
+        } else if (f->len_kind == LEN_NULL_TERM || f->len_kind == LEN_TERM_VALUE) {
             /* inline terminated array (a root symbol that is a list): count elements first */
             n = 0;
             for (;;) {
@@ -297,7 +403,8 @@ static int walk_field(port_walk_ctx* c, const port_field* f, uint8_t* obj)
                 uint32_t be = ((uint32_t) e[0] << 24) | ((uint32_t) e[1] << 16) | ((uint32_t) e[2] << 8) | e[3];
                 uint32_t le = ((uint32_t) e[3] << 24) | ((uint32_t) e[2] << 16) | ((uint32_t) e[1] << 8) | e[0];
                 if (f->len_kind == LEN_NULL_TERM ? be == 0 : (be == f->len || le == f->len)) {
-                    if (f->len_kind == LEN_TERM_VALUE && be == f->len && !in_reloc(c, (uint32_t) (e - c->base))) {
+                    if (f->len_kind == LEN_TERM_VALUE && be == f->len && !in_reloc(c, (uint32_t) (e - c->base))
+                        && claim(c, e, 4)) {
                         swap32((uint8_t*) e);
                     }
                     break;
@@ -332,10 +439,10 @@ static int walk_field(port_walk_ctx* c, const port_field* f, uint8_t* obj)
             return 0;
         }
         if (r == -2) {
-            return fail(c, "pointer descriptor on an unrelocated slot");
+            return fail(c, "pointer descriptor on an unrelocated slot", p);
         }
         if (r < 0) {
-            return fail(c, "pointer outside the archive");
+            return fail(c, "pointer outside the archive", p);
         }
         return walk_obj(c, f->type, q);
     }
@@ -346,16 +453,16 @@ static int walk_field(port_walk_ctx* c, const port_field* f, uint8_t* obj)
             return 0;
         }
         if (r == -2) {
-            return fail(c, "array pointer descriptor on an unrelocated slot");
+            return fail(c, "array pointer descriptor on an unrelocated slot", p);
         }
         if (r < 0) {
-            return fail(c, "array pointer outside the archive");
+            return fail(c, "array pointer outside the archive", p);
         }
         uint32_t n = read_len(f, obj);
         for (uint32_t i = 0; i < n; i++) {
             uint8_t* e = q + i * f->type->size;
             if (!inside(c, e, f->type->size)) {
-                return fail(c, "array element outside the archive");
+                return fail(c, "array element outside the archive", e);
             }
             if (f->len_kind == LEN_NULL_TERM) {
                 uint32_t first;
@@ -370,7 +477,7 @@ static int walk_field(port_walk_ctx* c, const port_field* f, uint8_t* obj)
                 uint32_t be = ((uint32_t) e[0] << 24) | ((uint32_t) e[1] << 16) | ((uint32_t) e[2] << 8) | e[3];
                 uint32_t le = ((uint32_t) e[3] << 24) | ((uint32_t) e[2] << 16) | ((uint32_t) e[1] << 8) | e[0];
                 if (be == f->len) {
-                    if (!in_reloc(c, (uint32_t) (e - c->base))) {
+                    if (!in_reloc(c, (uint32_t) (e - c->base)) && claim(c, e, 4)) {
                         swap32(e); /* the terminator is compared natively by the game */
                     }
                     break;
@@ -390,7 +497,7 @@ static int walk_field(port_walk_ctx* c, const port_field* f, uint8_t* obj)
         unsigned sz = f->disc_size != 0 ? f->disc_size : 4;
         uint32_t d = 0;
         if (!inside(c, dp, sz)) {
-            return fail(c, "union discriminator outside the archive");
+            return fail(c, "union discriminator outside the archive", dp);
         }
         if (f->disc_be) { /* not converted yet: it lives inside the union itself */
             for (unsigned i = 0; i < sz; i++) {
@@ -409,10 +516,10 @@ static int walk_field(port_walk_ctx* c, const port_field* f, uint8_t* obj)
                 return f->disc_types[i] != NULL ? walk_obj(c, f->disc_types[i], p) : 0;
             }
         }
-        return fail(c, "union discriminator has no case");
+        return fail(c, "union discriminator has no case", dp);
     }
     }
-    return fail(c, "unknown field kind");
+    return fail(c, "unknown field kind", obj);
 }
 
 static int walk_obj(port_walk_ctx* c, const port_type* t, uint8_t* obj)
@@ -422,7 +529,7 @@ static int walk_obj(port_walk_ctx* c, const port_type* t, uint8_t* obj)
     }
     int added = vset_add(c->visited, (uintptr_t) obj, t);
     if (added <= 0) {
-        return added == 0 ? 0 : fail(c, "out of memory");
+        return added == 0 ? 0 : fail(c, "out of memory", obj);
     }
     /* Two passes: scalars first, then everything that follows pointers or
      * reads a sibling (array lengths, union discriminators). A count declared

@@ -15,6 +15,20 @@
 #include <dolphin/types.h>
 #include <melee/lb/lbarchive.h> ///< @todo Circular include
 
+/* The SIS stream is archive data laid out big-endian, and the encoder in
+ * hsd_3A64.c writes it a byte at a time in that order too, so its 16-bit
+ * fields are big-endian whatever the host's own byte order is. A plain u16
+ * load was already that on the GameCube; here it has to be spelled out. */
+static inline u16 sisReadU16(const void* p)
+{
+#ifdef TARGET_PC
+    const u8* b = (const u8*) p;
+    return (u16) (((u16) b[0] << 8) | b[1]);
+#else
+    return *(u16*) p;
+#endif
+}
+
 static inline f32 HSD_SisLib_GlyphWidth(HSD_Text* text, f32 scale_x)
 {
     return 32.0F * text->x80.x * scale_x;
@@ -326,7 +340,7 @@ loop_3:
     case 14:
         HSD_SisLib_803A7684(text, (u8*) cursor, 0x83U);
         text->x80.x = (f32) * (u16*) ((u8*) cursor + 1) / 256.0F;
-        scale_val = *(u16*) ((u8*) cursor + 3);
+        scale_val = sisReadU16((u8*) cursor + 3);
         cursor = (u8*) cursor + 4;
         text->x80.y = (f32) scale_val / 256.0F;
         goto block_33;
@@ -370,7 +384,7 @@ loop_3:
         if (opcode >= 0x20U) {
             *out_width += text->x80.x * (32.0F + text->x78.x);
             if (kern_enabled != 0) {
-                glyph_code = *(u16*) cursor;
+                glyph_code = sisReadU16(cursor);
                 if (glyph_code < 0x4000U) {
                     kern_width =
                         (s32) (default_kerning +
@@ -693,14 +707,14 @@ void HSD_SisLib_803A84BC(HSD_GObj* gobj, int pass)
                                 skip_count -= 1;
                             } else {
                                 text->x98 = (u32) (text->x98 + 1);
-                                text->x94 = *(u16*) (sis_cursor + 1);
+                                text->x94 = sisReadU16(sis_cursor + 1);
                                 text->x60 = (void *) (sis_cursor + 3);
                             }
                             sis_cursor += 2;
                             break;
                         case 6:
-                            line_delay = *(u16*) (sis_cursor + 1);
-                            char_delay = *(u16*) (sis_cursor + 3);
+                            line_delay = sisReadU16(sis_cursor + 1);
+                            char_delay = sisReadU16(sis_cursor + 3);
                             sis_cursor += 4;
                             break;
                         case 7:
@@ -758,8 +772,8 @@ void HSD_SisLib_803A84BC(HSD_GObj* gobj, int pass)
                             break;
                         case 14:
                             HSD_SisLib_803A7684(text, sis_cursor, 3U);
-                            text->x80.x = (f32) *(u16*) (sis_cursor + 1) / 256.0F;
-                            text->x80.y = (f32) *(u16*) (sis_cursor + 3) / 256.0F;
+                            text->x80.x = (f32) sisReadU16(sis_cursor + 1) / 256.0F;
+                            text->x80.y = (f32) sisReadU16(sis_cursor + 3) / 256.0F;
                             sis_cursor += 4;
                             break;
                         case 15:
@@ -827,7 +841,7 @@ void HSD_SisLib_803A84BC(HSD_GObj* gobj, int pass)
                                     measured_width = line_width_out;
                                     sisFitLineToBox(text, measured_width);
                                 }
-                                glyph_idx = *(u16 *)sis_cursor;
+                                glyph_idx = sisReadU16(sis_cursor);
                                 if (glyph_idx < 0x4000U) {
                                     tex_offset = glyph_idx - 0x2000;
                                 } else {

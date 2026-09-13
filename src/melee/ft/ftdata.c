@@ -1576,6 +1576,16 @@ void ftData_8008572C(FighterKind kind)
     if (gFtDataList[kind] == NULL) {
         lbArchive_80017040(NULL, ftData_803C1F40[kind].a, &gFtDataList[kind],
                            ftData_803C1F40[kind].b, 0);
+#ifdef TARGET_PC
+        /* Convert on the load path, not once per fighter kind: ft_800852B0
+         * clears gFtDataList between scenes, so a second match re-reads the
+         * archive from the disc and that copy needs converting too. */
+        if (gFtDataList[kind] != NULL) {
+            u32 costumes = CostumeListsForeachCharacter[kind].numCostumes;
+            port_swap_ft_costume_tobjs(gFtDataList[kind]->x8, costumes);
+            port_swap_ft_parts_vis(gFtDataList[kind]->x8, costumes);
+        }
+#endif
     }
 }
 

@@ -166,7 +166,7 @@ void psInitDataBankLocate(HSD_Archive* cmdBank, HSD_Archive* texBank,
 #ifdef TARGET_PC
     /* The banks are raw big-endian blobs of offsets and counts; convert them
      * before this function starts reading them as native integers. */
-    port_swap_ptcl_banks(cmdBank, texBank);
+    port_swap_ptcl_banks(cmdBank, texBank, formBank);
 #endif
     s32 num;
     s32* ptr;

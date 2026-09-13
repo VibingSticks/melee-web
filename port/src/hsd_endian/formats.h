@@ -87,4 +87,9 @@ void port_swap_ft_costume_tobjs(void* ftdata_x8, uint32_t costumes);
  * once within the call. Call once per archive load, as above. */
 void port_swap_ft_parts_vis(void* ftdata_x8, uint32_t costumes);
 
+/* A .thp movie header, which lbmthp.c reads raw off the disc into its player
+ * struct. Everything from `version` on is a 32-bit field; the first eight bytes
+ * are the magic and are left alone. */
+void port_swap_thp_header(void* header);
+
 #endif

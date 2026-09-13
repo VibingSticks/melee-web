@@ -604,3 +604,13 @@ void port_swap_ft_parts_vis(void* ftdata_x8, uint32_t costumes)
         }
     }
 }
+
+void port_swap_thp_header(void* header)
+{
+    uint32_t* w = (uint32_t*) header;
+    /* 0x00 magic, 0x04 version-ish: bytes, not numbers the game does arithmetic
+     * on. From 0x08 to 0x2B every field is a u32 the player reads. */
+    for (unsigned i = 2; i < 11; i++) {
+        w[i] = bswap32(w[i]);
+    }
+}

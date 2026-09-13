@@ -34,8 +34,12 @@ unsigned char _stack_addr[4];
  * cache is a scratchpad the decoder fills and then DMAs out; this target has
  * one flat address space, so the "DMA" is a copy and the wait is nothing.
  * THPInit backs the scratchpad itself with a static buffer. */
+#include <stdint.h>
 #include <string.h>
-void DCZeroRange(void* addr, u32 nBytes) { memset(addr, 0, nBytes); }
+void DCZeroRange(void* addr, u32 nBytes)
+{
+    memset(addr, 0, nBytes);
+}
 u32 LCStoreData(void* dest, void* src, u32 nBytes)
 {
     memcpy(dest, src, nBytes);

@@ -181,6 +181,10 @@ static int inside(const port_walk_ctx* c, const void* p, uint32_t n)
 static int resolve_ptr(const port_walk_ctx* c, const uint8_t* slot, uint32_t need, uint8_t** out)
 {
     uint32_t v;
+    if (!inside(c, slot, 4)) {
+        *out = NULL;
+        return -1;
+    }
     memcpy(&v, slot, 4);
     if (v == 0) {
         *out = NULL;
@@ -335,10 +339,11 @@ static int looks_like_rec(const port_walk_ctx* c, const port_type* t, const uint
         case F_PTR:
         case F_PTR_ARRAY:
         case F_PTR_LIST: {
-            uint32_t n = f->kind == F_PTR_ARRAY ? read_len(f, obj) : 1;
-            if (n == 0xFFFFFFFFu) {
-                n = 1;
-            }
+            /* One slot in every case. An F_PTR_ARRAY is a single pointer TO
+             * an array, not an inline run of slots -- reading read_len() of
+             * them here walks off into the sibling fields and makes any type
+             * with such a field fail to match. */
+            uint32_t n = 1;
             for (uint32_t k = 0; k < n; k++) {
                 const uint8_t* q = p + 4 * k;
                 uint32_t v;
@@ -508,6 +513,9 @@ static int walk_field(port_walk_ctx* c, const port_field* f, uint8_t* obj)
             int is_ptr = f->type->fields[0].kind == F_PTR || f->type->fields[0].kind == F_PTR_ARRAY;
             for (uint32_t i = 0; i < n; i++) {
                 uint8_t* e = p + i * f->type->size;
+                if (!inside(c, e, f->type->size)) {
+                    return fail(c, "array element outside the archive", e);
+                }
                 if (is_ptr && vset_add(c->visited, (uintptr_t) e, f->type) < 0) {
                     return fail(c, "out of memory", e);
                 }
@@ -518,7 +526,11 @@ static int walk_field(port_walk_ctx* c, const port_field* f, uint8_t* obj)
             return 0;
         }
         for (uint32_t i = 0; i < n; i++) {
-            if (walk_obj(c, f->type, p + i * f->type->size) != 0) {
+            uint8_t* e = p + i * f->type->size;
+            if (!inside(c, e, f->type->size)) {
+                return fail(c, "array element outside the archive", e);
+            }
+            if (walk_obj(c, f->type, e) != 0) {
                 return -1;
             }
         }
@@ -668,6 +680,9 @@ static int walk_obj(port_walk_ctx* c, const port_type* t, uint8_t* obj)
 {
     if (t == NULL) {
         return 0;
+    }
+    if (!inside(c, obj, t->size)) {
+        return fail(c, "object outside the archive", obj);
     }
     int added = vset_add(c->visited, (uintptr_t) obj, t);
     if (added <= 0) {

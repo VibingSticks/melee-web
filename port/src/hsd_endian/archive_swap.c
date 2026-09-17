@@ -53,13 +53,18 @@ int port_archive_fixup(uint8_t* f, uint32_t n, port_archive_hdr* h, uint32_t** r
     h->nb_extern = rd(f + 16);
 
     uint8_t* data = f + 0x20;
+    /* The three counts come straight off the disc, so size the tables in
+     * 64-bit: 4 * nb_reloc wraps for counts past 2^30 and would let a tiny
+     * buffer pass the check below (and malloc a tiny reloc array). */
+    uint64_t need = (uint64_t) 0x20 + h->data_size + 4ull * h->nb_reloc + 8ull * h->nb_public + 8ull * h->nb_extern;
+    if (h->data_size > n || need > n) {
+        return -1;
+    }
     uint8_t* reloc = data + h->data_size;
     uint8_t* pub = reloc + 4u * h->nb_reloc;
     uint8_t* ext = pub + 8u * h->nb_public;
-    uint8_t* symbols = ext + 8u * h->nb_extern;
-    if (h->data_size > n || (uint32_t) (symbols - f) > n) {
-        return -1;
-    }
+    /* The symbol table follows at ext + 8 * nb_extern; `need` above already
+     * accounts for it, and ar->symbols is set from the parsed header. */
 
     uint32_t* rs = malloc(4u * (h->nb_reloc != 0 ? h->nb_reloc : 1));
     if (rs == NULL) {
@@ -77,7 +82,7 @@ int port_archive_fixup(uint8_t* f, uint32_t n, port_archive_hdr* h, uint32_t** r
 
     for (uint32_t i = 0; i < h->nb_reloc; i++) {
         uint32_t off = rd(reloc + 4u * i);
-        if (off + 4 > h->data_size) {
+        if (h->data_size < 4 || off > h->data_size - 4) {
             free(rs);
             return -1;
         }

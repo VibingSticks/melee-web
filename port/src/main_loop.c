@@ -11,6 +11,7 @@
 #include <aurora/aurora.h>
 #include <aurora/event.h>
 #include <aurora/main.h>
+#include <dolphin/gx/GXAurora.h> /* AuroraSetViewportPolicy */
 #include <dolphin/os.h>
 #include <emscripten.h>
 #include <emscripten/heap.h>
@@ -168,7 +169,22 @@ void port_vblank(void)
         *g_yields_since_frame = 0;
     }
     port_dvd_pump();
-    port_alarm_tick(OSGetTime());
+    /* Alarms run on a virtual clock that advances exactly one frame per
+     * vblank, not on the wall clock. The game's pad queue is filled only by a
+     * periodic alarm of about 1/60 s, and gmscene's wait loop presents another
+     * frame for every vblank that produces no pad sample. Tying the alarm grid
+     * to the wall clock let sleep jitter decide whether a given vblank saw a
+     * fire, so the simulation ran below 60 Hz with duplicate frames. One tick
+     * per frame makes that alarm fire exactly once per vblank. */
+    {
+        static OSTime s_virtual_time;
+        if (s_virtual_time == 0) {
+            s_virtual_time = OSGetTime();
+        } else {
+            s_virtual_time += (OSTime) (OS_TIMER_CLOCK / 60);
+        }
+        port_alarm_tick(s_virtual_time);
+    }
     port_vi_retrace(); /* pad queue, XFB flip bookkeeping */
     port_ax_pump(1);   /* AX frames due this video frame, mixed and queued */
     begin_frame_blocking();
@@ -216,6 +232,14 @@ int main(int argc, char** argv)
     };
     reserve_low_heap();
     aurora_initialize(argc, argv, &cfg);
+    /* SDL creates the window resizable, and its resize handler sets the canvas
+     * drawing buffer to whatever CSS size the page gives it. Aurora then makes
+     * the framebuffer match, and scales x and y independently -- so the page's
+     * object-fit letterboxing stops doing anything the moment the window is
+     * resized, zoomed or made fullscreen. Ask Aurora to keep the logical 4:3
+     * aspect and letterbox in the present pass instead, which holds at any
+     * canvas size. */
+    AuroraSetViewportPolicy(AURORA_VIEWPORT_FIT);
     port_font_load_from_dol();
     port_log("Aurora initialized; starting the game");
     begin_frame_blocking();

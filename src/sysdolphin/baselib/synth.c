@@ -247,6 +247,13 @@ int HSD_SynthSFXLoad(const char* filename, int bankID, void (*cb)(int, int),
 #endif
 
     while (HSD_Synth_804D772C >= 6) {
+#ifdef TARGET_PC
+        /* The queue drains only from DevCom/ARQ callbacks, which the host pump
+         * delivers -- without a yield this is a hung tab, not a wait. Today's
+         * callers load one bank at a time so the queue never fills, but that
+         * is their property, not this loop's. */
+        port_yield();
+#endif
     }
 
     enabled = OSDisableInterrupts();

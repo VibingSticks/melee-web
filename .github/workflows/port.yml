@@ -65,6 +65,25 @@ jobs:
           restore-keys: |
             port-build-${{ runner.os }}-
 
+      # The WebGL2 fallback translator. naga.wasm is gitignored, so CI has to
+      # build it -- the packer refuses to run without it.
+      - name: Cache the naga build
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            port/build/naga-target
+          key: port-naga-${{ runner.os }}-${{ hashFiles('port/tools/naga-wasm/Cargo.lock') }}
+
+      - name: Set up Rust for naga
+        run: |
+          rustup toolchain install stable --profile minimal
+          rustup target add wasm32-unknown-unknown
+
+      - name: Build naga
+        run: port/tools/build_naga.sh
+
       - name: Set up emsdk and Aurora
         run: port/tools/setup.sh
 
@@ -81,7 +100,7 @@ jobs:
         working-directory: port
         run: |
           . tools/env.sh
-          cmake --preset web-release
+          cmake --preset web-release -DPORT_SINGLE_FILE=OFF
           cmake --build --preset web-release -j"$(nproc)"
 
       - name: Upload the hosted build

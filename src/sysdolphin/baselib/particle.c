@@ -640,10 +640,21 @@ s32 hsd_803991D8(HSD_Generator* gen, HSD_JObj* jobj, f32 force, f32 range)
 static inline void psReadFloat(u8** stream)
 {
     u8* p = *stream;
+#ifdef TARGET_PC
+    /* Particle command lists are never converted -- swap_cmd_list touches only
+     * the 0x3C header, and the u16 operands below are read a byte at a time
+     * for the same reason. So these four bytes are big-endian: on the GameCube
+     * byte 0 was the float's high byte, here it is the low one. */
+    ((ParticleFloatBytes*) &hsd_804D78D0)->bytes[3] = *p++;
+    ((ParticleFloatBytes*) &hsd_804D78D0)->bytes[2] = *p++;
+    ((ParticleFloatBytes*) &hsd_804D78D0)->bytes[1] = *p++;
+    ((ParticleFloatBytes*) &hsd_804D78D0)->bytes[0] = *p++;
+#else
     ((ParticleFloatBytes*) &hsd_804D78D0)->bytes[0] = *p++;
     ((ParticleFloatBytes*) &hsd_804D78D0)->bytes[1] = *p++;
     ((ParticleFloatBytes*) &hsd_804D78D0)->bytes[2] = *p++;
     ((ParticleFloatBytes*) &hsd_804D78D0)->bytes[3] = *p++;
+#endif
     *stream = p;
 }
 

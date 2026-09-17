@@ -8,9 +8,13 @@ file(GLOB_RECURSE GAME_SOURCES CONFIGURE_DEPENDS
     ${GAME_ROOT}/src/melee/*.c
     ${GAME_ROOT}/src/sysdolphin/*.c)
 
-# The SDK's THP video decoder, which the intro movie needs. Its PowerPC asm is
-# all behind __MWERKS__ -- it only primes the paired-single quantisation
-# registers, which this target has no equivalent of and does not need.
+# The SDK's THP video decoder, which the intro movie needs. It compiles, but it
+# does NOT decode on this target: 36 asm blocks sit behind __MWERKS__ and all
+# but three of them are the hot path itself -- both inverse DCTs, the Huffman
+# lookup, and the three DCT component readers. Only three prime the
+# paired-single quantisation registers, and even those carry meaning (GQR6
+# encodes the IDCT's level-shift and clamp). Movies are skipped in lbmthp.c
+# until those routines are written in C.
 list(APPEND GAME_SOURCES ${GAME_ROOT}/extern/dolphin/src/dolphin/thp/THPDec.c)
 
 set(GAME_EXCLUDE

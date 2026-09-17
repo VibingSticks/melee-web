@@ -2787,11 +2787,24 @@ void THPInit(void)
     work->cache.work512[2] = base;
 
     base             = THP_LC_BASE;
+#ifdef TARGET_PC
+    /* struct THPLCWork is 124 bytes; THPInitWork appends work672[3] at 124.
+     * Writing work672 through the cast therefore runs 12 bytes off the end of
+     * __THPLC, and only worked because the GameCube link happened to place
+     * __THPLCWork672 immediately after it. Assign the real array instead --
+     * otherwise it stays NULL and the decoder reads from address 0. */
+    __THPLCWork672[0] = base;
+    base += 0x2800;
+    __THPLCWork672[1] = base;
+    base += 0xA00;
+    __THPLCWork672[2] = base;
+#else
     work->work672[0] = base;
     base += 0x2800;
     work->work672[1] = base;
     base += 0xA00;
     work->work672[2] = base;
+#endif
 
     OSInitFastCast();
 }

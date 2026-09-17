@@ -103,9 +103,10 @@ struct lbl_803BAFE8_t {
 /* 4333E0 */ static THPDecComp MoviePlayer;
 #endif
 
-/* A frame's packed size, which sits in the first word of the frame itself and
- * so comes off the disc big-endian however the host reads memory. A plain load
- * was already that on the GameCube. */
+/* The packed size of the frame AFTER this one, which THP stores in the first
+ * word of each frame (the first frame's size comes from the header instead).
+ * It comes off the disc big-endian however the host reads memory; on the
+ * GameCube a plain load already was. */
 static inline u32 thpFrameSize(const void* frame)
 {
 #ifdef TARGET_PC

@@ -69,6 +69,38 @@ typedef struct MnSelectChrDataTable {
 } MnSelectChrDataTable;
 
 static CSSData* mnCharSel_804D6CB0;
+
+#ifdef TARGET_PC
+#include <emscripten.h>
+
+/* The browser tests need the live character-select state, which is file-local
+ * here -- gm_80473814's saved_players is the config written on exit, not what
+ * the panels are showing now. Reading it through the real types rather than by
+ * address leaves StartMeleeRules' bitfield packing to the compiler, which is
+ * the one thing that must not be hand-counted on this target. */
+
+/* slot_type in bits 8-15, ckind in bits 0-7; -1 if the screen is not up. */
+EMSCRIPTEN_KEEPALIVE int port_css_live_slot(int port)
+{
+    CSSData* css = mnCharSel_804D6CB0;
+    PlayerInitData* p;
+    if (css == NULL || port < 0 || port >= 4) {
+        return -1;
+    }
+    p = &css->vs.start.players[port];
+    return ((int) p->slot_type << 8) | (p->ckind & 0xFF);
+}
+
+/* match_type in bits 8-15, pending_scene_change in bits 0-7; -1 if not up. */
+EMSCRIPTEN_KEEPALIVE int port_css_live_status(void)
+{
+    CSSData* css = mnCharSel_804D6CB0;
+    if (css == NULL) {
+        return -1;
+    }
+    return ((int) css->match_type << 8) | css->pending_scene_change;
+}
+#endif
 static MnSelectChrDataTable* css_data_table;
 static HSD_GObj* mnCharSel_804D6CB8;
 static HSD_GObj* mnCharSel_804D6CBC;
@@ -1623,6 +1655,35 @@ void mnCharSel_8025EE8C(u8 idx)
 }
 
 static struct CSSCursorData* mnCharSel_804A0BC0[4];
+
+#ifdef TARGET_PC
+/* The hand cursor's position for a port, x and y each scaled by 100 and
+ * packed into 16 bits. Whether the hand moves is what separates "input never
+ * reaches the screen" from "the automation cannot aim it at a portrait". */
+EMSCRIPTEN_KEEPALIVE int port_css_cursor(int port)
+{
+    struct CSSCursorData* c;
+    int x, y;
+    if (port < 0 || port >= 4) {
+        return -1;
+    }
+    c = mnCharSel_804A0BC0[port];
+    if (c == NULL) {
+        return -1;
+    }
+    x = (int) (c->xC * 100.0f);
+    y = (int) (c->x10 * 100.0f);
+    return ((x & 0xFFFF) << 16) | (y & 0xFFFF);
+}
+
+/* How many hand cursors the screen created (0 means none, so no port can
+ * select anything at all). */
+EMSCRIPTEN_KEEPALIVE int port_css_cursor_count(void)
+{
+    return mnCharSel_804D6CF5;
+}
+#endif
+
 static struct CSSCharModel {
     /* 0x00 */ HSD_GObj* gobj;
     /* 0x04 */ u8 x4;

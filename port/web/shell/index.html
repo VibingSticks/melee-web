@@ -18,6 +18,11 @@
      stretching everything sideways. */
   #canvas { flex: 1; width: 100%; min-height: 0; background: #000; outline: none;
             object-fit: contain; }
+  #saves { display: flex; gap: 8px; align-items: center; }
+  #saves button, #saves .btn { font: inherit; color: #ddd; background: #24242c; border: 1px solid #3a3a46;
+                               border-radius: 4px; padding: 3px 9px; cursor: pointer; }
+  #saves button[disabled] { opacity: .45; cursor: default; }
+  #saves button:not([disabled]):hover, #saves .btn:hover { background: #2f2f3a; }
   #log { height: 120px; margin: 0; padding: 6px 12px; overflow: auto; background: #101014; color: #9a9; font: 12px monospace; white-space: pre; }
 </style>
 </head>
@@ -27,6 +32,10 @@
     <label>Disc image (GALE01 .iso/.gcm): <input id="disc" type="file" accept=".iso,.gcm,.bin"></label>
     <span id="status">Pick your Melee disc image to start.</span>
     <span id="renderer" title="Add ?renderer=webgl2 or ?renderer=webgpu to the URL to force one"></span>
+    <span id="saves" hidden>
+      <button id="export" type="button" disabled title="Download your memory-card save">Export save</button>
+      <label class="btn">Import save<input id="import" type="file" accept=".gci,.raw,.bin,.json" hidden></label>
+    </span>
   </div>
   <canvas id="canvas" tabindex="-1" oncontextmenu="event.preventDefault()"></canvas>
   <pre id="log"></pre>

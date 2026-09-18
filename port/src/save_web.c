@@ -20,6 +20,26 @@ static unsigned g_frames;
 
 int port_save_mount(void)
 {
+    /* Ask the browser to keep this origin's storage. Without it IndexedDB is
+     * "best effort" and may be evicted under storage pressure, which for the
+     * player means their save quietly disappearing. Chrome decides from site
+     * engagement rather than prompting, so this is a request, not a
+     * guarantee -- log what we were given. */
+    EM_ASM({
+        if (navigator.storage && navigator.storage.persist) {
+            navigator.storage.persisted().then(function(already) {
+                if (already) {
+                    console.log('[melee] saves: storage is already persistent');
+                    return;
+                }
+                navigator.storage.persist().then(function(granted) {
+                    console.log(granted ? '[melee] saves: storage is now persistent'
+                                        : '[melee] saves: the browser may evict saves under storage pressure');
+                });
+            }).catch(function(e) { console.warn('[melee] saves: storage policy unknown:', e); });
+        }
+    });
+
     EM_ASM({
         window.__meleeSave = 0;
         try {
@@ -76,14 +96,29 @@ static int card_changed(void)
         var dir = UTF8ToString($0);
         var sig = 0;
         try {
-            var names = FS.readdir(dir);
-            for (var i = 0; i < names.length; i++) {
-                if (names[i] === '.' || names[i] === '..') continue;
-                var st = FS.stat(dir + '/' + names[i]);
-                /* |0 keeps this in int range; collisions only delay a store to
-                   the next change, they cannot lose one. */
-                sig = (sig * 31 + st.size + (st.mtime ? st.mtime.getTime() : 0)) | 0;
-            }
+            /* Recursive: Aurora keeps the card in a folder of its own
+               (/saves/<region>/Card A/*.gci), and a directory's own mtime does
+               not move when a file deeper inside it is written. Stat'ing only
+               the top level would miss every real save. */
+            var walk = function(d) {
+                var names = FS.readdir(d);
+                for (var i = 0; i < names.length; i++) {
+                    if (names[i] === '.' || names[i] === '..') continue;
+                    var full = d + '/' + names[i];
+                    var st = FS.stat(full);
+                    if (FS.isDir(st.mode)) {
+                        walk(full);
+                        continue;
+                    }
+                    /* |0 keeps this in int range; collisions only delay a store
+                       to the next change, they cannot lose one. */
+                    sig = (sig * 31 + st.size + (st.mtime ? st.mtime.getTime() : 0)) | 0;
+                    for (var k = 0; k < full.length; k++) {
+                        sig = (sig * 31 + full.charCodeAt(k)) | 0;
+                    }
+                }
+            };
+            walk(dir);
         } catch (e) {
             return 0;
         }

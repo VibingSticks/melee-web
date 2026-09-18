@@ -46,9 +46,22 @@ Manual acceptance list from spec §10. Tick with date and browser.
       The stored image is read in before aurora_initialize, because Aurora opens
       the card during init and formats a blank one over it otherwise, and it is
       written back on a debounce after the game writes.
-      `tests/browser/save_persist_test.mjs` boots, waits for the store, reloads
-      in the same browser context and checks Aurora loads the image rather than
-      formatting. Outstanding: the export/import round-trip.
+      The page also asks for persistent storage (navigator.storage.persist), so
+      the browser is less likely to evict a save under storage pressure; Chrome
+      decides from site engagement rather than prompting, and the answer is
+      logged either way.
+
+      Export and import are on the toolbar. Aurora keeps the card as a folder
+      of .gci files -- the same shape Dolphin uses -- so a single save exports
+      as a plain .gci that Dolphin can import, and several files export as a
+      JSON bundle. Import accepts either, forces a .gci extension (Aurora's
+      card folder ignores anything else), rejects bundle paths that try to
+      climb out of the mount, and reloads so the game rereads the card.
+
+      `tests/browser/save_persist_test.mjs` is the acceptance test: nine
+      checks covering mount, write-back, byte-for-byte survival of a reload,
+      export, and an import that restores a deleted save. All passing on the
+      real disc.
 - [~] M6 Single-file: `melee-offline.html` boots from `file://` on Chrome, Firefox, Safari
       (2026-09-12: Chrome 151 on WebGPU and Firefox on the WebGL2 fallback both
       boot the 14 MB packed file straight from `file://`, take a disc through the

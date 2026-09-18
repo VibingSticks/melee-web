@@ -147,6 +147,7 @@ void port_yield(void)
 static struct {
     double game, present, events, pace, dvd, alarm, vi, audio, begin;
     double worst;
+    double window_start; /* wall clock when this reporting window opened */
     unsigned frames;
 } g_prof;
 static double g_prof_left; /* when the previous port_vblank returned */
@@ -157,11 +158,18 @@ static void prof_report(unsigned frame)
         return;
     }
     double n = g_prof.frames;
-    port_log("frame %u ms/frame: game %.1f present %.1f events %.1f pace %.1f "
+    /* Measured against the wall clock over the reporting window, so this is
+     * the rate actually reaching the screen -- not the frame counter divided
+     * by an assumed 60. */
+    double now = emscripten_get_now();
+    double fps = g_prof.window_start > 0.0 && now > g_prof.window_start ? n * 1000.0 / (now - g_prof.window_start) : 0.0;
+    port_log("frame %u | %.1f fps (%.1f ms/frame) | game %.1f present %.1f events %.1f pace %.1f "
              "dvd %.1f alarm %.1f vi %.1f audio %.1f begin %.1f | worst %.1f",
-             frame, g_prof.game / n, g_prof.present / n, g_prof.events / n, g_prof.pace / n, g_prof.dvd / n,
-             g_prof.alarm / n, g_prof.vi / n, g_prof.audio / n, g_prof.begin / n, g_prof.worst);
+             frame, fps, fps > 0.0 ? 1000.0 / fps : 0.0, g_prof.game / n, g_prof.present / n, g_prof.events / n,
+             g_prof.pace / n, g_prof.dvd / n, g_prof.alarm / n, g_prof.vi / n, g_prof.audio / n, g_prof.begin / n,
+             g_prof.worst);
     memset(&g_prof, 0, sizeof(g_prof));
+    g_prof.window_start = now;
 }
 
 void port_vblank(void)
@@ -173,6 +181,9 @@ void port_vblank(void)
         port_ax_init();
     }
     double t_enter = emscripten_get_now();
+    if (g_prof.window_start == 0.0) {
+        g_prof.window_start = t_enter;
+    }
     if (g_prof_left != 0.0) {
         g_prof.game += t_enter - g_prof_left;
     }

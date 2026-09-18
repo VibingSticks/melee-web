@@ -2443,8 +2443,19 @@ void _Toy_803075E8(s32 arg0)
         Toy_sbss_804D6ED8->x8->x28->x4->x4->x40 = 9;
     }
 
+#ifdef TARGET_PC
+    /* Same trick as the light table, and the same problem: the original walks
+     * off _Toy_str_TyLight_dat by 0x1A4 + arg0 * 4, which is _Toy_803FDEBC
+     * only because the GameCube link put it there (0x3FDD18 + 0x1A4 ==
+     * 0x3FDEBC). Here that read landed in a neighbouring string table, so the
+     * "symbol" handed to the archive was the filename PlFxDViWaitAJ.dat.
+     * Name the array. */
+    ptr = (arg0 >= 0 && arg0 < (s32) ARRAY_SIZE(_Toy_803FDEBC)) ? &_Toy_803FDEBC[arg0] : NULL;
+    if (ptr != NULL && *ptr != NULL) {
+#else
     ptr = (char**) (data + arg0 * 4);
     if (*(ptr += 0x69) != NULL) {
+#endif
         joint = HSD_ArchiveGetPublicAddress(td->archive, *ptr);
         if (joint != NULL) {
             td->gobj = GObj_Create(4, 7, 0);
@@ -2453,12 +2464,25 @@ void _Toy_803075E8(s32 arg0)
             HSD_GObjObject_80390A70(td->gobj, kind, jobj);
             GObj_SetupGXLink(td->gobj, HSD_GObj_JObjCallback, 0x33, 0);
 
+#ifdef TARGET_PC
+            /* And again for the animation names: data + arg0 * 0xC + 0x290 is
+             * _Toy_803FDFA8[arg0], whose three members are exactly the three
+             * offsets read below (0x290/0x294/0x298, stride 0xC). */
+            {
+                const struct ModelNamesDesc* names =
+                    (arg0 >= 0 && arg0 < (s32) ARRAY_SIZE(_Toy_803FDFA8)) ? &_Toy_803FDFA8[arg0] : NULL;
+                joint = names != NULL ? HSD_ArchiveGetPublicAddress(td->archive, names->animjoint) : NULL;
+                data = names != NULL ? HSD_ArchiveGetPublicAddress(td->archive, names->matanim_joint) : NULL;
+                shapanim = names != NULL ? HSD_ArchiveGetPublicAddress(td->archive, names->shapeanim_joint) : NULL;
+            }
+#else
             arg0 = (u32) data + arg0 * 0xC;
             ptr = ((ToyPanelLabelData*) arg0)->ptrs;
             joint = HSD_ArchiveGetPublicAddress(td->archive, ptr[0x290 / 4]);
             data = HSD_ArchiveGetPublicAddress(td->archive, ptr[0x294 / 4]);
             shapanim =
                 HSD_ArchiveGetPublicAddress(td->archive, ptr[0x298 / 4]);
+#endif
 
             if (joint != NULL || data != NULL || shapanim != NULL) {
                 HSD_JObjAddAnimAll(jobj, (HSD_AnimJoint*) joint,

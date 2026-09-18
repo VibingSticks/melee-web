@@ -196,3 +196,23 @@ export async function reboot(page, disc) {
   }
   throw new Error('the runtime did not come back after a reload');
 }
+
+/** Frames the game has completed since boot, or null if unavailable. */
+export async function frameCount(page) {
+  return page.evaluate(() => (window.Module && window.Module._port_frame_count)
+    ? window.Module._port_frame_count() : null);
+}
+
+/**
+ * Is the game still running? A screen that sits on one scene may be waiting
+ * for input or may be hung, and only the frame counter tells them apart --
+ * calling the first one "wedged" is how a working character-select screen got
+ * reported as a freeze.
+ */
+export async function isAlive(page, overMs = 2000) {
+  const a = await frameCount(page);
+  if (a === null) return null;
+  await sleep(overMs);
+  const b = await frameCount(page);
+  return { alive: b > a, frames: b - a, fps: ((b - a) * 1000) / overMs };
+}

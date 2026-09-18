@@ -2,9 +2,9 @@
 // walk into each menu entry?
 //
 // The second half is the useful part: "some menus freeze or go black" is not
-// something anyone can act on, but "entry 3 reaches GIANT_VS[0], ignores every
-// button and cannot be backed out of" is. Unimplemented or wedged screens
-// become a list.
+// something anyone can act on, but "+2 DOWN reaches VS[0], which is alive at
+// 28 fps and simply ignores the buttons we know how to press" is. Screens that
+// are genuinely hung and screens that are merely waiting become two lists.
 //
 // Each entry is probed from a fresh boot rather than by backing out of the
 // previous one. That costs a reload per entry, but it is the only way to make
@@ -15,7 +15,7 @@
 // Usage: node menu_nav_test.mjs <build-dir> <disc.iso> [entries]
 import path from 'node:path';
 import {
-  launchGame, bootToMainMenu, reboot, scene, sceneName, press, menuState, sleep,
+  launchGame, bootToMainMenu, reboot, scene, sceneName, press, menuState, sleep, isAlive,
 } from './nav.mjs';
 
 const [buildDir, disc, entriesArg] = process.argv.slice(2);
@@ -29,6 +29,18 @@ let failed = false;
 const check = (ok, msg) => { console.log(`${ok ? 'ok  ' : 'FAIL'} ${msg}`); if (!ok) failed = true; };
 
 const { page, logs, close } = await launchGame({ buildDir, disc });
+
+// Only call a screen hung if the game has actually stopped. A live frame loop
+// sitting on one scene is a screen waiting for input we do not know how to
+// give -- a different problem, and a much less alarming one. Confusing the two
+// is how a working character-select screen got reported here as a freeze.
+async function liveness(page, where) {
+  const live = await isAlive(page);
+  return live && live.alive
+    ? `${where} -> alive (${live.fps.toFixed(0)} fps) but ignores A/START/B`
+    : `${where} -> HUNG: the frame loop stopped`;
+}
+
 
 // Walk into the entry `steps` below the cursor's start and describe where we
 // land. Assumes the caller has just reached the main menu from a fresh boot.
@@ -77,7 +89,7 @@ async function probeEntry(steps) {
         return `submenu ${sub} -> ${landedDeep} -> idle, ${btn} moved it to ${sceneName(now)}`;
       }
     }
-    return `submenu ${sub} -> ${landedDeep} -> WEDGED: ignores A/START/B`;
+    return `submenu ${sub} -> ${landedDeep} -> ` + await liveness(page, landedDeep);
   }
 
   // It left the menu. Is it still making progress, or has it stopped?
@@ -90,7 +102,7 @@ async function probeEntry(steps) {
     }
   }
 
-  // Sitting still. Waiting for input, or wedged?
+  // Sitting still. Waiting for input, or hung?
   for (const btn of ['A', 'START', 'B']) {
     await press(page, btn, 150);
     await sleep(1000);
@@ -99,7 +111,7 @@ async function probeEntry(steps) {
       return `${landed} -> idle, but ${btn} moved it to ${sceneName(now)}`;
     }
   }
-  return `${landed} -> WEDGED: still there after ~7s and ignores A/START/B`;
+  return `${landed} -> ` + await liveness(page, landed);
 }
 
 try {
@@ -127,11 +139,11 @@ try {
   console.log('\n--- menu entries (by DOWN presses from the default cursor) ---');
   for (const r of results) console.log(`  +${r.steps} DOWN: ${r.outcome}`);
 
-  const wedged = results.filter(r => r.outcome.includes('WEDGED'));
+  const wedged = results.filter(r => r.outcome.includes('HUNG'));
   const left = results.filter(r => r.outcome.includes('->') && !r.outcome.includes('still in MENU'));
-  console.log(`\n${left.length} of ${results.length} entries left the menu; ${wedged.length} wedged.`);
+  console.log(`\n${left.length} of ${results.length} entries left the menu; ${wedged.length} hung.`);
   if (wedged.length) {
-    console.log('wedged screens (these are the freezes worth chasing):');
+    console.log('hung screens (frame loop stopped -- real freezes):');
     for (const w of wedged) console.log(`  +${w.steps} DOWN: ${w.outcome}`);
   }
   check(results.length === ENTRIES, `probed all ${ENTRIES} entries`);

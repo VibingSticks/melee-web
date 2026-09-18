@@ -16,7 +16,7 @@ set(PORT_LINK_FLAGS
     # append (see tools/pack_single_html.py).
     -sMODULARIZE=1
     -sEXPORT_NAME=createMelee
-    -sEXPORTED_FUNCTIONS=_main,_port_dvd_init,_port_pad_virtual,_port_pad_virtual_clear,_port_debug_start_vs,_port_scene_state,_port_menu_state,_malloc,_free
+    -sEXPORTED_FUNCTIONS=_main,_port_dvd_init,_port_pad_virtual,_port_pad_virtual_clear,_port_debug_start_vs,_port_scene_state,_port_menu_state,_port_css_slot,_port_css_stage,_port_frame_count,_malloc,_free
     -sEXPORTED_RUNTIME_METHODS=ccall,cwrap,callMain,HEAPU8,HEAPF32,FS
     --js-library ${CMAKE_CURRENT_SOURCE_DIR}/web/js/imports.js
     -Wl,--error-limit=0

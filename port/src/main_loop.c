@@ -207,6 +207,39 @@ EMSCRIPTEN_KEEPALIVE int port_menu_state(void)
     return ((int) m[0] << 24) | ((int) m[1] << 16) | hovered;
 }
 
+/* Frames completed since boot. A screen that is not advancing may be waiting
+ * for input or may be wedged; the difference is whether this keeps moving. */
+static unsigned g_frame_count;
+
+EMSCRIPTEN_KEEPALIVE int port_frame_count(void)
+{
+    return (int) g_frame_count;
+}
+
+/* The character-select screen's player slots (CssSubStruct gm_80473814,
+ * src/melee/gm/types.h). Bytes at documented offsets, as above:
+ *   +0x006 stage_id (s16)
+ *   +0x014 saved_players[4], each 0x24 bytes, ckind at +0 and slot_type at +1
+ * slot_type is Gm_PKind: 0 human, 1 cpu, 2 demo, 3 none, 4 boss. */
+extern unsigned char gm_80473814[];
+
+/* slot_type in bits 8-15, ckind in bits 0-7 (0xFF for an empty slot). */
+EMSCRIPTEN_KEEPALIVE int port_css_slot(int i)
+{
+    if (i < 0 || i > 3) {
+        return -1;
+    }
+    const unsigned char* p = gm_80473814 + 0x14 + (unsigned) i * 0x24;
+    return ((int) p[1] << 8) | p[0];
+}
+
+EMSCRIPTEN_KEEPALIVE int port_css_stage(void)
+{
+    short id;
+    memcpy(&id, gm_80473814 + 6, sizeof id);
+    return id;
+}
+
 /* Say so whenever the game moves. A screen that never arrives, or one that
  * arrives and then stops, is the difference between "it went black" and a
  * scene number to go and look at. */
@@ -303,6 +336,7 @@ void port_vblank(void)
     port_ax_pump(1); /* AX frames due this video frame, mixed and queued */
     port_save_tick(); /* store the memory card when the game has written to it */
     report_scene_change();
+    g_frame_count++;
     double t_audio = emscripten_get_now();
     g_prof.audio += t_audio - t_vi;
 

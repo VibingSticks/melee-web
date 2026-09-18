@@ -17,6 +17,7 @@
 #include <emscripten/heap.h>
 #include <stdarg.h>
 #include <stdbool.h>
+#include <string.h> /* memset, for the frame-time accumulator */
 #include <stdio.h>
 #include <malloc.h>
 #include <stdlib.h>
@@ -135,6 +136,34 @@ void port_yield(void)
     port_ax_pump(0); /* keep audio flowing while the game blocks on a load */
 }
 
+/* Where a frame's milliseconds actually go.
+ *
+ * The game runs its own scene loops and calls back in here once per frame, so
+ * "game" is the time spent outside this function -- simulation, collision,
+ * display-list building -- and the rest is the port's own per-frame work.
+ * Printed once a second next to the heap line. `pace` is the deliberate wait
+ * to hit 60 Hz: while it is large the frame has headroom, and when it falls to
+ * zero the frame is late and the other columns say why. */
+static struct {
+    double game, present, events, pace, dvd, alarm, vi, audio, begin;
+    double worst;
+    unsigned frames;
+} g_prof;
+static double g_prof_left; /* when the previous port_vblank returned */
+
+static void prof_report(unsigned frame)
+{
+    if (g_prof.frames == 0) {
+        return;
+    }
+    double n = g_prof.frames;
+    port_log("frame %u ms/frame: game %.1f present %.1f events %.1f pace %.1f "
+             "dvd %.1f alarm %.1f vi %.1f audio %.1f begin %.1f | worst %.1f",
+             frame, g_prof.game / n, g_prof.present / n, g_prof.events / n, g_prof.pace / n, g_prof.dvd / n,
+             g_prof.alarm / n, g_prof.vi / n, g_prof.audio / n, g_prof.begin / n, g_prof.worst);
+    memset(&g_prof, 0, sizeof(g_prof));
+}
+
 void port_vblank(void)
 {
     static bool s_devices_bound;
@@ -143,18 +172,28 @@ void port_vblank(void)
         port_pad_install_keyboard();
         port_ax_init();
     }
+    double t_enter = emscripten_get_now();
+    if (g_prof_left != 0.0) {
+        g_prof.game += t_enter - g_prof_left;
+    }
+
     if (g_frame_active) {
         aurora_end_frame();
         g_frame_active = false;
     }
+    double t_present = emscripten_get_now();
+    g_prof.present += t_present - t_enter;
+
     handle_events();
     if (g_exit_requested) {
         shutdown_and_exit();
     }
+    double t_events = emscripten_get_now();
+    g_prof.events += t_events - t_present;
 
     /* Pace to 60 Hz. After a long stall, resynchronise instead of running
      * several frames back to back. */
-    double now = emscripten_get_now();
+    double now = t_events;
     if (g_next_vblank_ms == 0.0 || now > g_next_vblank_ms + 4 * kFrameMs) {
         g_next_vblank_ms = now;
     }
@@ -164,11 +203,15 @@ void port_vblank(void)
         now = emscripten_get_now();
     }
     g_next_vblank_ms += kFrameMs;
+    double t_pace = emscripten_get_now();
+    g_prof.pace += t_pace - t_events;
 
     if (g_yields_since_frame != NULL) {
         *g_yields_since_frame = 0;
     }
     port_dvd_pump();
+    double t_dvd = emscripten_get_now();
+    g_prof.dvd += t_dvd - t_pace;
     /* Alarms run on a virtual clock that advances exactly one frame per
      * vblank, not on the wall clock. The game's pad queue is filled only by a
      * periodic alarm of about 1/60 s, and gmscene's wait loop presents another
@@ -185,9 +228,32 @@ void port_vblank(void)
         }
         port_alarm_tick(s_virtual_time);
     }
+    double t_alarm = emscripten_get_now();
+    g_prof.alarm += t_alarm - t_dvd;
+
     port_vi_retrace(); /* pad queue, XFB flip bookkeeping */
-    port_ax_pump(1);   /* AX frames due this video frame, mixed and queued */
+    double t_vi = emscripten_get_now();
+    g_prof.vi += t_vi - t_alarm;
+
+    port_ax_pump(1); /* AX frames due this video frame, mixed and queued */
+    double t_audio = emscripten_get_now();
+    g_prof.audio += t_audio - t_vi;
+
     begin_frame_blocking();
+    double t_begin = emscripten_get_now();
+    g_prof.begin += t_begin - t_audio;
+    g_prof.frames++;
+    {
+        /* The frame's real cost: everything but the deliberate wait. A value
+         * above 16.7 means this frame could not have hit 60 Hz. */
+        double busy = (t_begin - t_enter) - (t_pace - t_events);
+        if (g_prof_left != 0.0) {
+            busy += t_enter - g_prof_left;
+        }
+        if (busy > g_prof.worst) {
+            g_prof.worst = busy;
+        }
+    }
 
     /* Once a second: frame count and wasm heap size, to spot runaway growth. */
     static unsigned s_frames;
@@ -195,6 +261,7 @@ void port_vblank(void)
         struct mallinfo mi = mallinfo();
         port_log("frame %u heap=%u MB malloc=%u MB", s_frames, (unsigned) (emscripten_get_heap_size() >> 20),
                  (unsigned) ((unsigned) mi.uordblks >> 20));
+        prof_report(s_frames);
     }
     {
         /* The wasm heap only ever grows, so report every step: a jump that is
@@ -210,18 +277,32 @@ void port_vblank(void)
             s_heap = now;
         }
     }
+
+    g_prof_left = emscripten_get_now();
 }
 
 int main(int argc, char** argv)
 {
+    /* Render size. The game draws 640x480; the default renders at twice that
+     * and lets the page scale it down, which is free on a real GPU and is not
+     * free on a software rasteriser. ?res=WxH overrides it -- the frame-time
+     * line printed once a second says whether it helped. */
+    int render_w = emscripten_run_script_int("(typeof Module !== 'undefined' && Module.renderWidth) | 0");
+    int render_h = emscripten_run_script_int("(typeof Module !== 'undefined' && Module.renderHeight) | 0");
+    if (render_w < 256 || render_h < 192) {
+        render_w = 1280;
+        render_h = 960;
+    }
+    port_log("render size %dx%d", render_w, render_h);
+
     AuroraConfig cfg = {
         .appName = "Melee",
         .desiredBackend = BACKEND_WEBGPU,
         .msaa = 1,
         .vsync = true,
         .allowCpuAdapter = true,
-        .windowWidth = 1280,
-        .windowHeight = 960,
+        .windowWidth = render_w,
+        .windowHeight = render_h,
         .logLevel = LOG_INFO,
         .mem1Size = MEM1_DEFAULT_SIZE,
         .mem2Size = ARAM_DEFAULT_SIZE,

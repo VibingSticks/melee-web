@@ -101,11 +101,19 @@ async function startGame(disc, fst) {
   // Renderer profile overrides for testing (see docs/superpowers/specs/2026-09-11-webgl2-fallback-design.md).
   const gpuFlag = params.get('gpu');
   const forceCompatProfile = { compat: 7, noimm: 1, nostorage: 2, nocompute: 4 }[gpuFlag] ?? 0;
+  // ?res=WxH renders at that size and scales to the canvas. The game itself is
+  // 640x480; anything above that is supersampling, and the cost is fill-rate
+  // bound, so dropping to 640x480 is the first thing to try on a slow machine.
+  const resFlag = /^(\d{2,4})x(\d{2,4})$/.exec(params.get('res') ?? '');
+  const renderWidth = resFlag ? +resFlag[1] : 0;
+  const renderHeight = resFlag ? +resFlag[2] : 0;
   const createMelee = await meleeFactory();
   const Module = await createMelee({
     canvas,
     discSource: disc,
     forceCompatProfile,
+    renderWidth,
+    renderHeight,
     noInitialRun: true,
     print: (t) => { console.log(t); appendLog(t); },
     printErr: (t) => { console.error(t); appendLog(t); },

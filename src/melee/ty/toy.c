@@ -2351,8 +2351,15 @@ static inline void Toy_AddPanelAnims(HSD_JObj* jobj,
 static inline HSD_MatAnimJoint*
 Toy_GetPanelMatAnim(s32 arg0, ToyPanelLabelData* data, ToyGlobalsS_* tg)
 {
+#ifdef TARGET_PC
+    /* 0x3FDD18 + 0x228 is _Toy_803FDF3C.matanim_joint, and both callers of
+     * Toy_80307470 pass arg0 == 0, so the stride never applies. */
+    (void) data, (void) arg0;
+    return HSD_ArchiveGetPublicAddress(tg->x50, _Toy_803FDF3C.matanim_joint);
+#else
     return HSD_ArchiveGetPublicAddress(tg->x50,
                                        (&data->ptrs[arg0 * 3])[0x228 / 4]);
+#endif
 }
 
 void Toy_80307470(s32 arg0)
@@ -2381,20 +2388,41 @@ void Toy_80307470(s32 arg0)
         tg->x0 = NULL;
     }
 
+#ifdef TARGET_PC
+    /* Third and last of the gallery's off-the-end reads. data is
+     * _Toy_str_TyLight_dat again, and 0x3FDD18 + 0x188 is _Toy_803FDEA0 --
+     * only because the GameCube link put it there. Here the read fell into
+     * binary, which is why this label printed as garbage rather than as a
+     * wrong-but-readable name like the back label did. */
+    (void) data;
+    label = (arg0 >= 0 && arg0 < (s32) ARRAY_SIZE(_Toy_803FDEA0)) ? &_Toy_803FDEA0[arg0] : NULL;
+    joint[0] = label != NULL ? HSD_ArchiveGetPublicAddress(tg->x50, *label) : NULL;
+#else
     label = &data->ptrs[arg0];
     joint[0] = HSD_ArchiveGetPublicAddress(tg->x50, *(label += 0x188 / 4));
+#endif
 
     if (joint[0] != NULL) {
         tg->x0 = GObj_Create(9, 9, 0);
 
         loaded_jobj = HSD_JObjLoadJoint(joint[0]);
+#ifdef TARGET_PC
+        anim[0] = HSD_ArchiveGetPublicAddress(tg->x50, _Toy_803FDF3C.animjoint);
+#else
         anim[0] = HSD_ArchiveGetPublicAddress(
             tg->x50, (&data->ptrs[arg0 * 3])[0x224 / 4]);
+#endif
         matanim[0] = Toy_GetPanelMatAnim(arg0, data, tg);
+#ifdef TARGET_PC
+        Toy_AddPanelAnims(loaded_jobj,
+                          HSD_ArchiveGetPublicAddress(tg->x50, _Toy_803FDF3C.shapeanim_joint),
+                          matanim[0], anim[0]);
+#else
         Toy_AddPanelAnims(loaded_jobj,
                           HSD_ArchiveGetPublicAddress(
                               tg->x50, (&data->ptrs[arg0 * 3])[0x22C / 4]),
                           matanim[0], anim[0]);
+#endif
         HSD_JObjReqAnimAll(loaded_jobj, 0.0f);
         HSD_GObjObject_80390A70(tg->x0, (kind = HSD_GObj_JObjKind),
                                 loaded_jobj);
@@ -2406,7 +2434,7 @@ void Toy_80307470(s32 arg0)
         return;
     }
 
-    OSReport("*** Can not Load Panel Label(%s)\n", *label);
+    OSReport("*** Can not Load Panel Label(%s)\n", label != NULL ? *label : "(out of range)");
     HSD_ASSERT(2534, 0);
 }
 

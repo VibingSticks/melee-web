@@ -2033,6 +2033,29 @@ void Toy_80306D14(void)
     }
 }
 
+#ifdef TARGET_PC
+/* The light table is reached in the original by casting the filename string to
+ * TyLightFile and skipping its 0xCC of padding, which lands on _Toy_803FDDE4
+ * only because the GameCube link placed the two exactly that far apart
+ * (0x3FDD18 + 0xCC == 0x3FDDE4). Nothing arranges that here, so the cast reads
+ * off the end of a twelve-byte string: the symbol name came back NULL and the
+ * trophy gallery asserted on "Can not Load Light Label((null))". Name the
+ * table directly, and bound both indices while we are here. */
+static char* toyLightSymbol(s32 entry)
+{
+    s32 idx;
+
+    if (entry < 0 || entry >= (s32) ARRAY_SIZE(_Toy_803FDDE4.values)) {
+        return NULL;
+    }
+    idx = _Toy_803FDDE4.values[entry].index;
+    if (idx < 0 || idx >= (s32) ARRAY_SIZE(_Toy_803FDDE4.symbols)) {
+        return NULL;
+    }
+    return _Toy_803FDDE4.symbols[idx].name;
+}
+#endif
+
 void Toy_80306D70(s32 arg0)
 {
     UNUSED u8 framepad[8];
@@ -2046,18 +2069,29 @@ void Toy_80306D70(s32 arg0)
         u8 kind;
 
         base = (TyLightFile*) _Toy_str_TyLight_dat;
+#ifdef TARGET_PC
+        (void) base, (void) idx;
+#endif
         data = (TyLightData*) Toy_sbss_804D6ED4;
 
         if (data->archive != NULL && data->gobj != NULL) {
             HSD_GObjProc_RemoveAllProcs(data->gobj);
             HSD_GObjFree(data->gobj);
             data->gobj = NULL;
+#ifdef TARGET_PC
+            sym = toyLightSymbol(arg0);
+#else
             idx = base->entries[arg0].idx;
             sym = base->symbols[idx].name;
+#endif
             sp14 = HSD_ArchiveGetPublicAddress(data->archive, sym);
         } else {
+#ifdef TARGET_PC
+            sym = toyLightSymbol(arg0);
+#else
             idx = base->entries[arg0].idx;
             sym = base->symbols[idx].name;
+#endif
             data->archive =
                 lbArchive_80016DBC(_Toy_str_TyLight_dat, &sp14, sym, 0);
         }
@@ -2076,8 +2110,12 @@ void Toy_80306D70(s32 arg0)
                 HSD_GObj_80390CD4(data->gobj);
             }
         } else {
+#ifdef TARGET_PC
+            sym = toyLightSymbol(arg0);
+#else
             idx = base->entries[arg0].idx;
             sym = base->symbols[idx].name;
+#endif
             OSReport("*** Can not Load Light Label(%s)\n", sym);
             HSD_ASSERT(2253, 0);
         }

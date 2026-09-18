@@ -184,3 +184,15 @@ export async function moveCursorTo(page, target, { tries = 24, gap = 260 } = {})
   }
   return { ok: last.hovered === target, hovered: last.hovered, seen: [...seen].sort((a, b) => a - b) };
 }
+
+/** Reload the page, feed the disc again, and wait for the runtime. */
+export async function reboot(page, disc) {
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await page.setInputFiles('#disc', path.resolve(disc));
+  const until = Date.now() + 60000;
+  while (Date.now() < until) {
+    if (await page.evaluate(() => !!(window.Module && window.Module._port_scene_state))) return;
+    await sleep(200);
+  }
+  throw new Error('the runtime did not come back after a reload');
+}

@@ -18,6 +18,8 @@
 #include <stdarg.h>
 #include <stdbool.h>
 #include <string.h> /* memset, for the frame-time accumulator */
+
+#include "save_web.h"
 #include <stdio.h>
 #include <malloc.h>
 #include <stdlib.h>
@@ -247,6 +249,7 @@ void port_vblank(void)
     g_prof.vi += t_vi - t_alarm;
 
     port_ax_pump(1); /* AX frames due this video frame, mixed and queued */
+    port_save_tick(); /* store the memory card when the game has written to it */
     double t_audio = emscripten_get_now();
     g_prof.audio += t_audio - t_vi;
 
@@ -306,8 +309,14 @@ int main(int argc, char** argv)
     }
     port_log("render size %dx%d", render_w, render_h);
 
+    /* Before Aurora: it opens the memory card during aurora_initialize and
+     * formats a blank one if the image is absent, so the stored card has to be
+     * in the filesystem by then. */
+    port_save_mount();
+
     AuroraConfig cfg = {
         .appName = "Melee",
+        .userPath = PORT_SAVE_DIR,
         .desiredBackend = BACKEND_WEBGPU,
         .msaa = 1,
         .vsync = true,

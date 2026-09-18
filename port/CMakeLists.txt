@@ -46,6 +46,7 @@ if (EMSCRIPTEN)
         src/gx_shim.c
         $<IF:$<BOOL:${PORT_AUDIO}>,src/ax_hle/ax_hle.c,src/ax_hle/ax_stub.c>
         src/game_stubs.c
+        src/save_web.c
         src/hsd_endian/walker.c)
     target_include_directories(melee_port PUBLIC src extern/aurora/include)
     target_compile_options(melee_port PRIVATE -std=gnu99 -Wall -Wextra -Wno-unused-parameter)

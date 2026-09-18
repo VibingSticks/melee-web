@@ -39,7 +39,16 @@ Manual acceptance list from spec §10. Tick with date and browser.
       macro reached its play command. The game's u32 reads of the DSP
       parameter block's hi/lo u16 pairs go through PB_GET32/PB_SET32 now.
       Not mixed: the aux busses (reverb, chorus, delay) and ITD.
-- [ ] M5 Saves: save created, page reloaded, save present; export/import round-trip
+- [~] M5 Saves: save created, page reloaded, save present (2026-09-17, Chrome,
+      real GALE01 disc). Aurora's CARD implementation keeps the card image on
+      the filesystem, which under Emscripten is MEMFS and is discarded with the
+      tab; the card directory is now an IDBFS mount instead (port/src/save_web.c).
+      The stored image is read in before aurora_initialize, because Aurora opens
+      the card during init and formats a blank one over it otherwise, and it is
+      written back on a debounce after the game writes.
+      `tests/browser/save_persist_test.mjs` boots, waits for the store, reloads
+      in the same browser context and checks Aurora loads the image rather than
+      formatting. Outstanding: the export/import round-trip.
 - [~] M6 Single-file: `melee-offline.html` boots from `file://` on Chrome, Firefox, Safari
       (2026-09-12: Chrome 151 on WebGPU and Firefox on the WebGL2 fallback both
       boot the 14 MB packed file straight from `file://`, take a disc through the

@@ -174,6 +174,58 @@ static void prof_report(unsigned frame)
     g_prof.window_start = now;
 }
 
+/* The game's scene state, for the browser tests and for the log.
+ *
+ * Melee runs a two-level state machine: a "game mode" (title, menu, VS, and so
+ * on) and an index within it. Declared here rather than including the game's
+ * header, which drags in enough of the decomp to disturb this file's include
+ * order. */
+extern unsigned char gm_GetCurrentGameMode(void);
+extern unsigned char gm_GetCurrentSceneIndex(void);
+
+/* mode in the high byte, scene index in the low one. */
+EMSCRIPTEN_KEEPALIVE int port_scene_state(void)
+{
+    return ((int) gm_GetCurrentGameMode() << 8) | gm_GetCurrentSceneIndex();
+}
+
+/* The main menu's cursor (MenuFlow mn_804A04F0, src/melee/mn/mnmain.h).
+ *
+ * Read as bytes at documented offsets rather than through the game's header,
+ * for the same include-order reason as the scene getters above:
+ *   +0 cur_menu, +1 prev_menu, +2 hovered_selection (u16), +4 confirmed.
+ * This is live runtime state, so it is in the host's byte order, not the
+ * disc's. */
+extern unsigned char mn_804A04F0[];
+
+/* cur_menu in bits 24-31, prev_menu in 16-23, hovered selection in 0-15. */
+EMSCRIPTEN_KEEPALIVE int port_menu_state(void)
+{
+    const unsigned char* m = mn_804A04F0;
+    unsigned short hovered;
+    memcpy(&hovered, m + 2, sizeof hovered);
+    return ((int) m[0] << 24) | ((int) m[1] << 16) | hovered;
+}
+
+/* Say so whenever the game moves. A screen that never arrives, or one that
+ * arrives and then stops, is the difference between "it went black" and a
+ * scene number to go and look at. */
+static void report_scene_change(void)
+{
+    static int s_last = -1;
+    static unsigned s_frames_here;
+    int now = port_scene_state();
+
+    if (now != s_last) {
+        port_log("scene: mode %d index %d (previous mode %d index %d after %u frames)", now >> 8, now & 0xFF,
+                 s_last >> 8, s_last & 0xFF, s_frames_here);
+        s_last = now;
+        s_frames_here = 0;
+    } else {
+        s_frames_here++;
+    }
+}
+
 void port_vblank(void)
 {
     static bool s_devices_bound;
@@ -250,6 +302,7 @@ void port_vblank(void)
 
     port_ax_pump(1); /* AX frames due this video frame, mixed and queued */
     port_save_tick(); /* store the memory card when the game has written to it */
+    report_scene_change();
     double t_audio = emscripten_get_now();
     g_prof.audio += t_audio - t_vi;
 

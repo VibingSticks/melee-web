@@ -93,7 +93,14 @@ port_StageJointMap:
   pairs: { ptr_array: port_StageJointPair, len_field: pair_count }
 port_FtLoadCommonData:
   # tables indexed by fighter kind (Ft_Kind_Max)
-  float5_rows:     { ptr_array: port_Float5, len_const: 33 }
+  # ...except float5_rows, which is not. fighter.h declares it
+  # `float (*Fighter_804D654C)[5]` and ftswing.c indexes it
+  # [swing_type][arg1], the same pair as lbl_803C6D70[6][5] beside it -- so it
+  # has six rows, not thirty-three. Walking it as 33 ran 540 bytes past the end
+  # into neighbouring data holding real pointers, which the walker reported as
+  # "scalar descriptor on a pointer slot" and which ended in a wasm trap once
+  # the game used what had been scribbled on.
+  float5_rows:     { ptr_array: port_Float5, len_const: 6 }
   per_kind_floats: { ptr_array: f32, len_const: 33 }
   parts_tables:    { ptr_array: "FighterPartsTable*", len_const: 33 }
   virtual_parts:   { ptr_array: "Fighter_804D6540_t*", len_const: 33 }

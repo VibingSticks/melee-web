@@ -363,3 +363,41 @@ export async function enterMode(page, downs, { confirms = 6, timeout = 30000 } =
   try { css = await waitForCss(page, { timeout: 12000 }); } catch { /* not a CSS */ }
   return { scene: landed, css };
 }
+
+/**
+ * Measure the frame rate, so presses can be expressed in frames.
+ *
+ * Every fixed millisecond hold in this file has been wrong at least once: the
+ * menu has a five-frame input cooldown, so the hold that works at 30 fps is
+ * far too short at the 5 fps a debug build manages, and too long once the game
+ * speeds up. Measure instead of guessing.
+ */
+export async function measureFps(page, overMs = 1500) {
+  const a = await frameCount(page);
+  if (a === null) return null;
+  await sleep(overMs);
+  const b = await frameCount(page);
+  const fps = ((b - a) * 1000) / overMs;
+  return fps > 0.5 ? fps : null;
+}
+
+/** Hold a button for `frames` frames at the measured rate (min 150 ms). */
+export async function pressFrames(page, name, frames = 8, fpsHint = null) {
+  const fps = fpsHint ?? (await measureFps(page, 800)) ?? 30;
+  const ms = Math.max(150, Math.min(2500, Math.round((frames / fps) * 1000)));
+  await press(page, name, ms);
+  return { fps, ms };
+}
+
+/** pressUntilScene, but with frame-based holds for slow builds. */
+export async function pressUntilSceneFrames(page, name, pred, { tries = 10, frames = 10, gap = 1200, what } = {}) {
+  const fps = (await measureFps(page, 1000)) ?? 30;
+  for (let i = 0; i < tries; i++) {
+    const now = await scene(page);
+    if (now && pred(now)) return now;
+    await pressFrames(page, name, frames, fps);
+    await sleep(gap);
+  }
+  const last = await scene(page);
+  throw new Error(`pressed ${name} ${tries}x (${fps.toFixed(1)} fps) waiting for ${what ?? 'a scene'}; at ${last ? sceneName(last) : '?'}`);
+}

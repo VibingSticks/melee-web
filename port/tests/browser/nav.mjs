@@ -263,3 +263,103 @@ export async function cssJoinPort1(page, { tries = 4, hold = 1000 } = {}) {
   const slots = await cssSlots(page);
   return !!(slots && slots[0] && slots[0].type === 0);
 }
+
+/** The roster's icons: {i, x, y, kind, state} for each selectable portrait. */
+export async function cssIcons(page) {
+  const raw = await page.evaluate(() => {
+    if (!window.Module || !window.Module._port_css_icon_count) return null;
+    const n = window.Module._port_css_icon_count();
+    return Array.from({ length: n }, (_, i) => [window.Module._port_css_icon_pos(i), window.Module._port_css_icon_info(i)]);
+  });
+  if (!raw) return null;
+  return raw.map(([pos, info], i) => pos < 0 || info < 0 ? null : {
+    i,
+    x: (((pos >>> 16) & 0x7fff) - CSS_X_BIAS) / 100,
+    y: ((pos & 0xffff) - CSS_Y_BIAS) / 100,
+    kind: info & 0xff,
+    state: (info >> 8) & 0xff,
+  }).filter(Boolean);
+}
+
+/**
+ * Steer port 1's hand onto a portrait and choose it.
+ *
+ * Closed loop, not timed: read the cursor, push toward the target, read again.
+ * The hand's speed depends on the frame rate, so any fixed press duration is
+ * wrong on a different machine -- which is how earlier attempts kept missing.
+ * The hit test uses the token, which sits at hand + (2.7, -2.0), so the hand is
+ * aimed at the portrait centre less that offset.
+ */
+export async function cssPickCharacter(page, icon, { steps = 26, tol = 1.2 } = {}) {
+  const tx = icon.x - 2.7, ty = icon.y + 2.0;
+  for (let n = 0; n < steps; n++) {
+    const cur = (await cssCursors(page))?.[0];
+    if (!cur) return { ok: false, why: 'port 1 has no cursor' };
+    const dx = tx - cur.x, dy = ty - cur.y;
+    if (Math.abs(dx) < tol && Math.abs(dy) < tol) break;
+    const dir = [];
+    if (dy > tol) dir.push('SUP'); else if (dy < -tol) dir.push('SDOWN');
+    if (dx > tol) dir.push('SRIGHT'); else if (dx < -tol) dir.push('SLEFT');
+    if (dir.length === 0) break;
+    // Roughly proportional, clamped: long pushes when far, taps when close.
+    const dist = Math.max(Math.abs(dx), Math.abs(dy));
+    await press(page, dir.join('+'), Math.min(900, Math.max(90, Math.round(dist * 45))));
+    await sleep(140);
+  }
+  const before = (await cssSlots(page))?.[0]?.ckind;
+  await press(page, 'A', 260);
+  await sleep(900);
+  const after = (await cssSlots(page))?.[0];
+  const cur = (await cssCursors(page))?.[0];
+  return {
+    ok: !!after && after.ckind === icon.kind,
+    picked: after?.ckind, wanted: icon.kind, before,
+    at: cur ? `(${cur.x.toFixed(1)},${cur.y.toFixed(1)})` : '?',
+  };
+}
+
+/** Pick one selectable portrait at random (state != locked). */
+export function randomIcon(icons) {
+  const open = icons.filter(ic => ic.state !== 0);
+  return open.length ? open[Math.floor(Math.random() * open.length)] : null;
+}
+
+/**
+ * Wait until a character-select screen is actually interactive.
+ *
+ * The icon table is a static array and reads fine long before the screen is
+ * up, so its presence proves nothing; port 1's hand cursor is what only exists
+ * once the screen has been built. Waiting on a timer instead keeps breaking
+ * whenever the game gets faster.
+ */
+export async function waitForCss(page, { timeout = 30000 } = {}) {
+  const until = Date.now() + timeout;
+  while (Date.now() < until) {
+    const s = await scene(page);
+    const cur = await cssCursors(page);
+    if (s && s.mode !== 1 && cur && cur[0]) return { scene: s, cursor: cur[0] };
+    await sleep(250);
+  }
+  const s = await scene(page);
+  throw new Error(`no character select became interactive; at ${s ? sceneName(s) : 'no scene'}`);
+}
+
+/**
+ * From a fresh boot, walk `downs` entries into the main menu and confirm until
+ * the game leaves MENU, then report where it landed.
+ *
+ * Every fixed-count sequence I wrote for this broke as soon as the game's
+ * speed changed -- presses that were being dropped started registering. So the
+ * confirms are driven by the state machine, not by a count.
+ */
+export async function enterMode(page, downs, { confirms = 6, timeout = 30000 } = {}) {
+  await bootToMainMenu(page);
+  for (let d = 0; d < downs; d++) { await press(page, 'DOWN', 280); await sleep(450); }
+  await sleep(350);
+  const landed = await pressUntilScene(page, 'A', s => s.mode !== 1,
+    { tries: confirms, gap: 2200, hold: 280, what: 'the menu to hand over' });
+  // Some modes open a character select; others go straight to their own scene.
+  let css = null;
+  try { css = await waitForCss(page, { timeout: 12000 }); } catch { /* not a CSS */ }
+  return { scene: landed, css };
+}

@@ -1693,6 +1693,38 @@ EMSCRIPTEN_KEEPALIVE int port_css_cursor(int port)
 
 /* How many hand cursors the screen created (0 means none, so no port can
  * select anything at all). */
+/* The roster's hit-test rectangles, so a test can aim at a portrait instead of
+ * nudging the hand blindly. Centres are packed exactly like port_css_cursor,
+ * so the same decode works for both. */
+EMSCRIPTEN_KEEPALIVE int port_css_icon_count(void)
+{
+    return (int) ARRAY_SIZE(icons);
+}
+
+EMSCRIPTEN_KEEPALIVE int port_css_icon_pos(int i)
+{
+    int x, y;
+
+    if (i < 0 || i >= (int) ARRAY_SIZE(icons)) {
+        return -1;
+    }
+    x = (int) ((icons[i].bound_l + icons[i].bound_r) * 0.5f * 100.0f) + PORT_CSS_CURSOR_X_BIAS;
+    y = (int) ((icons[i].bound_u + icons[i].bound_d) * 0.5f * 100.0f) + PORT_CSS_CURSOR_Y_BIAS;
+    if (x < 0 || x > 0x7FFF || y < 0 || y > 0xFFFF) {
+        return -1;
+    }
+    return (x << 16) | y;
+}
+
+/* state in bits 8-15 (0 locked, 1 temporary, 2 unlocked), char kind in 0-7. */
+EMSCRIPTEN_KEEPALIVE int port_css_icon_info(int i)
+{
+    if (i < 0 || i >= (int) ARRAY_SIZE(icons)) {
+        return -1;
+    }
+    return ((int) icons[i].state << 8) | icons[i].char_kind;
+}
+
 EMSCRIPTEN_KEEPALIVE int port_css_cursor_count(void)
 {
     return mnCharSel_804D6CF5;

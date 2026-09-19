@@ -72,6 +72,7 @@ static CSSData* mnCharSel_804D6CB0;
 
 #ifdef TARGET_PC
 #include <emscripten.h>
+void port_log(const char* fmt, ...);
 
 /* The browser tests need the live character-select state, which is file-local
  * here -- gm_80473814's saved_players is the config written on exit, not what
@@ -1660,6 +1661,11 @@ static struct CSSCursorData* mnCharSel_804A0BC0[4];
 /* The hand cursor's position for a port, x and y each scaled by 100 and
  * packed into 16 bits. Whether the hand moves is what separates "input never
  * reaches the screen" from "the automation cannot aim it at a portrait". */
+/* Biases applied by port_css_cursor so every valid result is non-negative and
+ * -1 can mean "no cursor" unambiguously. Coordinates are in hundredths. */
+#define PORT_CSS_CURSOR_X_BIAS 0x4000
+#define PORT_CSS_CURSOR_Y_BIAS 0x8000
+
 EMSCRIPTEN_KEEPALIVE int port_css_cursor(int port)
 {
     struct CSSCursorData* c;
@@ -1671,9 +1677,18 @@ EMSCRIPTEN_KEEPALIVE int port_css_cursor(int port)
     if (c == NULL) {
         return -1;
     }
-    x = (int) (c->xC * 100.0f);
-    y = (int) (c->x10 * 100.0f);
-    return ((x & 0xFFFF) << 16) | (y & 0xFFFF);
+    /* Bias both coordinates so a valid answer is never negative. Packing the
+     * signed x straight into the top half set bit 31 for any cursor left of
+     * centre, and the three left-hand cursors start at -31, -16 and -1 -- so a
+     * caller using a negative return as the "no cursor" sentinel saw three of
+     * the four as absent. They were there all along. Hand coordinates stay
+     * inside about +-35 units, so the biases below cannot wrap. */
+    x = (int) (c->xC * 100.0f) + PORT_CSS_CURSOR_X_BIAS;
+    y = (int) (c->x10 * 100.0f) + PORT_CSS_CURSOR_Y_BIAS;
+    if (x < 0 || x > 0x7FFF || y < 0 || y > 0xFFFF) {
+        return -1; /* off the scale the biases allow for */
+    }
+    return (x << 16) | y;
 }
 
 /* How many hand cursors the screen created (0 means none, so no port can
@@ -4556,6 +4571,11 @@ s32 mnCharSel_802640A0(void)
         HSD_ForeachAnim(jobj, JOBJ_TYPE, ALL_TYPE_MASK, HSD_AObjStopAnim,
                         AOBJ_ARG_AOV, 0, 0);
         mnCharSel_804A0BC0[i] = cursor;
+#ifdef TARGET_PC
+        /* Temporary: three of these four pointers are NULL by the time the
+         * screen is up, and nothing else ever writes this array. */
+        port_log("css: cursor %d created (count %u)", i, mnCharSel_804D6CF5);
+#endif
         cursor->gobj = cursor_gobj;
         cursor->x4 = i;
         cursor->x8 = 0;

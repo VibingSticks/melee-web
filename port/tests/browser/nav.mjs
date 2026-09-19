@@ -216,3 +216,50 @@ export async function isAlive(page, overMs = 2000) {
   const b = await frameCount(page);
   return { alive: b > a, frames: b - a, fps: ((b - a) * 1000) / overMs };
 }
+
+// --- character select -------------------------------------------------------
+//
+// port_css_cursor biases both coordinates so a valid result is never negative;
+// -1 alone means "no cursor". Decoding it as a plain signed int is what made
+// three of the four hands look absent when they were all present.
+const CSS_X_BIAS = 0x4000, CSS_Y_BIAS = 0x8000;
+
+/** Every port's hand cursor: {x, y} in game units, or null if there is none. */
+export async function cssCursors(page) {
+  const raw = await page.evaluate(() => (window.Module && window.Module._port_css_cursor)
+    ? [0, 1, 2, 3].map(i => window.Module._port_css_cursor(i)) : null);
+  if (!raw) return null;
+  return raw.map(v => v < 0 ? null
+    : { x: (((v >>> 16) & 0x7fff) - CSS_X_BIAS) / 100, y: ((v & 0xffff) - CSS_Y_BIAS) / 100 });
+}
+
+export const CSS_SLOT = { 0: 'HUMAN', 1: 'CPU', 2: 'DEMO', 3: 'NONE', 4: 'BOSS' };
+
+/** Every port's slot: {type, typeName, ckind}, or null before the screen is up. */
+export async function cssSlots(page) {
+  const raw = await page.evaluate(() => (window.Module && window.Module._port_css_live_slot)
+    ? [0, 1, 2, 3].map(i => window.Module._port_css_live_slot(i)) : null);
+  if (!raw) return null;
+  return raw.map(v => v < 0 ? null
+    : { type: (v >> 8) & 0xff, typeName: CSS_SLOT[(v >> 8) & 0xff] ?? String((v >> 8) & 0xff), ckind: v & 0xff });
+}
+
+/**
+ * Join port 1 by walking its hand up onto the roster.
+ *
+ * The hand moves about 0.0002 units per frame of full deflection and has some
+ * 22 units to cover, so it needs the stick held for the better part of a
+ * second -- a 150 ms tap moves it a couple of units and looks like nothing
+ * happening at all. Joining takes no button: crossing onto the roster with the
+ * door unclaimed sets the slot to Human by itself.
+ */
+export async function cssJoinPort1(page, { tries = 4, hold = 1000 } = {}) {
+  for (let i = 0; i < tries; i++) {
+    const slots = await cssSlots(page);
+    if (slots && slots[0] && slots[0].type === 0) return true;
+    await press(page, 'SUP', hold);
+    await sleep(400);
+  }
+  const slots = await cssSlots(page);
+  return !!(slots && slots[0] && slots[0].type === 0);
+}

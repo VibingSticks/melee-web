@@ -107,6 +107,9 @@ async function startGame(disc, fst) {
   const resFlag = /^(\d{2,4})x(\d{2,4})$/.exec(params.get('res') ?? '');
   const renderWidth = resFlag ? +resFlag[1] : 0;
   const renderHeight = resFlag ? +resFlag[2] : 0;
+  // ?yield=timer puts the game's busy-wait yields back on setTimeout(0), for
+  // A/B-ing the menu pauses (see port_yield_browser in imports.js).
+  const yieldTimer = params.get('yield') === 'timer';
   const createMelee = await meleeFactory();
   const Module = await createMelee({
     canvas,
@@ -114,6 +117,7 @@ async function startGame(disc, fst) {
     forceCompatProfile,
     renderWidth,
     renderHeight,
+    yieldTimer,
     noInitialRun: true,
     print: (t) => { console.log(t); appendLog(t); },
     printErr: (t) => { console.error(t); appendLog(t); },

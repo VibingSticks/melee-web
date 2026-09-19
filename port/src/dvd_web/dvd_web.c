@@ -17,6 +17,62 @@ typedef struct pending {
     struct pending* next;
 } pending;
 
+#ifdef __EMSCRIPTEN__
+#include <emscripten.h>
+#define NOW_MS() emscripten_get_now()
+#else
+#define NOW_MS() 0.0
+#endif
+
+/* Issue time of every read in flight, so a completion can say how long the
+ * browser took. DevCom keeps at most a couple in flight; 16 is generous. */
+static struct {
+    const DVDFileInfo* fi;
+    double issued;
+} g_issued[16];
+static struct {
+    unsigned reads, bytes;
+    double wait_ms, max_ms;
+} g_stats;
+
+static void note_issue(const DVDFileInfo* fi)
+{
+    for (unsigned i = 0; i < 16; i++) {
+        if (g_issued[i].fi == NULL) {
+            g_issued[i].fi = fi;
+            g_issued[i].issued = NOW_MS();
+            return;
+        }
+    }
+}
+
+static void note_done(const DVDFileInfo* fi, unsigned bytes)
+{
+    g_stats.reads++;
+    g_stats.bytes += bytes;
+    for (unsigned i = 0; i < 16; i++) {
+        if (g_issued[i].fi == fi) {
+            double dt = NOW_MS() - g_issued[i].issued;
+            g_issued[i].fi = NULL;
+            g_stats.wait_ms += dt;
+            if (dt > g_stats.max_ms) {
+                g_stats.max_ms = dt;
+            }
+            return;
+        }
+    }
+}
+
+void port_dvd_stats(unsigned* reads, unsigned* bytes, double* wait_ms, double* max_ms)
+{
+    *reads = g_stats.reads;
+    *bytes = g_stats.bytes;
+    *wait_ms = g_stats.wait_ms;
+    *max_ms = g_stats.max_ms;
+}
+
+void port_dvd_stats_reset(void) { memset(&g_stats, 0, sizeof g_stats); }
+
 static pending* g_done_head;
 static pending* g_done_tail;
 static uint32_t g_in_flight;
@@ -122,6 +178,7 @@ s32 DVDReadAsyncPrio(DVDFileInfo* fi, void* addr, s32 length, s32 offset, DVDCal
     fi->cb.length = (u32) length;
     fi->cb.transferredSize = (u32) length;
     g_in_flight++;
+    note_issue(fi);
     if (n == 0) {
         on_read_done(fi, 0);
     } else {
@@ -159,6 +216,7 @@ void port_dvd_pump(void)
             }
             g_in_flight--;
             DVDFileInfo* fi = p->fi;
+            note_done(fi, fi->cb.length);
             s32 result = p->result;
             free(p);
             fi->cb.state = result < 0 ? DVD_STATE_FATAL_ERROR : DVD_STATE_END;

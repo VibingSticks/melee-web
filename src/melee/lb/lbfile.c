@@ -151,20 +151,42 @@ void lbFile_80016580(const char* basename, void* dst, size_t* size,
     lbFile_800164A4(entry_num, (uintptr_t) dst, size, 1, callback, args);
 }
 
+#ifdef TARGET_PC
+/* How long a blocking load held the frame, and how many times it yielded
+ * to the browser doing so: the two numbers that tell a slow disc from a slow
+ * wait loop. */
+double emscripten_get_now(void);
+#define LOAD_TIMER_BEGIN()                                                    \
+    double port_t0 = emscripten_get_now();                                    \
+    unsigned port_y0 = port_yield_count();                                    \
+    double port_ym0 = port_yield_ms()
+#define LOAD_TIMER_END(name, size)                                            \
+    port_log("lbfile: %s %u KB in %.1f ms (%u yields, %.1f ms in yield)",     \
+             (name), (unsigned) (size) >> 10, emscripten_get_now() - port_t0, \
+             port_yield_count() - port_y0, port_yield_ms() - port_ym0)
+#else
+#define LOAD_TIMER_BEGIN() ((void) 0)
+#define LOAD_TIMER_END(name, size) ((void) 0)
+#endif
+
 void lbFile_8001668C(const char* basename, void* dst, size_t* size)
 {
+    LOAD_TIMER_BEGIN();
     cancel = false;
     lbFile_80016580(basename, dst, size, lbFile_8001615C, NULL);
     waitForDisc();
+    LOAD_TIMER_END(basename, *size);
 }
 
 static void lbFile_80016760_inline(int heap_id, const char* basename,
                                    void** dst, size_t* size)
 {
+    LOAD_TIMER_BEGIN();
     *size = lbFileGetSize(basename);
     *dst = lbHeap_80015BD0(heap_id, ROUND_UP_32(*size));
     lbFile_80016580(basename, *dst, size, lbFile_8001615C, NULL);
     waitForDisc();
+    LOAD_TIMER_END(basename, *size);
 }
 
 void lbFile_80016760(const char* basename, void** dst, size_t* size)

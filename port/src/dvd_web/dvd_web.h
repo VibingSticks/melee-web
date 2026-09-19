@@ -19,4 +19,9 @@ void port_dvd_pump(void);
 /* Number of reads issued but not yet completed (for tests and diagnostics). */
 uint32_t port_dvd_pending(void);
 
+/* Reads completed since the last reset: how many, how many bytes, and the
+ * wall time from issue to completion (summed, and the single longest). */
+void port_dvd_stats(unsigned* reads, unsigned* bytes, double* wait_ms, double* max_ms);
+void port_dvd_stats_reset(void);
+
 #endif

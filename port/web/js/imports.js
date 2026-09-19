@@ -33,6 +33,40 @@ mergeInto(LibraryManager.library, {
         done(-1);
       });
   },
+  // One turn of the browser's event loop, without setTimeout's clamp.
+  //
+  // emscripten_sleep(0) is setTimeout(0), and Chrome clamps a timer set from
+  // inside a timer callback -- which under Asyncify every wake-up is -- to a
+  // 4 ms minimum once five deep. The game yields once per disc chunk while it
+  // loads a scene, and HSD's DevCom relays ARAM-bound data in 16 KB chunks, so
+  // a 3 MB load paid ~200 x 4 ms of timer clamp and froze the frame for most
+  // of a second. A MessageChannel message is a plain macrotask: the browser
+  // still gets to complete the read, run its callbacks and paint between two
+  // of them, but the round trip is a fraction of a millisecond.
+  $portYieldQueue: [],
+  $portYieldChannel: null,
+  // 'auto' has the glue wrap this in Asyncify.handleAsync (as emscripten_sleep
+  // is); `true` would mean the function drives Asyncify itself, and a bare
+  // Promise then comes back to the wasm as 0 without ever suspending.
+  port_yield_browser__async: 'auto',
+  port_yield_browser__deps: ['$portYieldQueue', '$portYieldChannel'],
+  port_yield_browser: function () {
+    return new Promise(function (resolve) {
+      if (Module.yieldTimer) { // ?yield=timer: the old behaviour, for comparison
+        setTimeout(resolve, 0);
+        return;
+      }
+      if (portYieldChannel === null) {
+        portYieldChannel = new MessageChannel();
+        portYieldChannel.port1.onmessage = function () {
+          var next = portYieldQueue.shift();
+          if (next) next();
+        };
+      }
+      portYieldQueue.push(resolve);
+      portYieldChannel.port2.postMessage(0);
+    });
+  },
   port_disc_size__sig: 'i',
   port_disc_size: function () {
     return Module.discSource ? Module.discSource.size >>> 0 : 0;

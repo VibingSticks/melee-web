@@ -35,6 +35,13 @@
 
 int melee_main(void); /* the game's main(), renamed under TARGET_PC */
 
+/* One turn of the browser's event loop (port/web/js/imports.js). Unlike
+ * emscripten_sleep(0) this is not a timer, so it is not subject to the 4 ms
+ * minimum Chrome applies to nested setTimeout -- which every Asyncify wake-up
+ * is. Use it for "let the browser run" waits; use emscripten_sleep only when
+ * an actual delay is wanted. */
+extern void port_yield_browser(void);
+
 /* Aurora's MEM1 block (lib/dolphin/os/OSMemory.cpp). */
 extern void* MEM1Start;
 extern void* MEM1End;
@@ -124,6 +131,15 @@ static void begin_frame_blocking(void)
     }
 }
 
+/* Time the game spends parked in port_yield (waiting on the browser) rather
+ * than running its own code. Reset every vblank; the spike line below reads
+ * it, and lbfile's per-load timing reads it through port_yield_count/ms. */
+static struct {
+    unsigned count;
+    double sleep_ms; /* inside port_yield_browser: the browser's turn */
+    double pump_ms;  /* the disc and audio pumps that follow it */
+} g_yield;
+
 void port_yield(void)
 {
     /* A wait loop that never reaches a frame means something it is waiting for
@@ -133,10 +149,19 @@ void port_yield(void)
         port_log("stuck: %u yields without a frame (%u disc reads in flight)", s_since_frame, port_dvd_pending());
     }
     g_yields_since_frame = &s_since_frame;
-    emscripten_sleep(0);
+    double t0 = emscripten_get_now();
+    port_yield_browser();
+    double t1 = emscripten_get_now();
     port_dvd_pump();
     port_ax_pump(0); /* keep audio flowing while the game blocks on a load */
+    double t2 = emscripten_get_now();
+    g_yield.count++;
+    g_yield.sleep_ms += t1 - t0;
+    g_yield.pump_ms += t2 - t1;
 }
+
+unsigned port_yield_count(void) { return g_yield.count; }
+double port_yield_ms(void) { return g_yield.sleep_ms + g_yield.pump_ms; }
 
 /* Where a frame's milliseconds actually go.
  *
@@ -297,7 +322,11 @@ void port_vblank(void)
     }
     while (now < g_next_vblank_ms) {
         double remaining = g_next_vblank_ms - now;
-        emscripten_sleep(remaining >= 2.0 ? (unsigned) (remaining - 1.0) : 0);
+        if (remaining >= 2.0) {
+            emscripten_sleep((unsigned) (remaining - 1.0));
+        } else {
+            port_yield_browser(); /* a timer here would overshoot by 4 ms */
+        }
         now = emscripten_get_now();
     }
     g_next_vblank_ms += kFrameMs;
@@ -354,6 +383,21 @@ void port_vblank(void)
         if (busy > g_prof.worst) {
             g_prof.worst = busy;
         }
+        /* A frame this long is a visible pause. Say where it went: how much of
+         * the game's time was spent parked in port_yield (and in which half),
+         * and what the disc did meanwhile. */
+        if (busy > 100.0) {
+            unsigned reads, bytes;
+            double read_wait, read_max;
+            port_dvd_stats(&reads, &bytes, &read_wait, &read_max);
+            port_log("spike: frame %u busy %.0f ms | game %.0f (yield %u x: sleep %.0f pump %.0f) present %.0f begin %.0f "
+                     "| disc %u reads %u KB, wait %.0f ms (max %.0f)",
+                     g_frame_count, busy, g_prof_left != 0.0 ? t_enter - g_prof_left : 0.0, g_yield.count,
+                     g_yield.sleep_ms, g_yield.pump_ms, t_present - t_enter, t_begin - t_audio, reads, bytes >> 10,
+                     read_wait, read_max);
+        }
+        memset(&g_yield, 0, sizeof g_yield);
+        port_dvd_stats_reset();
     }
 
     /* Once a second: frame count and wasm heap size, to spot runaway growth. */

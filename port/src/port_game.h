@@ -15,6 +15,10 @@ void port_yield(void);
 /* Disc reads issued but not yet completed. */
 unsigned port_dvd_pending(void);
 
+/* Diagnostics: yields since the last vblank, and the milliseconds they took. */
+unsigned port_yield_count(void);
+double port_yield_ms(void);
+
 /* On hardware the game tells ARAM addresses (small offsets) from main memory
  * pointers (>= 0x80000000). On the port main memory is Aurora's MEM1 block and
  * ARAM is a separate buffer addressed by offset, so the test is a range check. */

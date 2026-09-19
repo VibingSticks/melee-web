@@ -65,8 +65,36 @@
 /* 31263C */ void Toy_8031263C(void);
 /* 3127D4 */ void Toy_803127D4(void);
 /* 3FE5E8 */ extern char Toy_str_ScMenFigure_cam_int1_camera[];
+#ifdef TARGET_PC
+/* These five objects are contiguous in the original binary, and the trophy
+ * code reaches the last two by casting the address of the first -- a twelve-
+ * byte struct -- and reading at +0x194 and +0x3F0:
+ *
+ *   4A26B8 _Toy_804A26B8            0x0C
+ *   4A26C4 devtext buffer           0x8C
+ *   4A2750 devtext buffer           0xFC
+ *   4A284C Toy_804A284C[302]       0x25C   == 4A26B8 + 0x194
+ *   4A2AA8 Toy_804A2AA8                    == 4A26B8 + 0x3F0
+ *
+ * That only resolves because the GameCube link placed them exactly so. On this
+ * target the casts wrote into other translation units' statics instead, which
+ * is what aborted the lottery and collection scenes. Declaring one block makes
+ * the layout a guarantee rather than a coincidence, and fixes every cast site
+ * at once. The offsets are asserted in toy.c. */
+struct ToyStateBlock {
+    struct _Toy_804A26B8_t head;
+    char devtext1[0x8C];
+    char devtext2[0xFC];
+    u16 state[302];
+    ToyAnimState anim;
+};
+extern struct ToyStateBlock Toy_state_block;
+#define Toy_804A284C (Toy_state_block.state)
+#define Toy_804A2AA8 (Toy_state_block.anim)
+#else
 /* 4A284C */ extern u16 Toy_804A284C[302];
 /* 4A2AA8 */ extern ToyAnimState Toy_804A2AA8;
+#endif
 /* 4D6EAC */ extern TyDspEntry* Toy_sbss_804D6EAC;
 /* 4D6EB0 */ extern TyDspEntry* Toy_sbss_804D6EB0;
 /* 4D6EC8 */ extern HSD_Archive* Toy_sbss_804D6EC8;

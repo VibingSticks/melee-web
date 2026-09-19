@@ -401,3 +401,34 @@ export async function pressUntilSceneFrames(page, name, pred, { tries = 10, fram
   const last = await scene(page);
   throw new Error(`pressed ${name} ${tries}x (${fps.toFixed(1)} fps) waiting for ${what ?? 'a scene'}; at ${last ? sceneName(last) : '?'}`);
 }
+
+/**
+ * Open main-menu submenu `target`, checking where it actually landed.
+ *
+ * Counting DOWN presses is not enough on its own: the cursor persists and a
+ * dropped press silently shifts every later entry. Entering a submenu does set
+ * MenuFlow.cur_menu, so the landing is checkable -- and when it is wrong the
+ * only reliable recovery is a reboot, not B. B does not back out of a
+ * character select, so "press B until we are home again" hangs there.
+ */
+export async function selectSubmenu(page, target, { disc, tries = 4, frames = 10 } = {}) {
+  if (!disc) throw new Error('selectSubmenu needs { disc } so it can reboot to recover');
+  let guess = target; // a fresh menu starts with the cursor at the top
+  for (let attempt = 0; attempt < tries; attempt++) {
+    if (attempt > 0) await reboot(page, disc);
+    await bootToMainMenu(page);
+    const fps = (await measureFps(page, 900)) ?? 30;
+
+    for (let d = 0; d < guess; d++) { await pressFrames(page, 'DOWN', frames, fps); await sleep(450); }
+    await sleep(350);
+    await pressFrames(page, 'A', frames, fps);
+    await sleep(1800);
+
+    const s2 = await scene(page);
+    if (s2.mode !== 1) { guess = Math.max(0, guess - 1); continue; } // went too far in
+    const m = await menuState(page);
+    if (m.curMenu === target) return { ok: true, curMenu: m.curMenu, attempts: attempt + 1, fps };
+    guess = Math.max(0, guess + (target - m.curMenu));
+  }
+  return { ok: false, curMenu: (await menuState(page)).curMenu };
+}

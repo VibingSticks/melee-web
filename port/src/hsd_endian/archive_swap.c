@@ -3,6 +3,15 @@
 #include <stdlib.h>
 #include <string.h>
 
+/* Milliseconds, for reporting how long a conversion blocked the frame. Host
+ * tests build this file too and have no emscripten.h. */
+#ifdef __EMSCRIPTEN__
+#include <emscripten.h>
+#define PORT_NOW_MS() emscripten_get_now()
+#else
+#define PORT_NOW_MS() 0.0
+#endif
+
 static uint32_t rd_be32(const uint8_t* p)
 {
     return (uint32_t) p[0] << 24 | (uint32_t) p[1] << 16 | (uint32_t) p[2] << 8 | p[3];
@@ -204,6 +213,7 @@ int port_archive_swap_roots(HSD_Archive* ar, const uint32_t* reloc_set, uint32_t
         port_log("hsd_endian: out of memory converting %s", name);
         return -1;
     }
+    double t0 = PORT_NOW_MS();
     for (uint32_t i = 0; i < ar->header.nb_public; i++) {
         const char* sym = ar->symbols + ar->public_info[i].symbol;
         const port_root* root = find_root(sym);
@@ -226,7 +236,9 @@ int port_archive_swap_roots(HSD_Archive* ar, const uint32_t* reloc_set, uint32_t
     }
     port_archive_convert_scripts(&c, name);
     port_walk_ctx_free(&c);
-    port_log("hsd_endian: converted %s (%u roots, %u bytes)", name, (unsigned) ar->header.nb_public,
-             (unsigned) ar->header.data_size, (void*) ar->data);
+    /* This runs synchronously inside whatever frame asked for the archive, so
+     * a large one is a visible pause rather than a slow average. */
+    port_log("hsd_endian: converted %s (%u roots, %u bytes) in %.1f ms", name, (unsigned) ar->header.nb_public,
+             (unsigned) ar->header.data_size, PORT_NOW_MS() - t0);
     return rc;
 }

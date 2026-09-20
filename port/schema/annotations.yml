@@ -66,6 +66,11 @@ port_EventInitLevel:
   x4: { ptr_array: port_EventLevelPair, null_term: true }
 
 # --- stages ------------------------------------------------------------------
+GroundParam:
+  # A table of stkind rows, not one row: without the length only row 0 was
+  # converted, so grGetStageParam walked big-endian ids (stkind 96 read back as
+  # 0x60000000) and gave up with "not found stage param" at ground.c:2310.
+  stage_params: { ptr_array: StageParam, len_field: stage_param_count }
 UnkStageDat:
   unk0:  { ptr_array: port_StageJointMap, len_field: unk4 }
   unk8:  { ptr_array: UnkStageDat_x8_t, len_field: unkC }
@@ -118,6 +123,20 @@ ftData:
   # in ft_0D4D.c pass it straight to ftCo_8008A7A8(WaitStruct*).
   x24: { ptr_array: port_WaitEntry, term_value: 0xFFFFFFFF }
   x28: { ptr_array: port_WaitEntry, term_value: 0xFFFFFFFF }
+  # Declared int, but the relocation table says pointer: bone indices for gfx
+  # part 0x8D, read as ((int*) fp->ft_data->x54)[n] in ftCo_09F7.c:75 with the
+  # counter wrapping at 5.
+  x54: { ptr_array: u32, len_const: 5 }
+FtSFX:
+  # Declared int, but it sits between two FtSFXArr* and the relocation table
+  # says pointer. ftCo_Damage.c:503 stores it in dmg.x190C exactly as x20 is
+  # stored at :496, and ftCo_DamageFall.c:90 hands x190C to ft_800889F4,
+  # which reads it as FtSFXArr* (num / sfx_ids).
+  x1C: { word: { ptr: FtSFXArr } }
+FtSFXArr:
+  # Was {F_PTR, NULL}: followed but never converted, so the sound-id arrays of
+  # smash, x1C and x20 all stayed big-endian.
+  sfx_ids: { ptr_array: u32, len_field: num }
 Fighter_804D64FC_t:
   x20: { ptr_array: f32, len_const: 33 }   # per-fighter distance thresholds
 ftData_x30:

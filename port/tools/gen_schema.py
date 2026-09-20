@@ -23,7 +23,7 @@ annotations.yml (per struct name):
     ptr_array/elem_ptr targets may also be the scalar helpers u16, u32, u64, f32, f64, ptr, word,
     or "T*" for an array of pointers to T;
     union_on may add mask: 0x30 to compare only those bits of the discriminator;
-  roots.yml entries: { prefix|suffix, type, array: null_term | { term_value: N },
+  roots.yml entries: { prefix|suffix, type, array: null_term | object_run | { term_value: N },
                       field_types: { <field>: T } to aim a pointer field at T for this root }
     term_value: 0x83D60                    pointer array ends at the element whose first word is this
     reloc_run: true                        inline array runs while each element's pointers are relocated
@@ -436,10 +436,15 @@ def main():
         t = g.need_name(r["type"])
         if "field_types" in r:
             t = g.variant(r["type"], r["field_types"])
-        if "array" in r:  # the symbol is an inline list of `type`: null_term or term_value:N
+        if "array" in r:  # the symbol is an inline list of `type`: null_term, object_run or term_value:N
             elem = t[len("&port_T_"):]
             spec = r["array"]
-            lk, lv = ("LEN_NULL_TERM", "0") if spec == "null_term" else ("LEN_TERM_VALUE", f"{int(spec['term_value'])}u")
+            if spec == "null_term":
+                lk, lv = "LEN_NULL_TERM", "0"
+            elif spec == "object_run":  # runs to the next root symbol or pointer target, or the data's end
+                lk, lv = "LEN_OBJECT_RUN", "0"
+            else:
+                lk, lv = "LEN_TERM_VALUE", f"{int(spec['term_value'])}u"
             wname = f"__list_{elem}_{lk.lower()}"
             if wname not in g.helpers:
                 g.helpers.add(wname)

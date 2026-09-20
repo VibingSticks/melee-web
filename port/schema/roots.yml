@@ -23,7 +23,15 @@
 - { suffix: _tlut_desc, type: HSD_TlutDesc }
 - { suffix: _tlut, type: HSD_Tlut }
 - { prefix: MnSelectChrDataTable, type: port_MnSelectChrDataTable }
+- { prefix: MnSelectStageDataTable, type: port_MnSelectStageDataTable }
 - { prefix: sqEventInitDataLevelTbl, type: port_EventInitLevel }
+# gmtou_0.c / gmtou_1.c: TmBox.dat bracket box tables (see port_BracketSrcEntry).
+- { prefix: tournament_box, type: port_BracketSrcEntry, array: object_run }
+# gm_1879.c: the adventure stage intro (IrNml.dat) names one camera per stage
+# "mc01".."mc12", each a SceneCameraDesc {desc, anims}; the cobj projection
+# assertion (cobj.c:1304) fired on the big-endian descriptor without this.
+- { prefix: mc0, type: SceneCameraDesc }
+- { prefix: mc1, type: SceneCameraDesc }
 - { prefix: MemSnap, type: opaque }        # LbMcSnap: banner/icon texels and pointer tables
 - { prefix: mnName, type: opaque }         # name lists: arrays of relocated string pointers
 # Stage archives (grdatfiles.c).

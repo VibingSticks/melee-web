@@ -44,6 +44,27 @@ typedef struct {
     port_MnSelectChrModels models;
 } port_MnSelectChrDataTable;
 
+/* mnstagesel.c: MnSelectStageDataTable (an anonymous struct at its one use
+ * site, mnStageSel_Scene_OnEnter). Same shape as the character select's table:
+ * camera, two lights, fog, then the models -- eleven static ones and a loose
+ * joint with its three animations (struct mnStageSel_804D6C98_t). Without this
+ * the stage select was only relocated, never byte-swapped, and Training died
+ * on a garbage camera projection the moment MnSlMap loaded. */
+typedef struct {
+    StaticModelDesc models[11];
+    HSD_Joint* joint;
+    HSD_AnimJoint* animjoint;
+    HSD_MatAnimJoint* matanim_joint;
+    HSD_ShapeAnimJoint* shapeanim_joint;
+} port_MnSelectStageModels;
+typedef struct {
+    HSD_CObjDesc* cam;
+    HSD_LightDesc* light0;
+    HSD_LightDesc* light1;
+    HSD_FogDesc* fog;
+    port_MnSelectStageModels models;
+} port_MnSelectStageDataTable;
+
 /* gmevent.c: sqEventInitDataLevelTbl (struct gm_804D6900_t). */
 typedef struct { int x0; int x4; } port_EventLevelPair;
 typedef struct {
@@ -54,6 +75,23 @@ typedef struct {
     void* evstage_table;
     void* player_init[5];
 } port_EventInitLevel;
+
+/* gmtoulib.c: TmBox.dat's tournament_box{2,3,4}_array roots are arrays of
+ * BracketSrcEntry (gmtoulib.static.h, a file-local type): the bracket box
+ * coordinates fn_8018A514 copies into lbl_80473AB8 for 8-, 13- and 64-entrant
+ * brackets. The archive holds no length and the entries hold no pointers, so
+ * each root runs until the next root symbol (or the end of the data). Without
+ * this every s32 in them was read big-endian and the bracket was laid out
+ * from garbage. */
+typedef struct {
+    u8 x0, x1, x2, x3, x4, x5, x6, pad7;
+    s32 x8;
+    s32 xC;
+    s32 x10;
+    s32 x14;
+    u8 x18, x19, x1A, x1B, x1C, x1D, x1E, x1F, x20, x21, x22, x23, x24;
+    u8 pad25[3];
+} port_BracketSrcEntry;
 
 /* grdatfiles.c: the "itemdata" stage root is a NULL-terminated array of
  * pointers to {kind, Article*} pairs (StageInfo::itemdata's element type,

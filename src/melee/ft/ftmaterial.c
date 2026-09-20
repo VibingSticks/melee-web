@@ -48,10 +48,25 @@ static HSD_TECnst ftMaterial_803C6A44 = {
 };
 
 #ifdef TARGET_PC
-/* The game calls this 3-argument function through a void (0-argument) pointer (see PORT_FNCAST). */
-static void ftMaterial_800BF2B8__as_event(void)
+/* On the GameCube the two templates above follow ftMObj in .data (ftMObj is
+ * 0x50 bytes at 0x803C6980, ftMaterial_803C69D0 is at +0x50 and
+ * ftMaterial_803C6A44 after it), and ftMaterial_800BF534 / ftMaterial_800BF6BC
+ * reach them by casting &ftMObj to ft_MObjInfo. wasm-ld places the three
+ * objects wherever it likes, so that cast landed on unrelated data: a texp
+ * template that failed HSD_TExpSetReg's HSD_TE_CNST assertion and a tev
+ * template with alpha arguments the renderer rejected. This holds copies of
+ * the templates (filled in when the class initialises) for the cast to land
+ * on instead. */
+static struct ft_MObjInfo ftMObj_templates;
+
+/* The game installs this 3-argument function as the MObj class's setup
+ * method, which HSD_DObjDisp calls with (mobj, rendermode) -- the two
+ * arguments HSD_MObjSetup and grmaterial.c's fn_801C8EF8 take. The third
+ * argument is unused. A pointer of another arity is harmless on PowerPC and
+ * a trap in wasm (see PORT_FNCAST). */
+static void ftMaterial_800BF2B8__as_setup(HSD_MObj* mobj, u32 rendermode)
 {
-    ftMaterial_800BF2B8((HSD_MObj*) 0, (u32) 0, (u32) 0);
+    ftMaterial_800BF2B8(mobj, rendermode, 0);
 }
 #endif
 
@@ -60,7 +75,11 @@ void ftMaterial_800BF260(void)
     hsdInitClassInfo(&ftMObj.parent, &hsdMObj.parent,
                      "sysdolphin_base_library", "ft_mobj",
                      sizeof(HSD_MObjInfo), sizeof(HSD_MObj));
-    ftMObj.setup = (HSD_MObjSetupFunc) PORT_FNCAST(ftMaterial_800BF2B8__as_event, (Event) ftMaterial_800BF2B8);
+    ftMObj.setup = (HSD_MObjSetupFunc) PORT_FNCAST(ftMaterial_800BF2B8__as_setup, (Event) ftMaterial_800BF2B8);
+#ifdef TARGET_PC
+    ftMObj_templates.tevdesc_tmpl = ftMaterial_803C69D0;
+    ftMObj_templates.texp_tmpl = ftMaterial_803C6A44;
+#endif
 }
 
 void ftMaterial_800BF2B8(HSD_MObj* mobj, u32 rendermode, u32 unused)
@@ -167,7 +186,11 @@ HSD_TExp* ftMaterial_800BF534(Fighter* fp, HSD_MObj* mobj, HSD_TExp* texp,
     HSD_TevDesc sp_tevdesc;
     s32 reg;
     bool chk;
+#ifdef TARGET_PC
+    struct ft_MObjInfo* info = &ftMObj_templates;
+#else
     struct ft_MObjInfo* info = (struct ft_MObjInfo*) &ftMObj;
+#endif
     ColorOverlay* overlay = ftCo_800C0658(fp);
 
     if (overlay->x7C_flag2 && overlay->x7C_light_enable) {
@@ -221,7 +244,11 @@ void ftMaterial_800BF6BC(Fighter* fp, HSD_MObj* mobj, HSD_TExp* texp)
     s32 var_r3;
     ColorOverlay* overlay;
     s32 var_r5;
+#ifdef TARGET_PC
+    struct ft_MObjInfo* info = &ftMObj_templates;
+#else
     struct ft_MObjInfo* info = (struct ft_MObjInfo*) &ftMObj;
+#endif
 
     if (!fp->x2223_b3) {
         overlay = ftCo_800C0658(fp);

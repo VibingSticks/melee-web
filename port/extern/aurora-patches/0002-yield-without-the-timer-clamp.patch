@@ -1,0 +1,35 @@
+--- a/lib/gfx/frame.cpp
++++ b/lib/gfx/frame.cpp
+@@ -33,6 +33,14 @@
+ #endif
+ #include <magic_enum.hpp>
+ 
++#ifdef __EMSCRIPTEN__
++/* port/web/js/imports.js: yields to the browser through a MessageChannel
++ * message rather than a timer, so it is not subject to the nested-setTimeout
++ * clamp. Declared here rather than included because the port's headers are
++ * not on aurora's include path. */
++extern "C" void port_yield_browser(void);
++#endif
++
+ namespace aurora::gfx {
+ using namespace detail;
+ using webgpu::g_device;
+@@ -185,7 +193,16 @@
+ #ifdef __EMSCRIPTEN__
+   // Single-threaded browser build: WebGPU callbacks (MapAsync etc.) only run when we return to the
+   // event loop, so yield through Asyncify instead of sleeping in place.
+-  emscripten_sleep(static_cast<unsigned>(std::max<int64_t>(1, sleepDuration.count() / 1'000'000)));
++  //
++  // Not emscripten_sleep: that is setTimeout, and a timer set from inside a
++  // timer callback is clamped to 4 ms by the browser once nested a few deep.
++  // Every caller here asks for 100 us and waits in a loop, so each turn of the
++  // loop cost 4 ms instead, and a frame that needed a few hundred turns spent
++  // over a second in what should have been a short backpressure wait.
++  // port_yield_browser hands control back through a MessageChannel message,
++  // which is not a timer and is not clamped.
++  (void) sleepDuration;
++  port_yield_browser();
+ #else
+   std::this_thread::sleep_for(sleepDuration);
+ #endif

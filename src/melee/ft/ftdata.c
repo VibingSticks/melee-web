@@ -184,10 +184,20 @@ static inline void ft_800852B0_Reset_ft_8045993C(ftData** list, int i)
 void ft_800852B0(void)
 {
     ftData** list;
+#ifdef TARGET_PC
+    /* On the GameCube these two tables follow CostumeListsForeachCharacter in
+     * .data, and the game reaches them by offset from it. wasm-ld lays the
+     * globals out differently, so that arithmetic lands on other tables (it
+     * zeroed every other entry of ftData_803C2468 and never cleared these).
+     * Name the tables instead; the expansion below is unchanged for PowerPC. */
+    ftData_UnkCountStruct* unk0 = ftData_Table_Unk0;
+    ftData_UnkCountStruct* pairs = ftData_UnkIntPairs;
+#else
     ftData_UnkCountStruct* unk0 =
         (ftData_UnkCountStruct*) &CostumeListsForeachCharacter[Ft_Kind_Max];
     ftData_UnkCountStruct* pairs =
         (ftData_UnkCountStruct*) ((u8*) CostumeListsForeachCharacter + 5940);
+#endif
     int i;
     int new_var = 0;
 

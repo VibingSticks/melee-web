@@ -1197,6 +1197,39 @@ struct Fighter {
     /*  fp+588 */ HSD_LObj* x588;
     /*  fp+58C */ u32 x58C;
     /*  fp+590 */ FigaTree* x590;
+#ifdef TARGET_PC
+    /* The game fills this union through x594_s32 with a whole word from the
+     * animation entry (Fighter_WaitAnimData::x10) and reads it back through
+     * the bitfields. CodeWarrior packs bitfields MSB-first and clang LSB-first,
+     * so the PowerPC declarations below would read different bits of the same
+     * value (x597_bits came back as 4 for Fox's 0x10000001). These mirror the
+     * PowerPC bit positions of that word. */
+    /*  fp+594 */ union {
+        struct {
+            u8 x594_pad_lo[3];
+            u8 x594_b7 : 1;
+            u8 x594_b6 : 1;
+            u8 x594_b5 : 1;
+            u8 x594_b4 : 1;
+            u8 x594_b3 : 1;
+            u8 x594_b2 : 1;
+            u8 x594_b1_loop : 1;
+            u8 x594_b0 : 1;
+        };
+        struct {
+            u16 x594_pad_x596 : 6;
+            u16 x7 : 3;
+            u16 x0 : 7;
+        } x596_bits;
+        struct {
+            u32 x597_bits : 6; // FighterKind of this fighter's x590 FigaTree
+            u32 x594_pad2 : 3;
+            u32 x594_bits : 13;
+            u32 x594_pad : 10;
+        };
+        /* fp+594 */ s32 x594_s32;
+    };
+#else
     /*  fp+594 */ union {
         struct {
             /* fp+594:0 */ u8 x594_b0 : 1;
@@ -1220,6 +1253,7 @@ struct Fighter {
         };
         /* fp+594 */ s32 x594_s32;
     };
+#endif
     /*  fp+598 */ FigaTree* x598;
     /*  fp+59C */ struct Fighter_x59C_t* x59C;
     /*  fp+5A0 */ struct Fighter_x59C_t* x5A0;

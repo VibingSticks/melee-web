@@ -8,6 +8,7 @@
 #include "plstale.h"
 #include "types.h"
 #include <dolphin/mtx.h>
+#include <stddef.h>
 #include <melee/ft/fighter.h>
 #include <melee/ft/ft_0877.h>
 #include <melee/ft/ft_0D4D.h>
@@ -35,6 +36,25 @@ struct Unk_Struct_w_Array {
     char another_str[16 + 4];
     S8Vec3 vec_arr[30]; /// ftMapping_list
 };
+
+/* This overlay reaches ftMapping_list by counting 32 bytes forward from the
+ * address of an eight-byte string -- it only ever worked because MWERKS laid
+ * "PdPm.dat", "plLoadCommonData" and ftMapping_list out back to back in .data.
+ * wasm-ld pads them apart and puts ftMapping_list at +56, so the overlay read
+ * 24 bytes early: Mario's entry came back as Captain's, and Fox's landed in
+ * the middle of "plLoadCommonData" and drove a write off the end of
+ * ftData_UnkIntPairs. Aim the overlay at the table itself instead; on the
+ * GameCube the two addresses are the same one, so the expansion is unchanged.
+ */
+#ifdef TARGET_PC
+#define PL_MAPPING_OVERLAY()                                                  \
+    ((struct Unk_Struct_w_Array*) ((char*) ftMapping_list -                   \
+                                   offsetof(struct Unk_Struct_w_Array,        \
+                                            vec_arr)))
+#else
+#define PL_MAPPING_OVERLAY()                                                  \
+    ((struct Unk_Struct_w_Array*) &str_PdPmdat_start_of_data)
+#endif
 
 //// .data
 char str_PdPmdat_start_of_data[] = "PdPm.dat";
@@ -344,7 +364,7 @@ void Player_80032070(int slot, bool bool_arg)
 {
     StaticPlayer* player;
     struct Unk_Struct_w_Array* unkStruct =
-        (struct Unk_Struct_w_Array*) &str_PdPmdat_start_of_data;
+        PL_MAPPING_OVERLAY();
     Player_CheckSlot(slot);
     player = &player_slots[slot];
 
@@ -432,7 +452,7 @@ Gm_PKind Player_8003248C(s32 slot, bool arg1)
 {
     Gm_PKind slot_type;
     struct Unk_Struct_w_Array* unk_struct =
-        (struct Unk_Struct_w_Array*) &str_PdPmdat_start_of_data;
+        PL_MAPPING_OVERLAY();
     StaticPlayer* player;
 
     Player_CheckSlot(slot);
@@ -476,7 +496,7 @@ s8 Player_80032610(s32 slot, bool arg1)
 { //// decomp.me/scratch/pHTx2
 
     struct Unk_Struct_w_Array* some_struct =
-        (struct Unk_Struct_w_Array*) &str_PdPmdat_start_of_data;
+        PL_MAPPING_OVERLAY();
     StaticPlayer* player;
     s32 error_value = -1;
 
@@ -1282,7 +1302,7 @@ s32 Player_GetFalls(s32 slot)
 { /// decomp.me/scratch/8ijor
     StaticPlayer* player;
     struct Unk_Struct_w_Array* unkStruct =
-        (struct Unk_Struct_w_Array*) &str_PdPmdat_start_of_data;
+        PL_MAPPING_OVERLAY();
     Player_CheckSlot(slot);
     player = &player_slots[slot];
 
@@ -2039,7 +2059,7 @@ void Player_80036DD8(void)
 void Player_80036E20(CharacterKind ckind, HSD_Archive* archive, s32 arg2)
 {
     struct Unk_Struct_w_Array* unkStruct =
-        (struct Unk_Struct_w_Array*) &str_PdPmdat_start_of_data;
+        PL_MAPPING_OVERLAY();
     ftDemo_SetArchiveData(unkStruct->vec_arr[ckind].x, archive, arg2);
     if ((unkStruct->vec_arr[ckind].y != -1) &&
         (unkStruct->vec_arr[ckind].z == 0))

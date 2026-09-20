@@ -66,6 +66,16 @@ static char mnEvent_803EF7A0[0xD0] = {
     0x69, 0x6E, 0x74, 0x00,
 };
 static s32 mnEvent_804D5028 = 0xCABC9FFF;
+#ifdef TARGET_PC
+/* mnEvent_8024E524 and mnEvent_8024E838 reach their strings by offset from
+ * mnEvent_803EF740, a twelve-byte AnimLoopSettings; that lands inside
+ * mnEvent_803EF7A0 only because the GameCube link placed the blob exactly 0x60
+ * past it (0x3EF740 + 0x60 == 0x3EF7A0). Nothing arranges that here, so the
+ * section names handed to lbArchive_LoadSections were garbage ("Cannot find
+ * symbol s%:s."), every asset came back NULL, and the Event Match menu
+ * faulted on a NULL joint. Name the blob directly. */
+#define MNEVENT_STR(off) (mnEvent_803EF7A0 + ((off) - 0x60))
+#endif
 
 static s32 mnEvent_804D502C = 0xFF;
 
@@ -724,8 +734,14 @@ void mnEvent_8024E524(s32 event_idx)
 
     user_data = HSD_MemAlloc(sizeof(MnEventData));
     if (user_data == NULL) {
+#ifdef TARGET_PC
+        (void) strs;
+        OSReport(MNEVENT_STR(0x70));
+        __assert(MNEVENT_STR(0x88), 0x39B, MNEVENT_STR(0x94));
+#else
         OSReport(strs + 0x70);
         __assert(strs + 0x88, 0x39B, strs + 0x94);
+#endif
     }
     mnEvent_8024E420(user_data, event_idx);
     GObj_InitUserData(gobj, 0, HSD_Free, user_data);
@@ -767,9 +783,17 @@ void mnEvent_8024E838(int event_idx, int first_time)
     mnEvent_804D6C60 = NULL;
     {
         HSD_Archive* archive = mn_804D6BB8;
+#ifdef TARGET_PC
+        (void) base;
+        lbArchive_LoadSections(archive, arr, MNEVENT_STR(0xA0), arr + 1,
+                               MNEVENT_STR(0xB8), arr + 2, MNEVENT_STR(0xD4),
+                               arr + 3, MNEVENT_STR(0xF4), arr + 4,
+                               MNEVENT_STR(0x118), 0);
+#else
         lbArchive_LoadSections(archive, arr, base + 0xA0, arr + 1, base + 0xB8,
                                arr + 2, base + 0xD4, arr + 3, base + 0xF4,
                                arr + 4, base + 0x118, 0);
+#endif
     }
 
     if (first_time == 0) {

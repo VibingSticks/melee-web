@@ -2423,25 +2423,39 @@ void fn_8018FBD8(void* arg0, s32 arg1)
 #pragma pop
 #endif
 
+#ifdef TARGET_PC
+/* On the GameCube gm_804771C4, the TmData, sits at 0x4771C4: right after
+ * lbl_804771B8's three pointers, which in turn follow lbl_80473AB8's 64
+ * entries (64 * 0xDC = 0x3700). So the overlay below reaches it as one
+ * element past the end of BracketData::srcs. wasm-ld lays the three objects
+ * out independently, so that address is not the TmData, and the 0x574-byte
+ * write below landed on whatever was there instead. Name the object; the
+ * PowerPC expansion is the original expression. */
+#define TM_OVERLAY() (gm_GetTournamentData())
+#else
+#define TM_OVERLAY()                                                          \
+    ((TmData*) &((BracketData*) lbl_80473AB8)->srcs[3])
+#endif
+
 void fn_8018FBE0(s32 arg0, s32 arg1, s32 arg2, s32 arg3, s32 arg4, s32 arg5,
                  s32 arg6)
 {
     s32 i;
 
-    ((TmData*) &((BracketData*) lbl_80473AB8)->srcs[3])->cur_option = arg0;
-    ((TmData*) &((BracketData*) lbl_80473AB8)->srcs[3])->x1C = arg1;
-    ((TmData*) &((BracketData*) lbl_80473AB8)->srcs[3])->x20 = arg2;
+    TM_OVERLAY()->cur_option = arg0;
+    TM_OVERLAY()->x1C = arg1;
+    TM_OVERLAY()->x20 = arg2;
 
     for (i = 0; 64 > i; i++) {
-        ((TmData*) &((BracketData*) lbl_80473AB8)->srcs[3])->x37[i].x2 =
+        TM_OVERLAY()->x37[i].x2 =
             (u8) arg3;
-        ((TmData*) &((BracketData*) lbl_80473AB8)->srcs[3])->x37[i].x1 =
+        TM_OVERLAY()->x37[i].x1 =
             (u8) arg4;
-        ((TmData*) &((BracketData*) lbl_80473AB8)->srcs[3])->x37[i].xD =
+        TM_OVERLAY()->x37[i].xD =
             (u8) i;
-        ((TmData*) &((BracketData*) lbl_80473AB8)->srcs[3])->x37[i].x9 =
+        TM_OVERLAY()->x37[i].x9 =
             (u16) arg5;
-        ((TmData*) &((BracketData*) lbl_80473AB8)->srcs[3])->x37[i].x0 =
+        TM_OVERLAY()->x37[i].x0 =
             (u8) arg6;
     }
 }

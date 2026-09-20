@@ -303,6 +303,18 @@ static void fn_8019F6EC(HSD_GObj* gobj)
     HSD_JObjAnimAll(lbl_804D66E8.x0);
 }
 
+static void fn_8019F810(void);
+
+#ifdef TARGET_PC
+/* The game installs this 0-argument function as a GObj proc, which the proc
+ * runner calls with the GObj (see PORT_FNCAST). */
+static void fn_8019F810__as_hsd_gobjevent(HSD_GObj* gobj)
+{
+    (void) gobj;
+    fn_8019F810();
+}
+#endif
+
 static void fn_8019F810(void)
 {
     u32 trigger;
@@ -489,7 +501,7 @@ void fn_8019F9C4(u32 arg0)
     jobj = HSD_JObjLoadJoint(lbl_804D669C->models[0]->joint);
     HSD_GObjObject_80390A70(gobj, HSD_GObj_JObjKind, jobj);
     GObj_SetupGXLink(gobj, HSD_GObj_JObjCallback, 0xB, 0);
-    HSD_GObj_SetupProc(gobj, (void (*)(HSD_GObj*)) fn_8019F810, 0);
+    HSD_GObj_SetupProc(gobj, PORT_FNCAST(fn_8019F810__as_hsd_gobjevent, (void (*)(HSD_GObj*)) fn_8019F810), 0);
     gm_8016895C(jobj, lbl_804D669C->models[0], 0);
     HSD_JObjReqAnimAll(jobj, 0.0f);
     HSD_JObjAnimAll(jobj);

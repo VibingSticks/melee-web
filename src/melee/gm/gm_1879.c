@@ -263,6 +263,18 @@ static inline u64 gm_80187F48_GetAudioConfig(u8 stage_index)
            gm_1832_NormalAudioMasks[stage_index];
 }
 
+#ifdef TARGET_PC
+/* The game calls this 1-argument function through a 2-argument
+ * GObj_RenderFunc pointer (see PORT_FNCAST): on the GameCube the render pass
+ * argument is simply ignored, in wasm the call traps with a signature
+ * mismatch as soon as the adventure stage intro renders its camera. */
+static void Camera_800304E0__as_gobj_renderfunc(HSD_GObj* gobj, int code)
+{
+    (void) code;
+    Camera_800304E0(gobj);
+}
+#endif
+
 static inline void gm_80187F48_OnEnter_inline(gm_80187F48_EnterData* arg0)
 {
     gm_1832_804736C0_t* data;
@@ -312,7 +324,7 @@ static inline void gm_80187F48_OnEnter_inline(gm_80187F48_EnterData* arg0)
     data->x8 = gobj;
     cobj = HSD_CObjLoadDesc(data->x4->desc);
     HSD_GObjObject_80390A70(gobj, HSD_GObj_CameraKind, cobj);
-    GObj_SetupGXLinkMax(gobj, (GObj_RenderFunc) (Event) Camera_800304E0, 8);
+    GObj_SetupGXLinkMax(gobj, PORT_FNCAST(Camera_800304E0__as_gobj_renderfunc, (GObj_RenderFunc) (Event) Camera_800304E0), 8);
     HSD_GObj_SetupProc(gobj, fn_80187910, 0);
     HSD_CObjAddAnim(cobj, *data->x4->anims);
     HSD_CObjReqAnim(cobj, 0.0f);

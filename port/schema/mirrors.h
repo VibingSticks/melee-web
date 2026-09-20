@@ -102,8 +102,8 @@ typedef struct {
     f32* per_kind_floats;                            /* Fighter_804D6548 */
     struct FighterPartsTable** parts_tables;         /* ftPartsTable */
     struct Fighter_804D6540_t** virtual_parts;       /* Fighter_804D6540 */
-    void* rumble_a;                                  /* Fighter_804D653C */
-    void* rumble_b;                                  /* Fighter_804D6538 */
+    struct Fighter_804D653C_t* colanim_a;            /* Fighter_804D653C */
+    struct Fighter_804D653C_t* colanim_b;            /* Fighter_804D6538 */
     void* p8;                                        /* Fighter_804D6534 */
     void* per_kind_vec2_lists;                       /* Fighter_804D6530 */
     struct Fighter_ShakeTable_t* grab_mash_shake;    /* Fighter_GrabMashShake */

@@ -39,6 +39,8 @@ port_add_game_test(ft_script_test ft_script_test.c ${PORT_SRC_DIR}/hsd_endian/fo
                    ${PORT_SRC_DIR}/hsd_endian/walker.c)
 port_add_game_test(it_script_test it_script_test.c ${PORT_SRC_DIR}/hsd_endian/formats.c
                    ${PORT_SRC_DIR}/hsd_endian/walker.c)
+port_add_game_test(co_script_test co_script_test.c ${PORT_SRC_DIR}/hsd_endian/formats.c
+                   ${PORT_SRC_DIR}/hsd_endian/walker.c)
 
 # Host tool: archive schema coverage straight from a disc image (not a test).
 # The tables are generated exactly as for the web build (wasm32 layout = the

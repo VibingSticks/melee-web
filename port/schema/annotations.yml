@@ -119,6 +119,11 @@ port_FtLoadCommonData:
   per_kind_floats: { ptr_array: f32, len_const: 33 }
   parts_tables:    { ptr_array: "FighterPartsTable*", len_const: 33 }
   virtual_parts:   { ptr_array: "Fighter_804D6540_t*", len_const: 33 }
+  # Colour-animation script tables (ftcolanim.c ftCo_800BFFD0): rows of
+  # {script, u8, u8} running to the next object; the scripts they point at are
+  # converted by port_archive_convert_scripts (port_swap_co_cmd_scripts).
+  colanim_a:       { ptr_array: Fighter_804D653C_t, object_run: true }
+  colanim_b:       { ptr_array: Fighter_804D653C_t, object_run: true }
 Fighter_804D6540_t:
   x0: { ptr_array: Fighter_804D6540_x0_t, len_field: x4 }
 Fighter_ShakeTable_t:
@@ -168,6 +173,12 @@ port_EfDataTable:
 # block in the archive (port/tools: the block runs to the next object). A ~ leaves
 # that block big-endian: the code reads it through a run-time struct, the sizes
 # disagree, or nothing reads it.
+# itheart.c reads x4 only as the u32 (the heal amount, 999); the header also
+# spells it as eight flag bits nobody reads, and the union rule would otherwise
+# leave the word big-endian.
+HeartContainerAttr:
+  x4: { word: true }
+
 it_804D6D20_t:
   # x8: monsters and Poke Ball entries, indexed by kind - It_Kind_Kuriboh up to
   # It_PKind_Random (118 slots, mostly NULL); xC: the 47 Pokemon. Their special

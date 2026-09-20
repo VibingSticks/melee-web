@@ -210,7 +210,7 @@ void port_swap_ft_anim_entries(void* entries, uint32_t count)
  * as a plain u32 is one 32-bit field. */
 typedef struct {
     uint8_t n;
-    uint8_t w[8];
+    uint8_t w[12];
 } ft_cmd_word;
 
 typedef struct {
@@ -336,6 +336,57 @@ static const ft_cmd_layout it_cmd_layouts[] = {
 };
 #define IT_CMD_OPCODES (sizeof it_cmd_layouts / sizeof it_cmd_layouts[0])
 
+/* Colour-overlay scripts (lb_013B.c lb_80014258): the tables ftcolanim.c and
+ * itanimlist.c hand lb_800144C8 (Fighter_804D653C_t rows in PlCo.dat and
+ * ItCo.dat). The generic commands 0-9, then the eleven lb_803BA248 handlers
+ * at 10-20, which read each word through union ColorOverlay_x8_t
+ * (melee/lb/types.h) -- a GXColor word is read as bytes and left alone -- and
+ * from 21 the fighter's or the item's own commands: fighters run
+ * ftCo_803C6AD0 / ftCo_803C6ADC (subaction opcodes 10, 17 and 57, or skips of
+ * the same lengths), items it_804D51C8 (item opcodes 10 and 16). Opcode 10
+ * (lb_80013BB0) ends a script like opcode 0. */
+#define CO_COMMON_LAYOUTS                                                            \
+    /*  0 */ { 1, { OP1 } },                                 /* Command_00 */        \
+    /*  1 */ { 1, { OP1 } },                                 /* Command_01 */        \
+    /*  2 */ { 1, { OP1 } },                                 /* Command_02 */        \
+    /*  3 */ { 1, { OP1 } },                                 /* Command_03 */        \
+    /*  4 */ { 1, { OP1 } },                                 /* Command_04 */        \
+    /*  5 */ { 2, { OP1, PTR } },                            /* Command_05 */        \
+    /*  6 */ { 1, { OP1 } },                                 /* Command_06 */        \
+    /*  7 */ { 2, { OP1, PTR } },                            /* Command_07 */        \
+    /*  8 */ { 1, { OP1 } },                                 /* Command_08 */        \
+    /*  9 */ { 1, { OP(8, 18) } },                           /* Command_09 */        \
+    /* 10 */ { 1, { OP1 } },                                 /* lb_80013BB0: end */  \
+    /* 11 */ { 1, { OP1 } },                                 /* lb_80013BB8: unk.timer */ \
+    /* 12 */ { 1, { OP1 } },                                 /* lb_80013BE4 */       \
+    /* 13: lb_80014258 reads the opcode as the 6-bit unk.unk and lb_80013C18 then  \
+     * light_rot2.light_enable, x and yz; the eight 1-bit names of light_rot2 are  \
+     * not read individually, and a 6-bit field and six 1-bit fields would not     \
+     * agree on their order once repacked. The layout follows the reads. */          \
+    /* 13 */ { 2, { OP(1, 1, 12, 12), PTR } },               /* light_rot2, then a GXColor */ \
+    /* 14 */ { 2, { OP1, PTR } },                            /* lb_80013D68: opcode, GXColor */ \
+    /* 15 */ { 2, { OP1, PTR } },                            /* lb_80013E3C: unk.timer, GXColor */ \
+    /* 16 */ { 1, { OP(13, 13) } },                          /* lb_80013F78: light_rot1 */ \
+    /* 17 */ { 1, { OP1 } },                                 /* lb_80013FF0 */       \
+    /* 18 */ { 2, { OP1, PTR } },                            /* lb_80014014: opcode, GXColor */ \
+    /* 19 */ { 2, { OP1, PTR } },                            /* lb_800140F8: unk.timer, GXColor */ \
+    /* 20 */ { 1, { OP1 } }                                  /* lb_80014234 */
+
+static const ft_cmd_layout co_ft_cmd_layouts[] = {
+    CO_COMMON_LAYOUTS,
+    /* 21 */ { 5, { OP(8, 1, 1, 1, 15), B(16, 16), B(16, 16), B(16, 16), B(16, 16) } }, /* ftAction_80071028: spawn_gfx_0..4 */
+    /* 22 */ { 3, { OP(8, 18), B(32), B(16, 8, 8) } },       /* ftAction_80071B50: sound_effect_0..2 */
+    /* 23 */ { 1, { OP(1, 8) } },                            /* ftAction_800730B8: unk21 */
+};
+static const ft_cmd_layout co_it_cmd_layouts[] = {
+    CO_COMMON_LAYOUTS,
+    /* 21 */ { 5, { OP(10, 16), B(16, 16), B(16, 16), B(16, 16), B(16, 16) } }, /* it_80278F2C: item opcode 10 */
+    /* 22 */ { 3, { OP(8, 2, 16), B(32), { 0, { 0 } } } },   /* it_8027978C: item opcode 16 */
+};
+#define CO_FT_CMD_OPCODES (sizeof co_ft_cmd_layouts / sizeof co_ft_cmd_layouts[0])
+#define CO_IT_CMD_OPCODES (sizeof co_it_cmd_layouts / sizeof co_it_cmd_layouts[0])
+#define CO_CMD_END 10
+
 #undef B
 #undef PTR
 #undef OP
@@ -352,18 +403,30 @@ static unsigned it_cmd_nwords(unsigned op, const uint8_t* p)
     return 0;
 }
 
-/* One bytecode dialect: its opcode layouts and, for dialects with a
- * variable-length command, how many words such a command occupies (0: as the
- * table says). */
+/* Item colour-overlay opcode 22 is item opcode 16 under another number. */
+static unsigned co_it_cmd_nwords(unsigned op, const uint8_t* p)
+{
+    return op == 22 ? it_cmd_nwords(16, p) : 0;
+}
+
+/* One bytecode dialect: its opcode layouts, for dialects with a
+ * variable-length command how many words such a command occupies (0: as the
+ * table says), and an opcode besides 0 and 6 that ends a script (NO_END_OP:
+ * none). */
+#define NO_END_OP 0xFFu
 typedef struct {
     const char* tag;
     const ft_cmd_layout* layouts;
     unsigned nlayouts;
     unsigned (*nwords)(unsigned op, const uint8_t* p);
+    unsigned end_op;
 } cmd_set;
 
-static const cmd_set ft_cmd_set = { "ft_script", ft_cmd_layouts, FT_CMD_OPCODES, NULL };
-static const cmd_set it_cmd_set = { "it_script", it_cmd_layouts, IT_CMD_OPCODES, it_cmd_nwords };
+static const cmd_set ft_cmd_set = { "ft_script", ft_cmd_layouts, FT_CMD_OPCODES, NULL, NO_END_OP };
+static const cmd_set it_cmd_set = { "it_script", it_cmd_layouts, IT_CMD_OPCODES, it_cmd_nwords, NO_END_OP };
+static const cmd_set co_ft_cmd_set = { "co_ft_script", co_ft_cmd_layouts, CO_FT_CMD_OPCODES, NULL, CO_CMD_END };
+static const cmd_set co_it_cmd_set = { "co_it_script", co_it_cmd_layouts, CO_IT_CMD_OPCODES, co_it_cmd_nwords,
+                                       CO_CMD_END };
 
 enum { FT_CMD_END = 0, FT_CMD_SUBROUTINE = 5, FT_CMD_RETURN = 6, FT_CMD_GOTO = 7 };
 
@@ -465,7 +528,7 @@ static void convert_stream(ft_script_ctx* c, uint8_t* p, unsigned depth)
                 port_repack_bits(p + 4 * k, 4, l->word[k].w, l->word[k].n);
             }
         }
-        if (op == FT_CMD_END || op == FT_CMD_RETURN) {
+        if (op == FT_CMD_END || op == FT_CMD_RETURN || op == c->set->end_op) {
             return;
         }
         if (op == FT_CMD_SUBROUTINE || op == FT_CMD_GOTO) {
@@ -528,6 +591,24 @@ void port_swap_it_cmd_scripts(const void* base, const void* const* slots, uint32
     }
     if (c.errors != 0) {
         port_log("it_script: %d problems converting %u scripts", c.errors, (unsigned) nslots);
+    }
+    free(c.seen.slots);
+}
+
+void port_swap_co_cmd_scripts(const void* base, const void* const* slots, uint32_t nslots, int item_scripts,
+                              void (*note_ptr)(void* user, const void* slot), void* user)
+{
+    ft_script_ctx c;
+    memset(&c, 0, sizeof c);
+    c.base = base;
+    c.set = item_scripts ? &co_it_cmd_set : &co_ft_cmd_set;
+    c.note_ptr = note_ptr;
+    c.note_user = user;
+    for (uint32_t i = 0; i < nslots; i++) {
+        convert_stream(&c, resolve_slot(&c, slots[i]), 0);
+    }
+    if (c.errors != 0) {
+        port_log("%s: %d problems converting %u scripts", c.set->tag, c.errors, (unsigned) nslots);
     }
     free(c.seen.slots);
 }

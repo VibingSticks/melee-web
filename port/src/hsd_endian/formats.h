@@ -75,6 +75,13 @@ void port_swap_ft_cmd_scripts(const void* base, void* entries_a, uint32_t count_
 void port_swap_it_cmd_scripts(const void* base, const void* const* slots, uint32_t nslots,
                               void (*note_ptr)(void* user, const void* slot), void* user);
 
+/* Colour-overlay scripts (lb_013B.c): `slots` are the script pointer words of
+ * Fighter_804D653C_t rows (the tables ftcolanim.c and itanimlist.c pass to
+ * lb_800144C8); `item_scripts` picks the item command set for opcodes 21+
+ * over the fighter one. Otherwise as port_swap_it_cmd_scripts. */
+void port_swap_co_cmd_scripts(const void* base, const void* const* slots, uint32_t nslots, int item_scripts,
+                              void (*note_ptr)(void* user, const void* slot), void* user);
+
 /* Per-costume texture-animation id lists (ftData::x8->x8.xC): an array of
  * `costumes` pointers, each to `count` u16 ids. Their lengths come from the
  * costume table in the code, so the schema walker cannot reach them. Call once

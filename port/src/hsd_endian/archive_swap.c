@@ -247,6 +247,39 @@ static void collect_yaku_scripts(const port_walk_ctx* c, const HSD_ArchivePublic
     }
 }
 
+/* Colour-overlay scripts (lb_013B.c): the rows of every Fighter_804D653C_t
+ * table the walk visited -- PlCo.dat's ftLoadCommonData colanim tables
+ * (ftcolanim.c) and ItCo.dat's itPublicData x14 (itanimlist.c). Each row's
+ * first word is its script. */
+static void collect_colanim_scripts(void* user, const uint8_t* obj, const port_type* t)
+{
+    script_slots* s = user;
+    if (strcmp(t->name, "Fighter_804D653C_t") != 0) {
+        return;
+    }
+    if (s->n == s->cap) {
+        uint32_t ncap = s->cap != 0 ? s->cap * 2 : 256;
+        const void** p = realloc((void*) s->slots, ncap * sizeof *p);
+        if (p == NULL) {
+            s->oom = 1;
+            return;
+        }
+        s->slots = p;
+        s->cap = ncap;
+    }
+    s->slots[s->n++] = obj; /* Fighter_804D653C_t::unk */
+}
+
+static int has_root(const HSD_ArchivePublicInfo* pub, uint32_t nb_public, const char* syms, const char* sym)
+{
+    for (uint32_t i = 0; i < nb_public; i++) {
+        if (strcmp(syms + pub[i].symbol, sym) == 0) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
 void port_archive_convert_scripts(port_walk_ctx* c, const HSD_ArchivePublicInfo* pub, uint32_t nb_public,
                                   const char* syms, const char* name)
 {
@@ -258,6 +291,18 @@ void port_archive_convert_scripts(port_walk_ctx* c, const HSD_ArchivePublicInfo*
         port_log("hsd_endian: out of memory collecting item scripts in %s", name);
     } else if (s.n != 0) {
         port_swap_it_cmd_scripts(c->base, s.slots, s.n, note_script_ptr, c);
+    }
+    free((void*) s.slots);
+
+    /* From opcode 21 a colour-overlay script runs the commands of whoever
+     * plays it: items for ItCo.dat's tables, fighters for PlCo.dat's. */
+    memset(&s, 0, sizeof s);
+    port_walk_visited_foreach(c, collect_colanim_scripts, &s);
+    if (s.oom) {
+        port_log("hsd_endian: out of memory collecting colour-overlay scripts in %s", name);
+    } else if (s.n != 0) {
+        int item_scripts = has_root(pub, nb_public, syms, "itPublicData");
+        port_swap_co_cmd_scripts(c->base, s.slots, s.n, item_scripts, note_script_ptr, c);
     }
     free((void*) s.slots);
 }

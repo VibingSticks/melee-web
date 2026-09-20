@@ -146,6 +146,17 @@ ftData:
   # part 0x8D, read as ((int*) fp->ft_data->x54)[n] in ftCo_09F7.c:75 with the
   # counter wrapping at 5.
   x54: { ptr_array: u32, len_const: 5 }
+  # Five part-animation slots (ftanim.c indexes them by ARRAY_SIZE(Fighter::x8B0)
+  # and the scripts' part_anim.unk1). Each row's x0 is the first part and x8 the
+  # AnimJoint per animation. Undescribed, x0 stayed big-endian, ftAnim_80070904
+  # started its part walk at 0x100 and read off the end of fp->parts: the
+  # HSD_JObjAddAnim trap a few seconds into the first Classic match.
+  # The slot count varies by character (thirteen have fewer than five), so the
+  # list runs while its words are pointers and stops at the next object.
+  x1C: { ptr_array: "ftData_x1C*", object_run: true }
+ftData_x1C:
+  # x4 is x2 part indices (bytes); x8 runs to the next object.
+  x8: { ptr_array: "HSD_AnimJoint*", object_run: true }
 FtSFX:
   # Declared int, but it sits between two FtSFXArr* and the relocation table
   # says pointer. ftCo_Damage.c:503 stores it in dmg.x190C exactly as x20 is

@@ -8,7 +8,9 @@
 #include "plstale.h"
 #include "types.h"
 #include <dolphin/mtx.h>
-#include <stddef.h>
+#ifdef TARGET_PC
+#include <stddef.h> /* offsetof, for PL_MAPPING_OVERLAY */
+#endif
 #include <melee/ft/fighter.h>
 #include <melee/ft/ft_0877.h>
 #include <melee/ft/ft_0D4D.h>

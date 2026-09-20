@@ -303,11 +303,10 @@ static void fn_8019F6EC(HSD_GObj* gobj)
     HSD_JObjAnimAll(lbl_804D66E8.x0);
 }
 
-static void fn_8019F810(void);
-
 #ifdef TARGET_PC
 /* The game installs this 0-argument function as a GObj proc, which the proc
  * runner calls with the GObj (see PORT_FNCAST). */
+static void fn_8019F810(void);
 static void fn_8019F810__as_hsd_gobjevent(HSD_GObj* gobj)
 {
     (void) gobj;

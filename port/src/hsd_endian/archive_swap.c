@@ -134,19 +134,36 @@ typedef struct {
     int fresh;
 } parse_note;
 
-#define PORT_PARSE_NOTES 64
+/* Notes are never retired (nothing says when a buffer is freed), so a slot is
+ * reused only when its memory is reused (below) or the ring wraps. The ring
+ * is sized so that wrapping over a live note -- a preloaded fighter archive
+ * that has not yet been handed back -- takes more distinct buffers than a
+ * scene change parses. */
+#define PORT_PARSE_NOTES 256
 static parse_note g_parse_notes[PORT_PARSE_NOTES];
 static unsigned g_parse_next;
 
 void port_archive_note_parse(const void* data, uint32_t size, int fresh)
 {
     const uint8_t* d = data;
+    if (d == NULL || size == 0) {
+        return;
+    }
     for (unsigned i = 0; i < PORT_PARSE_NOTES; i++) {
         parse_note* n = &g_parse_notes[i];
         if (n->data != NULL && d < n->data + n->size && n->data < d + size) {
-            n->data = d; /* the same buffer, or one reusing its memory: the newer parse rules */
+            n->data = d; /* the same buffer, or one reusing its memory */
             n->size = size;
-            n->fresh = fresh;
+            /* A converting parse leaves big-endian tables behind, whatever the
+             * memory held before (the file was read from the disc again, or the
+             * memory was reused). A parse that found the buffer native already
+             * did not touch the tables: whether they still await the game's own
+             * conversion is what the note says, so it is left alone. Resetting
+             * it here would make a preloaded archive that is parsed again
+             * before its first hand-back look converted when it is not. */
+            if (fresh) {
+                n->fresh = 1;
+            }
             return;
         }
     }

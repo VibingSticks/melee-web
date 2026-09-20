@@ -168,7 +168,11 @@ export function installWebGL2Fallback({ canvas, naga, force = false }) {
   const errorScopes = [];
   function raise(err) {
     if (errorScopes.length) { errorScopes[errorScopes.length - 1].error ??= err; return; }
-    if (device?.onuncapturederror) device.onuncapturederror(new g.GPUUncapturedErrorEvent(err));
+    // Always our own event class: where the browser has WebGPU, g.GPUUncapturedErrorEvent is the
+    // native one, whose constructor wants (type, { error: <native GPUError> }) and throws on
+    // anything else -- which turned every reported GL error into a TypeError from inside raise()
+    // and lost the message. The handler only reads .error and .error.message.
+    if (device?.onuncapturederror) device.onuncapturederror(new GPUUncapturedErrorEventImpl(err));
     else console.error('gpu-gl2:', err.message);
   }
 

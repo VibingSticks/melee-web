@@ -265,6 +265,17 @@ EMSCRIPTEN_KEEPALIVE int port_css_stage(void)
     return id;
 }
 
+/* Test hook: mark All-Star as unlocked in the loaded save (gmMainLib_8015EDE4
+ * sets the flag mn_80229938's menu check reads). The Regular Match menu will
+ * not put its cursor on a locked All-Star, so a fresh save cannot reach the
+ * mode at all; the browser tests call this once the main menu is up. */
+extern void gmMainLib_8015EDE4(void);
+
+EMSCRIPTEN_KEEPALIVE void port_unlock_allstar(void)
+{
+    gmMainLib_8015EDE4();
+}
+
 /* Say so whenever the game moves. A screen that never arrives, or one that
  * arrives and then stops, is the difference between "it went black" and a
  * scene number to go and look at. */

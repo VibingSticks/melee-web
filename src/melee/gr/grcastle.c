@@ -396,6 +396,25 @@ void grCastle_801CD610(Ground_GObj* gobj)
     grCastle_801CDFD8(gobj);
 }
 
+#ifdef TARGET_PC
+/* The game passes these 0-argument functions as the yaku item's 2-argument
+ * damage-dealt callback (it_2E6A_Logic117_DmgDealt calls yaku.x14 with the
+ * item and the ground); the call through a mismatched pointer is harmless on
+ * PowerPC and a trap in wasm (see PORT_FNCAST). */
+static void fn_801CE3A0__as_item_cb(Item_GObj* item_gobj, Ground* gp)
+{
+    (void) item_gobj;
+    (void) gp;
+    fn_801CE3A0();
+}
+static void fn_801CE9DC__as_item_cb(Item_GObj* item_gobj, Ground* gp)
+{
+    (void) item_gobj;
+    (void) gp;
+    fn_801CE9DC();
+}
+#endif
+
 void grCastle_801CD658(Ground_GObj* gobj)
 {
     Ground* gp = GET_GROUND(gobj);
@@ -814,7 +833,7 @@ void grCastle_801CE260(Ground_GObj* gobj)
     grMaterial_801C94D8(jobj);
     gp->u.arwing.xD0 = (u32) grMaterial_801C8CFC(
         0, 3, gp, Ground_801C3FA4((HSD_GObj*) gobj, 0),
-        (void (*)(Item_GObj*, Ground*)) fn_801CE3A0, NULL, NULL);
+        (void (*)(Item_GObj*, Ground*)) PORT_FNCAST(fn_801CE3A0__as_item_cb, fn_801CE3A0), NULL, NULL);
     it_80275414((Item_GObj*) gp->u.arwing.xD0);
     Ground_801C5440(gp, 0, 0x53025U);
 }
@@ -1017,7 +1036,7 @@ void grCastle_801CE8E8(Ground_GObj* gobj)
     }
     gp->u.arwing.xC4 = (u32) grMaterial_801C8CFC(
         0, 4, gp, Ground_801C3FA4((HSD_GObj*) gobj, 0),
-        (void (*)(Item_GObj*, Ground*)) fn_801CE9DC, NULL, NULL);
+        (void (*)(Item_GObj*, Ground*)) PORT_FNCAST(fn_801CE9DC__as_item_cb, fn_801CE9DC), NULL, NULL);
     it_80275414((Item_GObj*) gp->u.arwing.xC4);
     Ground_801C5440(gp, 0, 0x53024U);
 }

@@ -133,6 +133,29 @@ typedef struct StageCallbacks {
     /*  +4 */ HSD_GObjPredicate callback1;
     /*  +8 */ HSD_GObjEvent gobj_proc;
     /*  +C */ void (*callback3)(Ground_GObj*);
+#ifdef TARGET_PC
+    /* Every stage's callback table initialises this union through `flags`
+     * with a whole word (0xC0000000 marks the model whose lights and camera
+     * the stage uses) and ground.c reads it back through flags_b0..b2.
+     * CodeWarrior packs bitfields MSB-first in the big-endian word, so
+     * flags_b0 is bit 31; clang's LSB-first packing in a little-endian word
+     * would make it bit 0, which no table sets. This mirrors the PowerPC bit
+     * positions of the word. */
+    /* +10 */ union {
+        /* +10 */ u32 flags;
+        struct {
+            u8 flags_pad_lo[3];
+            /* +13:0 */ u8 flags_b7 : 1;
+            /* +13:1 */ u8 flags_b6 : 1;
+            /* +13:2 */ u8 flags_b5 : 1;
+            /* +13:3 */ u8 flags_b4 : 1;
+            /* +13:4 */ u8 flags_b3 : 1;
+            /* +13:5 */ u8 flags_b2 : 1;
+            /* +13:6 */ u8 flags_b1 : 1;
+            /* +13:7 */ u8 flags_b0 : 1;
+        };
+    };
+#else
     /* +10 */ union {
         /* +10 */ u32 flags;
         struct {
@@ -146,6 +169,7 @@ typedef struct StageCallbacks {
             /* +10:7 */ u8 flags_b7 : 1;
         };
     };
+#endif
 } StageCallbacks;
 
 struct GrJoint { ///< @todo rename fields

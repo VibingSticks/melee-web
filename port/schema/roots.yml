@@ -32,6 +32,12 @@
 - { prefix: grGroundParam, type: GroundParam }
 - { prefix: quake_model_set, type: DynamicModelDesc }
 - { prefix: map_plit, type: "LightList*", array: null_term }
+# grcastle.c / grrcruise.c: cloth dynamics for the flags and the ship's flag;
+# lb_80011710 reads `count` lb_00F9_UnkDesc1Inner rows behind `data`.
+- { prefix: dynamicsdata, type: DynamicsDesc }
+# grizumi.c / grpstadium.c: a texture descriptor the stage rewrites at run time
+# (the `_image` rule does not match: the symbol ends in `_desc`).
+- { suffix: _image_desc, type: HSD_ImageDesc }
 - { prefix: itemdata, type: "port_GroundItemData*", array: null_term }
 - { prefix: map_ptcl, type: opaque }        # particle banks: converted in particle.c
 - { prefix: map_texg, type: opaque }
@@ -54,6 +60,8 @@
 - { prefix: ftDataSamus, type: ftData, field_types: { ext_attr: ftSs_DatAttrs } }
 - { prefix: ftDataYoshi, type: ftData, field_types: { ext_attr: ftYs_DatAttrs } }
 - { prefix: ftDataZelda, type: ftData, field_types: { ext_attr: ftZelda_DatAttrs } }
+# ftPk_Init_OnLoad indexes the item article list with these attributes' item kinds.
+- { prefix: ftDataPikachu, type: ftData, field_types: { ext_attr: ftPikachuAttributes } }
 - { suffix: _figatree, type: FigaTree }
 - { prefix: lbBgFlashColAnimData, type: opaque }   # {void*, u8, u8} rows; pointers already relocated
 # HUD model lists (ifstock, if_2FD9, iftime, ifmagnify).

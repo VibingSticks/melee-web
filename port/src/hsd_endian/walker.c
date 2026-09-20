@@ -90,6 +90,25 @@ void port_walk_ctx_free(port_walk_ctx* c)
     free(c->targets);
     c->targets = NULL;
     c->ntargets = 0;
+    free(c->object_starts);
+    c->object_starts = NULL;
+    c->n_object_starts = 0;
+}
+
+int port_walk_ctx_set_object_starts(port_walk_ctx* c, const uint32_t* offsets, uint32_t n)
+{
+    uint32_t* copy = malloc((n != 0 ? n : 1) * sizeof *copy);
+    if (copy == NULL) {
+        return -1;
+    }
+    memcpy(copy, offsets, n * sizeof *copy);
+    free(c->object_starts);
+    c->object_starts = copy;
+    c->n_object_starts = n;
+    free(c->targets); /* rebuilt with the new starts on the next query */
+    c->targets = NULL;
+    c->ntargets = 0;
+    return 0;
 }
 
 /* --- helpers --- */
@@ -116,12 +135,13 @@ static int cmp_u32(const void* a, const void* b)
 }
 
 /* Is `off` the start of an object: the target of some relocated pointer in
- * the archive? The sorted target list is built the first time it is needed,
- * from the (already native) values in the relocation slots. */
+ * the archive, or a root symbol (port_walk_ctx_set_object_starts)? The sorted
+ * list is built the first time it is needed, from the (already native) values
+ * in the relocation slots. */
 static int is_target(port_walk_ctx* c, uint32_t off)
 {
     if (c->targets == NULL) {
-        c->targets = malloc((c->reloc_count + 1) * sizeof *c->targets);
+        c->targets = malloc((c->reloc_count + c->n_object_starts + 1) * sizeof *c->targets);
         if (c->targets == NULL) {
             return 0;
         }
@@ -132,6 +152,11 @@ static int is_target(port_walk_ctx* c, uint32_t off)
             t = v - (uint32_t) (uintptr_t) c->base;
             if (v != 0 && t < c->size) {
                 c->targets[c->ntargets++] = t;
+            }
+        }
+        for (uint32_t i = 0; i < c->n_object_starts; i++) {
+            if (c->object_starts[i] < c->size) {
+                c->targets[c->ntargets++] = c->object_starts[i];
             }
         }
         qsort(c->targets, c->ntargets, sizeof *c->targets, cmp_u32);

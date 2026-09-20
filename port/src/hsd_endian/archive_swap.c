@@ -117,6 +117,59 @@ int port_archive_fixup(uint8_t* f, uint32_t n, port_archive_hdr* h, uint32_t** r
     return already_native;
 }
 
+/* --- which parses converted their buffer ---
+ * The game converts a few tables itself on its load path (the fighter
+ * animation tables and scripts in ftdata.c) because their lengths live in
+ * the code. An archive handed back by the preload cache is parsed again over
+ * the same, already native, buffer; the fixup reports that and the root walk
+ * is skipped, and those tables must be skipped too, or they swap straight
+ * back to big-endian. Each parse records here whether it converted its
+ * buffer; the game asks with a pointer into the data, and the answer is
+ * consumed: the cache can hand the same parsed archive back without parsing
+ * it again (the fighters the intro splash showed are the match's), so only
+ * the first load after a converting parse gets a yes. */
+typedef struct {
+    const uint8_t* data;
+    uint32_t size;
+    int fresh;
+} parse_note;
+
+#define PORT_PARSE_NOTES 64
+static parse_note g_parse_notes[PORT_PARSE_NOTES];
+static unsigned g_parse_next;
+
+void port_archive_note_parse(const void* data, uint32_t size, int fresh)
+{
+    const uint8_t* d = data;
+    for (unsigned i = 0; i < PORT_PARSE_NOTES; i++) {
+        parse_note* n = &g_parse_notes[i];
+        if (n->data != NULL && d < n->data + n->size && n->data < d + size) {
+            n->data = d; /* the same buffer, or one reusing its memory: the newer parse rules */
+            n->size = size;
+            n->fresh = fresh;
+            return;
+        }
+    }
+    parse_note* n = &g_parse_notes[g_parse_next++ % PORT_PARSE_NOTES];
+    n->data = d;
+    n->size = size;
+    n->fresh = fresh;
+}
+
+int port_archive_take_fresh(const void* p)
+{
+    const uint8_t* q = p;
+    for (unsigned i = 0; i < PORT_PARSE_NOTES; i++) {
+        parse_note* n = &g_parse_notes[i];
+        if (n->data != NULL && q >= n->data && q < n->data + n->size) {
+            int fresh = n->fresh;
+            n->fresh = 0; /* the caller converts its tables now; a later load of this buffer must not */
+            return fresh;
+        }
+    }
+    return 1; /* not a parsed archive we know of: convert, as before */
+}
+
 /* --- step 2: root dispatch (plan Task 14) --- */
 #include "formats.h"
 #include "walker.h"
@@ -158,11 +211,49 @@ static void note_script_ptr(void* user, const void* slot)
     port_walk_mark_slot(user, slot);
 }
 
-void port_archive_convert_scripts(port_walk_ctx* c, const char* name)
+/* ground.c (Ground_801C0800) stores the stage's "ALDYakuAll" entries, from
+ * index 1 to the first NULL, as the scripts of the Random-Pokemon article's
+ * state rows: they are item scripts like the rows' own, in a table the walk
+ * cannot describe (the root stays opaque). */
+static void collect_yaku_scripts(const port_walk_ctx* c, const HSD_ArchivePublicInfo* pub, uint32_t nb_public,
+                                 const char* syms, script_slots* s)
+{
+    for (uint32_t i = 0; i < nb_public; i++) {
+        if (strcmp(syms + pub[i].symbol, "ALDYakuAll") != 0) {
+            continue;
+        }
+        const uint8_t* list = c->base + pub[i].offset;
+        for (uint32_t k = 1;; k++) {
+            uint32_t v;
+            if (pub[i].offset + 4u * k + 4u > c->size) {
+                break;
+            }
+            memcpy(&v, list + 4u * k, 4);
+            if (v == 0) {
+                break;
+            }
+            if (s->n == s->cap) {
+                uint32_t ncap = s->cap != 0 ? s->cap * 2 : 256;
+                const void** p = realloc((void*) s->slots, ncap * sizeof *p);
+                if (p == NULL) {
+                    s->oom = 1;
+                    return;
+                }
+                s->slots = p;
+                s->cap = ncap;
+            }
+            s->slots[s->n++] = list + 4u * k;
+        }
+    }
+}
+
+void port_archive_convert_scripts(port_walk_ctx* c, const HSD_ArchivePublicInfo* pub, uint32_t nb_public,
+                                  const char* syms, const char* name)
 {
     script_slots s;
     memset(&s, 0, sizeof s);
     port_walk_visited_foreach(c, collect_item_scripts, &s);
+    collect_yaku_scripts(c, pub, nb_public, syms, &s);
     if (s.oom) {
         port_log("hsd_endian: out of memory collecting item scripts in %s", name);
     } else if (s.n != 0) {
@@ -214,6 +305,24 @@ int port_archive_swap_roots(HSD_Archive* ar, const uint32_t* reloc_set, uint32_t
         return -1;
     }
     double t0 = PORT_NOW_MS();
+    {
+        /* The roots are object starts too: an object run must not cross into one. */
+        uint32_t n = ar->header.nb_public;
+        uint32_t* starts = malloc((n != 0 ? n : 1) * sizeof *starts);
+        int set = -1;
+        if (starts != NULL) {
+            for (uint32_t i = 0; i < n; i++) {
+                starts[i] = ar->public_info[i].offset;
+            }
+            set = port_walk_ctx_set_object_starts(&c, starts, n);
+        }
+        free(starts);
+        if (set != 0) {
+            port_log("hsd_endian: out of memory converting %s", name);
+            port_walk_ctx_free(&c);
+            return -1;
+        }
+    }
     for (uint32_t i = 0; i < ar->header.nb_public; i++) {
         const char* sym = ar->symbols + ar->public_info[i].symbol;
         const port_root* root = find_root(sym);
@@ -234,7 +343,7 @@ int port_archive_swap_roots(HSD_Archive* ar, const uint32_t* reloc_set, uint32_t
             }
         }
     }
-    port_archive_convert_scripts(&c, name);
+    port_archive_convert_scripts(&c, ar->public_info, ar->header.nb_public, ar->symbols, name);
     port_walk_ctx_free(&c);
     /* This runs synchronously inside whatever frame asked for the archive, so
      * a large one is a visible pause rather than a slow average. */

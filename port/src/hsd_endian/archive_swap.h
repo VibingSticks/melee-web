@@ -32,13 +32,23 @@ int port_archive_fixup(uint8_t* file, uint32_t file_size, port_archive_hdr* hdr,
  * Implemented by plan Task 14; until then a no-op returning 0. */
 int port_archive_swap_roots(HSD_Archive* archive, const uint32_t* reloc_set, uint32_t reloc_count);
 
+/* Records whether the parse of the archive whose data starts at `data`
+ * converted it (`fresh`), or found it native already (a buffer the preload
+ * cache handed back). port_archive_take_fresh answers for a pointer into some
+ * archive's data: 1 the first time it is asked after a converting parse, 0
+ * after that (the same parsed archive handed back by the cache), so a table
+ * the game converts itself on its load path is converted exactly once. */
+void port_archive_note_parse(const void* data, uint32_t size, int fresh);
+int port_archive_take_fresh(const void* p);
+
 /* The bytecode the walk reached but cannot describe (item scripts behind the
  * ItemStateDesc rows it visited): converted after the roots, with the pointer
  * words it leaves in place recorded in `ctx` as reached. port_archive_swap_roots
  * does this itself; a caller that drives port_walk directly (the coverage tool)
  * calls it before reading the visited set. */
 struct port_walk_ctx_s;
-void port_archive_convert_scripts(struct port_walk_ctx_s* ctx, const char* archive_name);
+void port_archive_convert_scripts(struct port_walk_ctx_s* ctx, const HSD_ArchivePublicInfo* pub,
+                                  uint32_t nb_public, const char* syms, const char* archive_name);
 
 /* Replacement for the tail of HSD_ArchiveLocateExtern: the in-data chain of
  * reference sites is big-endian and not covered by the relocation table. */

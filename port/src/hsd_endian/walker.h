@@ -10,7 +10,8 @@
  *    landing on a relocation slot is an error;
  *  - pointers are followed only when they point inside the archive data;
  *  - F_OPAQUE fields are skipped;
- *  - LEN_OBJECT_RUN arrays end where the next object the archive points at begins;
+ *  - LEN_OBJECT_RUN arrays end where the next object begins: one a relocated pointer
+ *    targets, or a root symbol names (port_walk_ctx_set_object_starts);
  *  - F_BITS repacks a storage unit from MSB-first to LSB-first field order. */
 #ifndef PORT_HSD_ENDIAN_WALKER_H
 #define PORT_HSD_ENDIAN_WALKER_H
@@ -30,6 +31,8 @@ typedef struct port_walk_ctx_s {
     const char* error; /* description of the first strict-mode violation */
     uint32_t* targets;           /* sorted offsets the relocated pointers point at (built on first use) */
     uint32_t ntargets;
+    uint32_t* object_starts;     /* more object starts: the root symbols (port_walk_ctx_set_object_starts) */
+    uint32_t n_object_starts;
     const port_type* cur_type;   /* diagnostics: where the walker is */
     const port_field* cur_field;
     unsigned nlogged;            /* violations logged so far (capped) */
@@ -38,6 +41,13 @@ typedef struct port_walk_ctx_s {
 int port_walk_ctx_init(port_walk_ctx* ctx, const uint8_t* base, uint32_t size, const uint32_t* reloc_set,
                        uint32_t reloc_count, int strict);
 void port_walk_ctx_free(port_walk_ctx* ctx);
+
+/* Names more offsets where objects begin: the archive's public (root) symbols,
+ * which no relocated pointer need point at. An object run (LEN_OBJECT_RUN)
+ * ends at one of them as it does at a pointer target -- seven stage archives
+ * pack map_head right after the table it sizes this way. Copies `offsets`;
+ * call before the first walk. Returns -1 when out of memory. */
+int port_walk_ctx_set_object_starts(port_walk_ctx* ctx, const uint32_t* offsets, uint32_t n);
 
 /* Convert `obj` (of type `type`) and everything reachable from it.
  * Returns 0, or -1 on a strict-mode violation (ctx->error says which). */

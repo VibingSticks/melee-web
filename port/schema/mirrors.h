@@ -56,11 +56,12 @@ typedef struct {
 } port_EventInitLevel;
 
 /* grdatfiles.c: the "itemdata" stage root is a NULL-terminated array of
- * pointers to {count, Article*} pairs (StageInfo::itemdata's element type,
- * which is an anonymous struct in the header). */
+ * pointers to {kind, Article*} pairs (StageInfo::itemdata's element type,
+ * which is an anonymous struct in the header); ground.c registers each
+ * Article under its item kind with it_8026B40C. */
 typedef struct {
-    s32 count;
-    void* articles;
+    s32 kind;
+    Article* article;
 } port_GroundItemData;
 
 /* player.c: "plLoadCommonData" is a pointer to the common player parameters. */
@@ -74,6 +75,20 @@ typedef struct {
     port_StageJointPair* pairs;
     s32 pair_count;
 } port_StageJointMap;
+
+/* ground.c (find_light_override): UnkStageDat::unk18 is a table of light
+ * override entries, one per light descriptor the stage overrides. The count
+ * beside it (unk1C) is twice the row count in every stage archive on the disc
+ * -- the PowerPC scan over-reads harmlessly into the tables packed after it --
+ * so the rows are described as running to the next object instead. */
+typedef struct {
+    HSD_LightDesc* desc;
+    u8 a : 1;
+    u8 b : 1;
+    u8 c : 1;
+    u8 _ : 5;
+    u8 _pad[3];
+} port_LightOverrideEntry;
 
 /* fighter.c (Fighter_LoadCommonData): "ftLoadCommonData" is an array of 23
  * pointers into PlCo.dat, copied one by one into the globals named beside each

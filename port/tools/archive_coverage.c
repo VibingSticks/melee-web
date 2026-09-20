@@ -89,6 +89,16 @@ static void check_archive(const char* name, uint8_t* file, uint32_t size)
     const char* syms = (const char*) (pub + hdr.nb_public + hdr.nb_extern);
     port_walk_ctx c;
     port_walk_ctx_init(&c, data, hdr.data_size, rs, rn, g_strict);
+    {
+        uint32_t* starts = malloc((hdr.nb_public + 1) * sizeof *starts);
+        for (uint32_t i = 0; starts != NULL && i < hdr.nb_public; i++) {
+            starts[i] = pub[i].offset;
+        }
+        if (starts != NULL) {
+            port_walk_ctx_set_object_starts(&c, starts, hdr.nb_public);
+        }
+        free(starts);
+    }
     int unknown = 0, violations = 0;
     for (uint32_t i = 0; i < hdr.nb_public; i++) {
         const char* sym = syms + pub[i].symbol;
@@ -107,7 +117,7 @@ static void check_archive(const char* name, uint8_t* file, uint32_t size)
     }
     /* coverage: relocated slots not inside any visited object */
     g_nvis = 0;
-    port_archive_convert_scripts(&c, name);
+    port_archive_convert_scripts(&c, pub, hdr.nb_public, syms, name);
     port_walk_visited_foreach(&c, collect, NULL);
     qsort(g_vis, g_nvis, sizeof *g_vis, cmp_vis);
     int unreached = 0;

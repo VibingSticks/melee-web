@@ -137,6 +137,7 @@
 #include <sysdolphin/baselib/objalloc.h>
 
 #ifdef TARGET_PC
+#include <hsd_endian/archive_swap.h>
 #include <hsd_endian/formats.h>
 #endif
 
@@ -1589,8 +1590,10 @@ void ftData_8008572C(FighterKind kind)
 #ifdef TARGET_PC
         /* Convert on the load path, not once per fighter kind: ft_800852B0
          * clears gFtDataList between scenes, so a second match re-reads the
-         * archive from the disc and that copy needs converting too. */
-        if (gFtDataList[kind] != NULL) {
+         * archive from the disc and that copy needs converting too. Not when
+         * the preload cache handed the same, already converted, archive back
+         * (the fighters the intro splash showed): swapping again would undo it. */
+        if (gFtDataList[kind] != NULL && port_archive_take_fresh(gFtDataList[kind])) {
             ftData* fd = gFtDataList[kind];
             u32 costumes = CostumeListsForeachCharacter[kind].numCostumes;
             port_swap_ft_costume_tobjs(fd->x8, costumes);

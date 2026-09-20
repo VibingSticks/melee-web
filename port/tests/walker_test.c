@@ -168,6 +168,33 @@ static void run(void)
         /* list entry 1 has no type: the leaf at 32 was converted through row 0 only */
     }
 
+    /* An object run also ends at a root symbol's offset: the object there is
+     * named by the public table, not by any pointer, and may well look like
+     * one more row (its first word is a count of zero here). */
+    {
+        static const port_field row_fields[] = { { F_PTR, 0, &Leaf_t }, { F_U32, 4 } };
+        static const port_type Row_t = { "Row", 8, row_fields, 2 };
+        static const port_field hdr_fields[] = { { F_PTR_ARRAY, 0, &Row_t, LEN_OBJECT_RUN, 0 } };
+        static const port_type Hdr_t = { "Hdr", 4, hdr_fields, 1 };
+        uint8_t o[32];
+        memset(o, 0, sizeof o);
+        native_ptr(o + 0, o + 8);
+        native_ptr(o + 8, NULL);  be32(o + 12, 0x01020304u);  /* row 0 */
+        native_ptr(o + 16, NULL); be32(o + 20, 0x05060708u);  /* row 1 */
+        be32(o + 24, 0);          be32(o + 28, 0x0A0B0C0Du);  /* a root object: { count 0, word } */
+        uint32_t orelocs[] = { 0, 8, 16 };
+        uint32_t starts[] = { 24 };
+        CHECK_EQ_U32(port_walk_ctx_init(&c, o, sizeof o, orelocs, 3, 1), 0);
+        CHECK_EQ_U32(port_walk_ctx_set_object_starts(&c, starts, 1), 0);
+        CHECK_EQ_U32(port_walk(&c, &Hdr_t, o), 0);
+        CHECK(c.error == NULL);
+        uint32_t v;
+        memcpy(&v, o + 12, 4); CHECK_EQ_U32(v, 0x01020304u);
+        memcpy(&v, o + 20, 4); CHECK_EQ_U32(v, 0x05060708u);
+        CHECK_EQ_U32(o[28], 0x0A);                              /* the root's word was not taken as a third row */
+        port_walk_ctx_free(&c);
+    }
+
     /* bitfield repacking: 16-bit unit with padding, and a full 8-bit unit */
     uint8_t w16[2];
     be16(w16, (0x3u << 14) | (0x2Au << 8) | 0x00FF); /* fields 2,6 then 8 unused bits */

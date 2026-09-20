@@ -75,6 +75,8 @@ UnkStageDat:
   unk0:  { ptr_array: port_StageJointMap, len_field: unk4 }
   unk8:  { ptr_array: UnkStageDat_x8_t, len_field: unkC }
   unk10: { ptr_array: "HSD_Spline*", len_field: unk14 }
+  # unk1C is 2x the row count on disc (see mirrors.h); run to the next object
+  unk18: { ptr_array: port_LightOverrideEntry, object_run: true }
   unk20: { ptr_array: GroundShadowEntry, len_field: unk24 }
   unk28: { ptr_array: "UnkStageDatInternal*", len_field: unk2C }
 UnkStageDat_x8_t:
@@ -88,8 +90,16 @@ MapCollData:
   verts:  { ptr_array: Vec2, len_field: vert_count }
   lines:  { ptr_array: MapLine, len_field: line_count }
   joints: { ptr_array: MapJoint, len_field: joint_count }
+  # The archive object is 0x2C bytes: in 54 of the 57 stage files the next
+  # object starts at +0x2C (in GrGb/GrSt/GrZe that is map_ptcl, whose version
+  # word this field would swap). Nothing reads x2C; leave the bytes alone.
+  x2C: { opaque: true }
 port_GroundItemData:
-  articles: { opaque: true }   # Article descriptors: not typed yet
+  # ground.c registers each entry's one Article under its item kind
+  # (it_8026B40C(article, kind)); the state rows carry the item scripts,
+  # converted after the walk. x4_specialAttributes stays an unfollowed
+  # pointer: its type is per stage.
+  article: { ptr: Article }
 
 # --- player, item and effect tables ------------------------------------------
 port_PlLoadCommonDataRef:
@@ -114,6 +124,10 @@ Fighter_804D6540_t:
 Fighter_ShakeTable_t:
   x0: { ptr_array: Vec2, len_field: x4 }
 ftData:
+  # ft_8007C630 reads ARRAY_SIZE(Fighter::x1614) = 2 rows; every character's
+  # archive holds two. With one row converted, Yoshi's and Popo's second row
+  # kept a big-endian part index and indexed fp->parts out of bounds.
+  x38: { ptr_array: ftData_x38, len_const: 2 }
   # These animation tables are converted where the game reads them
   # (ftData_80085A14): their length is a table in the code, not in the archive.
   xC:  { ptr: opaque }
@@ -155,6 +169,11 @@ port_EfDataTable:
 # that block big-endian: the code reads it through a run-time struct, the sizes
 # disagree, or nothing reads it.
 it_804D6D20_t:
+  # x8: monsters and Poke Ball entries, indexed by kind - It_Kind_Kuriboh up to
+  # It_PKind_Random (118 slots, mostly NULL); xC: the 47 Pokemon. Their special
+  # attribute blocks are not typed yet, so the Article's x4 is left alone.
+  x8: { ptr_array: "Article*", len_const: 118 }
+  xC: { ptr_array: "Article*", len_const: 47 }
   x4:
     ptr_list: Article
     len_const: 43

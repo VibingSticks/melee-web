@@ -89,6 +89,7 @@ s32 HSD_ArchiveParse(HSD_Archive* archive, u8* src, size_t file_size)
     if (port_converted == 0) {
         port_archive_swap_roots(archive, port_reloc_set, port_reloc_count);
     }
+    port_archive_note_parse(archive->data, archive->header.data_size, port_converted == 0);
     free(port_reloc_set);
 #else
     Locate(archive);

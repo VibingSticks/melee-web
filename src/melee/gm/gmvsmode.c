@@ -165,6 +165,15 @@ void onEnterDebugVs(GameModeState* state)
 
     gm_SetupRulesDefaults(&start->rules);
     start->rules.stkind = St_Kind_Last;
+#ifdef TARGET_PC
+    /* A test can ask for one particular stage (port/src/game_hooks/debug_vs.c). */
+    {
+        extern int port_debug_vs_stkind;
+        if (port_debug_vs_stkind >= 0) {
+            start->rules.stkind = port_debug_vs_stkind;
+        }
+    }
+#endif
     start->rules.item_freq = -1;
     start->rules.sd_penalty = -1;
     start->rules.match_kind = MatchKind_Time;

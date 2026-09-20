@@ -322,6 +322,18 @@ u8 runGameMode(u8 mode_kind)
     if (!gmMainLib_8046B0F0.resetting && mode->on_unload != NULL) {
         mode->on_unload();
     }
+#ifdef TARGET_PC
+    /* A test asked for the debug VS mode (port/src/game_hooks/debug_vs.c).
+     * Every mode's exit handler names its own successor, so the request is
+     * honoured here, after the exiting mode has had its say. */
+    {
+        extern int port_debug_vs_requested;
+        if (port_debug_vs_requested) {
+            port_debug_vs_requested = 0;
+            return GM_DEBUG_VS;
+        }
+    }
+#endif
     return state_machine.routing.pending_mode;
 }
 

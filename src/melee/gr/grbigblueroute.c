@@ -564,6 +564,19 @@ s32 grBigBlueRoute_8020C530(Ground_GObj* arg0)
 #define GRBB_ROUTE_ENTRY_AT(car_info, offset)                                 \
     ((RouteEntry*) &((union grBigBlueRoute_RouteStorage*) (car_info))         \
          ->bytes[offset])
+#ifdef TARGET_PC
+/* The game hands this 0-argument function to grMaterial_801C8CFC as the
+ * yaku item's damage-dealt callback, which is called with the item and the
+ * ground (see PORT_FNCAST). */
+void fn_8020DEAC(void);
+static void fn_8020DEAC__as_item_cb(Item_GObj* item_gobj, Ground* gp)
+{
+    (void) item_gobj;
+    (void) gp;
+    fn_8020DEAC();
+}
+#endif
+
 static inline s32 grBigBlueRoute_Randi(s32 range)
 {
     return HSD_Randi(range);
@@ -679,7 +692,7 @@ static inline void grBigBlueRoute_SpawnRoute(s32 route_idx, Ground* gp,
                     {
                         Item_GObj* item = grMaterial_801C8CFC(
                             0, 1, gp, jobj,
-                            (void (*)(Item_GObj*, Ground*)) fn_8020DEAC, NULL,
+                            PORT_FNCAST(fn_8020DEAC__as_item_cb, (void (*)(Item_GObj*, Ground*)) fn_8020DEAC), NULL,
                             NULL);
                         re = GRBB_ROUTE_ENTRY_AT(gp->u.car.car_info, offset);
                         re->x28 = (void*) item;

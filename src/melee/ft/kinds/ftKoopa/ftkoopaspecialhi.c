@@ -17,11 +17,21 @@
 #include <melee/ft/kinds/ftCommon/ftCo_Fall.h>
 #include <melee/ft/kinds/ftCommon/ftCo_FallSpecial.h>
 
+#ifdef TARGET_PC
+/* The game installs this 0-argument function as the fighter's take-damage
+ * and death callbacks, which are called with the GObj (see PORT_FNCAST). */
+static void ftKp_Init_80132B38__as_hsd_gobjevent(HSD_GObj* gobj)
+{
+    (void) gobj;
+    ftKp_Init_80132B38();
+}
+#endif
+
 static inline void ftKp_SpecialHi_Enter_inline(Fighter_GObj* gobj)
 {
     Fighter* fp = GET_FIGHTER(gobj);
-    fp->take_dmg_cb = (void (*)(HSD_GObj*)) ftKp_Init_80132B38;
-    fp->death2_cb = (void (*)(HSD_GObj*)) ftKp_Init_80132B38;
+    fp->take_dmg_cb = PORT_FNCAST(ftKp_Init_80132B38__as_hsd_gobjevent, (void (*)(HSD_GObj*)) ftKp_Init_80132B38);
+    fp->death2_cb = PORT_FNCAST(ftKp_Init_80132B38__as_hsd_gobjevent, (void (*)(HSD_GObj*)) ftKp_Init_80132B38);
 }
 
 void ftKp_SpecialHi_Enter(Fighter_GObj* gobj)

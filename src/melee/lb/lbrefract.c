@@ -129,6 +129,18 @@ static void fn_80021F70(lbRefract_CallbackData* data, u32 row, u32 col, u8 r,
     base[offset] = (b / 8) | ((g * 8 & 0x7E0 & ~0xF800) | ((r << 8) & 0xF800));
 }
 
+#ifdef TARGET_PC
+/* lbRefract_WriteTexCoord calls callback0 with seven arguments; this one
+ * declares six, so on the GameCube the last (the x coordinate) was simply
+ * ignored. In wasm the call would trap on the signature (see PORT_FNCAST). */
+static void fn_80021F70__as_write_cb(lbRefract_CallbackData* data, s32 row, s32 col, s32 arg3, s32 arg4,
+                                     u32 arg5, u32 arg6)
+{
+    (void) arg6;
+    fn_80021F70(data, (u32) row, (u32) col, (u8) arg3, (u8) arg4, arg5);
+}
+#endif
+
 static void fn_80021FB4(lbRefract_CallbackData* data, u32 row, u32 col,
                         u8 arg6, u8 arg7, u8 arg8, u8 arg9)
 {
@@ -269,7 +281,7 @@ static int lbRefract_8002219C(lbRefract_CallbackData* data, void* buffer,
         data->row_stride = (width * 8) & 0xFFFFFFE0;
         break;
     case GX_TF_RGB565:
-        data->callback0 = fn_80021F70;
+        data->callback0 = PORT_FNCAST(fn_80021F70__as_write_cb, fn_80021F70);
         data->callback1 = fn_8002206C;
         data->row_stride = (width * 8) & 0xFFFFFFE0;
         break;

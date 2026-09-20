@@ -49,6 +49,18 @@ struct it_MObjInfo it_mobj = {
     { HSD_TE_CNST, NULL, NULL, HSD_TE_RGB, HSD_TE_U8, 0xFF, 0xFF },
 };
 
+#ifdef TARGET_PC
+/* The game installs this 3-argument function as the MObj class's setup
+ * method, which HSD_DObjDisp calls with (mobj, rendermode); the third
+ * argument is unused (same as ftmaterial.c's ftMObj.setup). A pointer of
+ * another arity is harmless on PowerPC and a trap in wasm (see PORT_FNCAST):
+ * the first item drawn in a match trapped on the signature. */
+static void fn_80277D8C__as_setup(HSD_MObj* mobj, u32 rendermode)
+{
+    fn_80277D8C(mobj, rendermode, 0);
+}
+#endif
+
 void it_80277D08(void)
 {
     hsdInitClassInfo(HSD_CLASS_INFO(&it_mobj), HSD_CLASS_INFO(&hsdMObj),
@@ -56,7 +68,7 @@ void it_80277D08(void)
                      sizeof(HSD_MObjInfo), sizeof(HSD_MObj));
     it_mobj.parent.release = hsdMObj.parent.release;
     it_mobj.parent.amnesia = hsdMObj.parent.amnesia;
-    it_mobj.setup = (it_MObjSetupFunc) fn_80277D8C;
+    it_mobj.setup = (it_MObjSetupFunc) PORT_FNCAST(fn_80277D8C__as_setup, fn_80277D8C);
     it_mobj.load = hsdMObj.load;
     it_mobj.make_texp = hsdMObj.make_texp;
 }

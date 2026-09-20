@@ -268,6 +268,16 @@ void fn_8017C71C(void)
     ftLib_80087508(Ft_Kind_CrezyH, 0);
 }
 
+#ifdef TARGET_PC
+/* The game installs this 0-argument function as rules.on_match_end, which
+ * gmvs.c calls with the match outcome (see PORT_FNCAST). */
+static void fn_8017C7A0__as_on_match_end(u8 outcome)
+{
+    (void) outcome;
+    fn_8017C7A0();
+}
+#endif
+
 void fn_8017C7A0(void)
 {
     lbBgFlash_8002063C(0x30);
@@ -625,7 +635,7 @@ void gm_8017CE34(StartMeleeData* arg0, Unk1PData* arg1, s8* arg2, u8 arg3,
             arg0->rules.x9 = 2;
             arg0->rules.x7 = 9;
             arg0->rules.x4_4 = 0;
-            arg0->rules.on_match_end = (void (*)(u8)) fn_8017C7A0;
+            arg0->rules.on_match_end = PORT_FNCAST(fn_8017C7A0__as_on_match_end, (void (*)(u8)) fn_8017C7A0);
             arg0->rules.xD = 0x30;
             break;
         }

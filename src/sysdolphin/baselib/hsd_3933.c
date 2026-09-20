@@ -96,9 +96,20 @@ s32 hsd_80393328(void)
     return 1;
 }
 
+#ifdef TARGET_PC
+/* The game puts this 0-argument function in a table of 2-argument command
+ * handlers, called with the request and the response (see PORT_FNCAST). */
+static void hsd_80393840__as_cmd_handler(void* request, void* response)
+{
+    (void) request;
+    (void) response;
+    hsd_80393840();
+}
+#endif
+
 static void (*lbl_8040A93C[32])(void*, void*) = {
     (void (*)(void*, void*)) hsd_80393440,
-    (void (*)(void*, void*)) hsd_80393840,
+    PORT_FNCAST(hsd_80393840__as_cmd_handler, (void (*)(void*, void*)) hsd_80393840),
 };
 
 extern int hsd_804D78A0;

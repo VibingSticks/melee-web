@@ -734,10 +734,12 @@ void fn_8024B8B4(mnSoundTest_GObj* arg0, f32 farg0)
 }
 
 #ifdef TARGET_PC
-/* The game calls this 2-argument function through a void (0-argument) pointer (see PORT_FNCAST). */
-static void fn_8024B8B4__as_event(void)
+/* Installed as a GObj proc, which the proc runner calls with the GObj. The
+ * f32 the game's function declares was whatever f1 held on the GameCube; it
+ * is overwritten before it is read (see PORT_FNCAST). */
+static void fn_8024B8B4__as_hsd_gobjevent(mnSoundTest_GObj* gobj)
 {
-    fn_8024B8B4((mnSoundTest_GObj*) 0, (f32) 0);
+    fn_8024B8B4(gobj, 0.0f);
 }
 #endif
 
@@ -785,7 +787,7 @@ void fn_8024BAF0(mnSoundTest_GObj* arg0)
         if (temp_f31 == vec_0.end_frame) {
             HSD_GObjProc_RemoveProc(HSD_GObj_CurrentInvokedProc);
             proc2 = HSD_GObj_SetupProc(
-                arg0, (void (*)(mnSoundTest_GObj*))PORT_FNCAST(fn_8024B8B4__as_event, (Event) fn_8024B8B4), 0U);
+                arg0, (void (*)(mnSoundTest_GObj*))PORT_FNCAST(fn_8024B8B4__as_hsd_gobjevent, (Event) fn_8024B8B4), 0U);
             proc2->flags_3 = HSD_GObj_804D783C;
             mnSoundTest_8024A958(arg0);
             mnSoundTest_804D6C44 = 0;

@@ -600,10 +600,11 @@ void fn_801B5AA8(int arg0)
 }
 
 #ifdef TARGET_PC
-/* The game calls this 1-argument function through a void (0-argument) pointer (see PORT_FNCAST). */
-static void fn_801B5AA8__as_event(void)
+/* Installed as rules.on_match_end, void (*)(u8 outcome), which gmvs.c calls
+ * with the match result (see PORT_FNCAST). */
+static void fn_801B5AA8__as_on_match_end(u8 outcome)
 {
-    fn_801B5AA8((int) 0);
+    fn_801B5AA8(outcome);
 }
 #endif
 
@@ -687,7 +688,7 @@ void gm_801B5ACC(GameModeState* arg0)
         gm_801B5ACC_inline1(&gm_803DEC4C[rest_round]);
 
         gm_801B5324(allstar, (s32) rest_round + 1);
-        data->rules.on_match_end = (void (*)(u8))PORT_FNCAST(fn_801B5AA8__as_event, (Event) fn_801B5AA8);
+        data->rules.on_match_end = (void (*)(u8))PORT_FNCAST(fn_801B5AA8__as_on_match_end, (Event) fn_801B5AA8);
     }
 }
 

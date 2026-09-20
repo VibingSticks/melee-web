@@ -84,6 +84,16 @@ void it_2725_Logic17_Spawned(Item_GObj* gobj)
 
 void it_802D14D0(void) {}
 
+#ifdef TARGET_PC
+/* The game hands this 0-argument function to it_8027A118 as an HSD_GObjEvent,
+ * which is called with the GObj (see PORT_FNCAST). */
+static void it_802D14D0__as_hsd_gobjevent(HSD_GObj* gobj)
+{
+    (void) gobj;
+    it_802D14D0();
+}
+#endif
+
 void itLugia_Logic17_EvtUnk(Item_GObj* gobj, Item_GObj* ref_gobj)
 {
     it_8026B894(gobj, ref_gobj);
@@ -386,7 +396,7 @@ void it_802D1DD8(Item_GObj* gobj)
 
 bool it_802D1E64(Item_GObj* gobj)
 {
-    return it_8027A118(gobj, (void (*)(HSD_GObj*)) it_802D14D0);
+    return it_8027A118(gobj, PORT_FNCAST(it_802D14D0__as_hsd_gobjevent, (void (*)(HSD_GObj*)) it_802D14D0));
 }
 
 Item_GObj* it_802D1E8C(Item_GObj* gobj, ItemKind kind, f32 param)

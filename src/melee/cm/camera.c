@@ -3505,10 +3505,13 @@ s32 Camera_SetBounds(Vec4* arg0)
 }
 
 #ifdef TARGET_PC
-/* The game calls this 1-argument function through a void (0-argument) pointer (see PORT_FNCAST). */
-static void Camera_SetBounds__as_event(void)
+/* Installed as Camera_x2D0::callback, which Camera_8002CB18 calls with the
+ * Camera_x2D0 itself; the game reads its first four floats as a Vec4 (r3 was
+ * the same pointer). A void(void) adapter would trap in wasm on the call and
+ * hand the function NULL (see PORT_FNCAST). */
+static void Camera_SetBounds__as_x2D0_cb(Camera_x2D0* params)
 {
-    Camera_SetBounds((Vec4*) 0);
+    Camera_SetBounds((Vec4*) params);
 }
 #endif
 
@@ -3543,7 +3546,7 @@ void Camera_SetUpPauseCamera(s8 pauserSlot, s8 pauserId, s32 arg2)
     game_camera.x2D0.unk28 = Stage_GetPauseCamZPosMin();
     game_camera.x2D0.unk2C = Stage_GetPauseCamZPosMax();
     game_camera.x2D0.callback =
-        (void (*)(Camera_x2D0*))PORT_FNCAST(Camera_SetBounds__as_event, (Event) Camera_SetBounds);
+        (void (*)(Camera_x2D0*))PORT_FNCAST(Camera_SetBounds__as_x2D0_cb, (Event) Camera_SetBounds);
 
     switch (arg2) {
     case 0:
@@ -3699,10 +3702,10 @@ s32 fn_8002F908(HSD_RectF32* arg0)
 }
 
 #ifdef TARGET_PC
-/* The game calls this 1-argument function through a void (0-argument) pointer (see PORT_FNCAST). */
-static void fn_8002F908__as_event(void)
+/* As Camera_SetBounds__as_x2D0_cb: the callback receives the Camera_x2D0. */
+static void fn_8002F908__as_x2D0_cb(Camera_x2D0* params)
 {
-    fn_8002F908((HSD_RectF32*) 0);
+    fn_8002F908((HSD_RectF32*) params);
 }
 #endif
 
@@ -3733,7 +3736,7 @@ void Camera_8002F9E4(s8 arg0, s8 arg1)
     scale = game_camera.x32C * cm_803BCCA0.x8C + cm_803BCCA0.x90;
     game_camera.x2D0.unk28 = scale * cm_803BCCA0.x94;
     game_camera.x2D0.unk2C = scale * cm_803BCCA0.x98;
-    game_camera.x2D0.callback = (void (*)(Camera_x2D0*))PORT_FNCAST(fn_8002F908__as_event, (Event) fn_8002F908);
+    game_camera.x2D0.callback = (void (*)(Camera_x2D0*))PORT_FNCAST(fn_8002F908__as_x2D0_cb, (Event) fn_8002F908);
 
     {
         s8 slot = game_camera.x304;
@@ -3790,10 +3793,10 @@ s32 fn_8002FBA0(HSD_RectF32* arg0)
 }
 
 #ifdef TARGET_PC
-/* The game calls this 1-argument function through a void (0-argument) pointer (see PORT_FNCAST). */
-static void fn_8002FBA0__as_event(void)
+/* As Camera_SetBounds__as_x2D0_cb: the callback receives the Camera_x2D0. */
+static void fn_8002FBA0__as_x2D0_cb(Camera_x2D0* params)
 {
-    fn_8002FBA0((HSD_RectF32*) 0);
+    fn_8002FBA0((HSD_RectF32*) params);
 }
 #endif
 
@@ -3823,7 +3826,7 @@ void Camera_8002FC7C(s8 arg0, s8 arg1)
     temp_f2 = (game_camera.x32C * (*new_var).x8C) + (*new_var).x90;
     game_camera.x2D0.unk28 = temp_f2 * (*new_var).x94;
     game_camera.x2D0.unk2C = temp_f2 * (*new_var).x98;
-    game_camera.x2D0.callback = (void (*)(Camera_x2D0*))PORT_FNCAST(fn_8002FBA0__as_event, (Event) fn_8002FBA0);
+    game_camera.x2D0.callback = (void (*)(Camera_x2D0*))PORT_FNCAST(fn_8002FBA0__as_x2D0_cb, (Event) fn_8002FBA0);
     x304_ptr = &game_camera.x304;
     x304_check = *x304_ptr;
     game_camera.x314.z = 0.0f;

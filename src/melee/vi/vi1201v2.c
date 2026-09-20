@@ -188,10 +188,12 @@ void un_803208F0(HSD_GObj* gobj)
 }
 
 #ifdef TARGET_PC
-/* The game calls this 1-argument function through a void (0-argument) pointer (see PORT_FNCAST). */
-static void un_803208F0__as_event(void)
+/* Installed as the GObj render callback, void (*)(HSD_GObj*, int), which the
+ * renderer calls with the GObj and the pass (see PORT_FNCAST). */
+static void un_803208F0__as_gobj_renderfunc(HSD_GObj* gobj, int code)
 {
-    un_803208F0((HSD_GObj*) 0);
+    (void) code;
+    un_803208F0(gobj);
 }
 #endif
 
@@ -243,7 +245,7 @@ static inline void un_80320A40_SetupCamera(void)
     cobj =
         lb_80013B14((HSD_CameraDescPerspective*) un_804D7010->cameras->desc);
     HSD_GObjObject_80390A70(gobj, HSD_GObj_CameraKind, cobj);
-    GObj_SetupGXLinkMax(gobj, (void (*)(HSD_GObj*, int))PORT_FNCAST(un_803208F0__as_event, (Event) un_803208F0),
+    GObj_SetupGXLinkMax(gobj, (void (*)(HSD_GObj*, int))PORT_FNCAST(un_803208F0__as_gobj_renderfunc, (Event) un_803208F0),
                         8);
     HSD_CObjAddAnim(cobj, un_804D7010->cameras->anims[0]);
     HSD_CObjReqAnim(cobj, 0.0f);

@@ -52,6 +52,20 @@
 /* 3153EC */ static void _tyFigupon_803153EC(s32, s32, s32, s32, s32);
 /* 315574 */ static void _tyFigupon_80315574(void);
 /* 3155C8 */ static void _tyFigupon_803155C8(void);
+#ifdef TARGET_PC
+/* The game installs these 0-argument functions as GObj procs, which the proc
+ * runner calls with the GObj (see PORT_FNCAST). */
+static void _tyFigupon_80315574__as_hsd_gobjevent(HSD_GObj* gobj)
+{
+    (void) gobj;
+    _tyFigupon_80315574();
+}
+static void _tyFigupon_803155C8__as_hsd_gobjevent(HSD_GObj* gobj)
+{
+    (void) gobj;
+    _tyFigupon_803155C8();
+}
+#endif
 /* 315C44 */ static void _tyFigupon_80315C44(HSD_GObj*);
 /* 316170 */ static void _tyFigupon_80316170(HSD_GObj*);
 /* 316420 */ static void _tyFigupon_80316420(s32);
@@ -844,7 +858,7 @@ void _tyFigupon_80316420(s32 arg0)
     if (((TyModeState*) Toy_804A284C)->x0 == 2) {
         if ((u32) data->x10 == 0) {
             data->x10 = (s32) HSD_GObj_SetupProc(
-                data->x0, (void (*)(HSD_GObj*)) _tyFigupon_80315574, 0);
+                data->x0, PORT_FNCAST(_tyFigupon_80315574__as_hsd_gobjevent, (void (*)(HSD_GObj*)) _tyFigupon_80315574), 0);
         }
         data->x24 = 0x12C;
         _tyFigupon_804D6EF0->x18->hidden = 0;
@@ -1096,7 +1110,7 @@ void _tyFigupon_80316C24(HSD_GObj* arg0)
                 HSD_GObj_80390CD4((HSD_GObj*) ef4->x0C);
                 ef4->x5C = 1;
                 HSD_GObj_SetupProc(
-                    arg0, (void (*)(HSD_GObj*)) _tyFigupon_803155C8, 0);
+                    arg0, PORT_FNCAST(_tyFigupon_803155C8__as_hsd_gobjevent, (void (*)(HSD_GObj*)) _tyFigupon_803155C8), 0);
                 HSD_GObj_80390CD4(arg0);
                 return;
             }

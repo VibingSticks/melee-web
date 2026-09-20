@@ -369,10 +369,11 @@ void fn_801749B8(HSD_GObj* unused)
 }
 
 #ifdef TARGET_PC
-/* The game calls this 1-argument function through a void (0-argument) pointer (see PORT_FNCAST). */
-static void fn_801749B8__as_event(void)
+/* Installed as HSD_Text::render_callback, void (*)(void*); the argument is
+ * unused (see PORT_FNCAST). */
+static void fn_801749B8__as_text_cb(void* arg)
 {
-    fn_801749B8((HSD_GObj*) 0);
+    fn_801749B8((HSD_GObj*) arg);
 }
 #endif
 
@@ -587,7 +588,7 @@ void fn_80174B4C(ResultsData* data, s32 slot)
     }
 
     /// Create text objects for visible entries
-    render_callback = (void (*)(void*))PORT_FNCAST(fn_801749B8__as_event, (Event) fn_801749B8);
+    render_callback = (void (*)(void*))PORT_FNCAST(fn_801749B8__as_text_cb, (Event) fn_801749B8);
     entry_idx = start_entry;
     while (count < 10) {
         if (list->count <= entry_idx + 1) {

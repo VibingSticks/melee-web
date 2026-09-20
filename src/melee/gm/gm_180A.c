@@ -243,6 +243,16 @@ void fn_80180C60(HSD_GObj* gobj)
     }
 }
 
+#ifdef TARGET_PC
+/* The game installs this 0-argument function as a GObj proc, which the proc
+ * runner calls with the GObj (see PORT_FNCAST). */
+static void fn_80181598__as_hsd_gobjevent(HSD_GObj* gobj)
+{
+    (void) gobj;
+    fn_80181598();
+}
+#endif
+
 void fn_80181598(void)
 {
     typedef struct {
@@ -325,7 +335,7 @@ void fn_80181708(void)
     lbl_804D65D8 = 0;
 
     HSD_GObj_SetupProc(GObj_Create(0xEU, 0x11U, 0U),
-                       (void (*)(HSD_GObj*)) fn_80181598, 0x15U);
+                       PORT_FNCAST(fn_80181598__as_hsd_gobjevent, (void (*)(HSD_GObj*)) fn_80181598), 0x15U);
 
     gobj = GObj_Create(0xEU, 0xFU, 0U);
     jobj = HSD_JObjLoadJoint((*lbl_804D65CC)->joint);

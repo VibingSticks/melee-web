@@ -458,6 +458,16 @@ static void ifMagnify_802FBBDC__as_gobj_renderfunc(HSD_GObj* gobj, int code)
 
 void ifMagnify_802FC3BC(void) {}
 
+#ifdef TARGET_PC
+/* The game installs this 0-argument function as the GObj's user-data remove
+ * function, which GObj_FreeUserData calls with the data (see PORT_FNCAST). */
+static void ifMagnify_802FC3BC__as_remove_func(void* user_data)
+{
+    (void) user_data;
+    ifMagnify_802FC3BC();
+}
+#endif
+
 void ifMagnify_802FC3C0(s32 slot)
 {
     ifMagnifyPlayer* player;
@@ -472,7 +482,7 @@ void ifMagnify_802FC3C0(s32 slot)
     }
 
     gobj = GObj_Create(HSD_GOBJ_CLASS_UI, 15, 0);
-    GObj_InitUserData(gobj, 0xE, (void (*)(void*)) ifMagnify_802FC3BC, player);
+    GObj_InitUserData(gobj, 0xE, PORT_FNCAST(ifMagnify_802FC3BC__as_remove_func, (void (*)(void*)) ifMagnify_802FC3BC), player);
 
     jobj = HSD_JObjLoadJoint(
         (*(DynamicModelDesc**) ifMagnify_804A1DE0.model_desc)->joint);

@@ -594,10 +594,17 @@ void grKinokoRoute_802084B4(HSD_GObj* gobj)
 }
 
 #ifdef TARGET_PC
-/* The game calls this 1-argument function through a void (0-argument) pointer (see PORT_FNCAST). */
-static void grKinokoRoute_802084B4__as_event(void)
+/* Installed as the yaku item's second callback, void (*)(Item_GObj*, Ground*,
+ * Vec3*, HSD_GObj*, f32); the game's function takes only the first argument,
+ * the item's GObj (see PORT_FNCAST). */
+static void grKinokoRoute_802084B4__as_item_cb5(Item_GObj* item_gobj, Ground* gp, Vec3* pos, HSD_GObj* gobj,
+                                                f32 f)
 {
-    grKinokoRoute_802084B4((HSD_GObj*) 0);
+    (void) gp;
+    (void) pos;
+    (void) gobj;
+    (void) f;
+    grKinokoRoute_802084B4((HSD_GObj*) item_gobj);
 }
 #endif
 
@@ -611,7 +618,7 @@ void grKinokoRoute_80208564(HSD_GObj* gobj)
         HSD_JObj* jobj = Ground_801C3FA4(gobj, depths.x[i]);
         Item_GObj* item = grMaterial_801C8CFC(
             8, 0, gp, jobj, NULL,
-            (void (*)(Item_GObj*, Ground*, Vec3*, HSD_GObj*, f32))PORT_FNCAST(grKinokoRoute_802084B4__as_event, (
+            (void (*)(Item_GObj*, Ground*, Vec3*, HSD_GObj*, f32))PORT_FNCAST(grKinokoRoute_802084B4__as_item_cb5, (
                 Event) grKinokoRoute_802084B4),
             NULL);
         if (item != NULL) {

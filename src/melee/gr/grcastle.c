@@ -319,6 +319,33 @@ static const grCastle_CallbackTable2 grCs_803B7F3C = { {
     grCastle_801D08AC,
 } };
 
+#ifdef TARGET_PC
+/* grCs_803B7F28's callbacks take two arguments; the yaku item's x18 slot they
+ * are installed in is called with five (ityaku.c it_2E6A_Logic117_DmgReceived:
+ * item, ground, position, fighter, damage). On the GameCube the extra
+ * registers were ignored; in wasm the call traps on the signature (see
+ * PORT_FNCAST). One adapter per entry, in the same order. */
+#define GRCASTLE_DMG_ADAPTER(fn)                                              \
+    static void fn##__as_item_cb5(Item_GObj* item_gobj, Ground* gp, Vec3* pos, \
+                                  HSD_GObj* gobj, f32 f)                       \
+    {                                                                          \
+        (void) pos;                                                            \
+        (void) gobj;                                                           \
+        (void) f;                                                              \
+        fn((void*) item_gobj, (unkCastle*) gp);                                \
+    }
+GRCASTLE_DMG_ADAPTER(grCastle_801D0550)
+GRCASTLE_DMG_ADAPTER(grCastle_801D059C)
+GRCASTLE_DMG_ADAPTER(grCastle_801D05E8)
+GRCASTLE_DMG_ADAPTER(grCastle_801D0634)
+GRCASTLE_DMG_ADAPTER(grCastle_801D0680)
+#undef GRCASTLE_DMG_ADAPTER
+static void (*const grCs_803B7F28_adapters[5])(Item_GObj*, Ground*, Vec3*, HSD_GObj*, f32) = {
+    grCastle_801D0550__as_item_cb5, grCastle_801D059C__as_item_cb5, grCastle_801D05E8__as_item_cb5,
+    grCastle_801D0634__as_item_cb5, grCastle_801D0680__as_item_cb5,
+};
+#endif
+
 static const grCastle_YOffsets grCs_803B7F50 = { {
     4.0f,
     6.0f,
@@ -1320,18 +1347,22 @@ bool grCastle_801CF300(Ground_GObj* gobj)
 }
 
 #ifdef TARGET_PC
-/* The game calls this 3-argument function through a void (0-argument) pointer (see PORT_FNCAST). */
-static void fn_801CFB68__as_event(void)
+/* Installed as the yaku item's third callback, void (*)(Item_GObj*, Ground*,
+ * HSD_GObj*): the same signature, so this only forwards (see PORT_FNCAST). */
+static void fn_801CFB68__as_item_cb3(Item_GObj* item_gobj, Ground* gp, HSD_GObj* gobj)
 {
-    fn_801CFB68((Item_GObj*) 0, (Ground*) 0, (HSD_GObj*) 0);
+    fn_801CFB68(item_gobj, gp, gobj);
 }
 #endif
 
 #ifdef TARGET_PC
-/* The game calls this 4-argument function through a void (0-argument) pointer (see PORT_FNCAST). */
-static void fn_801CFAFC__as_event(void)
+/* Installed as the yaku item's second callback, void (*)(Item_GObj*, Ground*,
+ * Vec3*, HSD_GObj*, f32); the game's function takes the first four (see
+ * PORT_FNCAST). */
+static void fn_801CFAFC__as_item_cb5(Item_GObj* item_gobj, Ground* gp, Vec3* pos, HSD_GObj* gobj, f32 f)
 {
-    fn_801CFAFC((Item_GObj*) 0, (Ground*) 0, (Vec3*) 0, (HSD_GObj*) 0);
+    (void) f;
+    fn_801CFAFC(item_gobj, gp, pos, gobj);
 }
 #endif
 
@@ -1375,9 +1406,9 @@ void grCastle_801CF308(Ground_GObj* gobj)
                 gp->u.castle5.xC4 = 3;
                 gp->u.castle11.xD8 = (u32) grMaterial_801C8CFC(
                     0, 1, gp, jobj, NULL,
-                    (void (*)(Item_GObj*, Ground*, Vec3*, HSD_GObj*, f32))PORT_FNCAST(fn_801CFAFC__as_event, (
+                    (void (*)(Item_GObj*, Ground*, Vec3*, HSD_GObj*, f32))PORT_FNCAST(fn_801CFAFC__as_item_cb5, (
                         Event) fn_801CFAFC),
-                    (void (*)(Item_GObj*, Ground*, HSD_GObj*))PORT_FNCAST(fn_801CFB68__as_event, (
+                    (void (*)(Item_GObj*, Ground*, HSD_GObj*))PORT_FNCAST(fn_801CFB68__as_item_cb3, (
                         Event) fn_801CFB68));
                 grMaterial_801C8DE0((Item_GObj*) gp->u.castle11.xD8, 0.0f,
                                     -1.0f, 0.0f, 0.0f, 1.0f, 0.0f, 4.0f);
@@ -1681,9 +1712,10 @@ s32 grCastle_801CFBD4(Ground_GObj* gobj, s32 arg1)
                                 gp->u.castle10.x10C[i] =
                                     (u32) grMaterial_801C8CFC(
                                         0, 2, gp, target, NULL,
+                                        PORT_FNCAST(grCs_803B7F28_adapters[i],
                                         (void (*)(Item_GObj*, Ground*, Vec3*,
                                                   HSD_GObj*, f32))(
-                                            Event) cb1.callbacks[i],
+                                            Event) cb1.callbacks[i]),
                                         (void (*)(Item_GObj*, Ground*,
                                                   HSD_GObj*))(
                                             Event) cb2.callbacks[i]);

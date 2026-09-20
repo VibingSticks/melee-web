@@ -53,7 +53,7 @@ async function toMenu() {
 }
 
 try {
-  if (!(await bootToMainMenu(page)).scene.mode === 1) throw new Error('never reached the menu');
+  if ((await bootToMainMenu(page)).scene.mode !== 1) throw new Error('never reached the menu');
 
   for (let top = 0; top < TOP; top++) {
     if (top > 0 && !(await toMenu())) { console.log(`top ${top}: could not reach the menu`); continue; }

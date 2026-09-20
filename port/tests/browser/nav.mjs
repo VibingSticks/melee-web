@@ -60,9 +60,18 @@ export async function launchGame({ buildDir, disc, port = 8795, query = 'rendere
   const context = await browser.newContext();
   const page = await context.newPage();
   const logs = [];
+  const faults = [];
   const t0 = Date.now();
   page.on('console', m => logs.push(`[${Date.now() - t0}ms] ${m.text()}`));
-  page.on('pageerror', e => logs.push(`[${Date.now() - t0}ms] [pageerror] ${e.message}`));
+  // Keep the stack, not just the message. A wasm trap's message is always the
+  // same four words ("memory access out of bounds"); the frames are the only
+  // part that says where. Recording e.message alone is what left the Classic
+  // hang unexplained for days -- the stack named the faulting function on the
+  // first run once it was kept.
+  page.on('pageerror', e => {
+    logs.push(`[${Date.now() - t0}ms] [pageerror] ${e.message}`);
+    if (e.stack) faults.push(e.stack);
+  });
 
   await page.goto(`http://localhost:${port}/index.html?${query}`, { waitUntil: 'domcontentloaded' });
   await page.setInputFiles('#disc', path.resolve(disc));
@@ -74,7 +83,7 @@ export async function launchGame({ buildDir, disc, port = 8795, query = 'rendere
     if (await page.evaluate(() => !!(window.Module && window.Module._port_scene_state))) break;
     await sleep(200);
   }
-  return { browser, context, page, logs, server, close, t0 };
+  return { browser, context, page, logs, faults, server, close, t0 };
 }
 
 /** The game's current {mode, index}, or null before the runtime is ready. */

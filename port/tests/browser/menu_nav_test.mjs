@@ -140,7 +140,7 @@ try {
   for (const r of results) console.log(`  +${r.steps} DOWN: ${r.outcome}`);
 
   const wedged = results.filter(r => r.outcome.includes('HUNG'));
-  const left = results.filter(r => r.outcome.includes('->') && !r.outcome.includes('still in MENU'));
+  const left = results.filter(r => r.outcome.includes('->') && !r.outcome.includes('stayed in MENU'));
   console.log(`\n${left.length} of ${results.length} entries left the menu; ${wedged.length} hung.`);
   if (wedged.length) {
     console.log('hung screens (frame loop stopped -- real freezes):');

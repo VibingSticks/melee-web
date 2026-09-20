@@ -503,7 +503,14 @@ struct grKinokoRoute_GroundVars {
 };
 
 struct grKinokoRoute_GroundVars2 {
+#ifdef TARGET_PC
+    /* grkinokoroute.c also sets this bit through a (mirrored) UnkFlagStruct
+     * cast, whose b0 is the top bit of the byte on PowerPC; keep it there. */
+    /* +00 gp+C4 */ u8 flags_0_pad_lo : 7;
     /* +00 gp+C4 */ u8 flags_0 : 1;
+#else
+    /* +00 gp+C4 */ u8 flags_0 : 1;
+#endif
     /* +01 */ u8 pad_01[1];
     /* +02 gp+C6 */ s16 phase;
     /* +04 gp+C8 */ s16 spawn_idx;
@@ -766,11 +773,22 @@ struct grIceMt_GObj9_GroundVars {
 
 struct grIceMt_GObj10_GroundVars {
     /*  +0   gp+C4 */ struct grIceMt_GObj9_GObj10_x0 x0;
+#ifdef TARGET_PC
+    /* gricemt.c sets x14_b4 through a (mirrored) UnkFlagStruct cast, whose
+     * b4 is bit 3 of the byte on PowerPC; keep the names on those bits. */
+    /* +14 gp+D8 */ u8 x14_pad_lo : 3;
+    /* +14:4 gp+D8:4 */ u8 x14_b4 : 1;
+    /* +14:3 gp+D8:3 */ u8 x14_b3 : 1;
+    /* +14:2 gp+D8:2 */ u8 x14_b2 : 1;
+    /* +14:1 gp+D8:1 */ u8 x14_b1 : 1;
+    /* +14:0 gp+D8:0 */ u8 x14_b0 : 1;
+#else
     /* +14:0 gp+D8:0 */ u8 x14_b0 : 1;
     /* +14:1 gp+D8:1 */ u8 x14_b1 : 1;
     /* +14:2 gp+D8:2 */ u8 x14_b2 : 1;
     /* +14:3 gp+D8:3 */ u8 x14_b3 : 1;
     /* +14:4 gp+D8:4 */ u8 x14_b4 : 1;
+#endif
     /* +16 gp+DA */ s16 x16;
     /* +18 gp+DC */ s16 x18;
     /* +1A gp+DE */ s16 x1A;
@@ -1407,6 +1425,31 @@ ASSERT_SIZE(struct grBigBlue_RoadVars, 0x38);
 /// Per-lane data for the Big Blue car gobj (ID 33), 0x40-byte stride from
 /// gp+D4.
 struct grBigBlue_CarLane {
+#ifdef TARGET_PC
+    /* grbigblue.c reads and writes the first byte of this word raw beside the
+     * named bitfields ((p[0xD4] >> 2) & 0x3F is `state`, (p[0xD4] >> 1) & 1
+     * is `direction`, and grBb_ByteBits is cast onto it), so the bytes stay
+     * where PowerPC put them and only the bit order within each byte is
+     * mirrored. collision_slot is bits 8..4 of the big-endian halfword: its
+     * top bit is the byte-0 bit named state_hi and its low four bits are the
+     * top nibble of x1. A little-endian bitfield cannot span that, so it is
+     * split in two and grbigblue.c composes it (grBb_GetSlot/grBb_SetSlot). */
+    union {
+        /* +00 gp+D4 */ u16 status;
+        struct {
+            /* +00 gp+D4 */ u8 state_hi : 1;
+            /* +00 gp+D4 */ u8 direction : 1;
+            /* +00 gp+D4 */ u8 state : 6;
+            /* +01 gp+D5 */ u8 x1;
+        };
+        struct {
+            /* +00 gp+D4 */ u16 collision_slot_hi : 1;
+            /* +00 gp+D4 */ u16 pad_slot_0 : 7;
+            /* +01 gp+D5 */ u16 pad_slot_1 : 4;
+            /* +01 gp+D5 */ u16 collision_slot_lo : 4;
+        };
+    };
+#else
     union {
         /* +00 gp+D4 */ u16 status;
         struct {
@@ -1421,6 +1464,7 @@ struct grBigBlue_CarLane {
             /* +00 gp+D4 */ u16 pad_slot_1 : 4;
         };
     };
+#endif
     /* +02 gp+D6 */ s8 x2;
     /* +03 gp+D7 */ u8 x3;
     /* +04 gp+D8 */ f32 target;

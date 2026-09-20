@@ -19,6 +19,29 @@
 #include <melee/mn/types.h>
 
 /// @deprecated Replace with inline bitfields
+#ifdef TARGET_PC
+/* Written as a whole byte (fighter.c sets x21FC_flag.u8 = 1; dbanim.c and
+ * dbitem.c do arithmetic on .u8) and read through the named bits
+ * (ftdrawcommon.c draws the model only when b7 is set; itdraw.c reads
+ * xDAA_flag.b6 and b7). CodeWarrior allocates b0 at the top of the byte, so
+ * `.u8 = 1` sets b7; clang would set b0. Reversing the declaration puts the
+ * names on the PowerPC bits. The casts of this type onto other memory
+ * (grkinokoroute.c, gricemt.c, grbigblueroute.c) either only ever use it, or
+ * have their target's own bitfields mirrored beside them. */
+typedef union UnkFlagStruct {
+    u8 u8;
+    struct {
+        u8 b7 : 1;
+        u8 b6 : 1;
+        u8 b5 : 1;
+        u8 b4 : 1;
+        u8 b3 : 1;
+        u8 b2 : 1;
+        u8 b1 : 1;
+        u8 b0 : 1;
+    };
+} UnkFlagStruct;
+#else
 typedef union UnkFlagStruct {
     u8 u8;
     struct {
@@ -32,6 +55,7 @@ typedef union UnkFlagStruct {
         u8 b7 : 1;
     };
 } UnkFlagStruct;
+#endif
 
 struct UnkMultimanData {
     u16 x0_0 : 1;

@@ -2647,6 +2647,34 @@ void grBigBlue_801EB4AC(Ground_GObj* gobj)
     mpLib_80058560();
 }
 
+#ifdef TARGET_PC
+/* Cast onto the first byte of a lane's status word, where b6 is `direction`
+ * (bit 1 of the byte on PowerPC); reversed so the names land on those bits. */
+typedef struct grBb_ByteBits {
+    u8 b7 : 1;
+    u8 b6 : 1;
+    u8 b5 : 1;
+    u8 b4 : 1;
+    u8 b3 : 1;
+    u8 b2 : 1;
+    u8 b1 : 1;
+    u8 b0 : 1;
+} grBb_ByteBits;
+
+/* collision_slot spans the two bytes of the lane status word (see
+ * grBigBlue_CarLane); the game names it as one bitfield, the port keeps its
+ * two halves and composes them here. */
+static inline u32 grBb_GetSlot(const struct grBigBlue_CarLane* lane)
+{
+    return (lane->collision_slot_hi << 4) | lane->collision_slot_lo;
+}
+
+static inline void grBb_SetSlot(struct grBigBlue_CarLane* lane, u32 slot)
+{
+    lane->collision_slot_hi = (slot >> 4) & 1;
+    lane->collision_slot_lo = slot & 0xF;
+}
+#else
 typedef struct grBb_ByteBits {
     u8 b0 : 1;
     u8 b1 : 1;
@@ -2657,6 +2685,7 @@ typedef struct grBb_ByteBits {
     u8 b6 : 1;
     u8 b7 : 1;
 } grBb_ByteBits;
+#endif
 
 u32 lbl_803E3010[] = {
     0x0006DDD2,
@@ -2973,7 +3002,11 @@ static inline void grBigBlue_801EC6C0_inline(Ground* gp, s32 car_idx,
     s32 hi;
     s32 lo;
 
+#ifdef TARGET_PC
+    grBb_SetSlot(&gp->u.bigblue.car.lanes[car_idx], line_idx);
+#else
     gp->u.bigblue.car.lanes[car_idx].collision_slot = line_idx;
+#endif
 
     gp->u.bigblue.car.lanes[car_idx].direction = 0;
 
@@ -3089,7 +3122,11 @@ void grBigBlue_801EC6C0(Ground_GObj* gobj)
             do {
                 line_idx = HSD_Randi(30);
                 for (i = 0; i < car_idx; i++) {
+#ifdef TARGET_PC
+                    if (grBb_GetSlot(&gp->u.bigblue.car.lanes[i]) == line_idx)
+#else
                     if (gp->u.bigblue.car.lanes[i].collision_slot == line_idx)
+#endif
                     {
                         break;
                     }
@@ -3535,7 +3572,13 @@ void grBigBlue_801ED694(Ground_GObj* gobj, s32 lane)
     lane_flags = (u8*) &gp->data.lanes[lane].status;
 
     {
+#ifdef TARGET_PC
+        /* The big-endian halfword the PowerPC load produced: (hw >> 4) & 0x1F
+         * below is collision_slot. */
+        u16 hw = (u16) ((lane_flags[0] << 8) | lane_flags[1]);
+#else
         u16 hw = *(u16*) lane_flags;
+#endif
         jobj = gp->data.jobjs[(hw >> 4) & 0x1F];
     }
 
@@ -3989,6 +4032,17 @@ static inline void grBigBlue_801EE398_inline(Ground* gp, s32 arg1, s32 arg2,
     case 1: {
         struct grBigBlue_CarLane* car = &gp->u.bigblue.car.lanes[arg1];
 
+#ifdef TARGET_PC
+        HSD_JObjSetFlagsAll(
+            gp->u.bigblue.car.collision_jobjs[grBb_GetSlot(car)],
+            JOBJ_HIDDEN);
+
+        if (gp->u.bigblue.car.lanes[arg1].pos.x > 0.0f) {
+            gp->u.bigblue.car.ranks[grBb_GetSlot(car)] = 0;
+        } else {
+            gp->u.bigblue.car.ranks[grBb_GetSlot(car)] = 2;
+        }
+#else
         HSD_JObjSetFlagsAll(
             gp->u.bigblue.car.collision_jobjs[car->collision_slot],
             JOBJ_HIDDEN);
@@ -3998,6 +4052,7 @@ static inline void grBigBlue_801EE398_inline(Ground* gp, s32 arg1, s32 arg2,
         } else {
             gp->u.bigblue.car.ranks[car->collision_slot] = 2;
         }
+#endif
         *result = 1;
         car->state = state_value4;
         (void) gp->u.bigblue.car.lanes[arg1].state;
@@ -4056,7 +4111,11 @@ static inline void grBigBlue_801EE398_inline(Ground* gp, s32 arg1, s32 arg2,
                     }
                 }
 
+#ifdef TARGET_PC
+                grBb_SetSlot(&gp->u.bigblue.car.lanes[arg1], slot);
+#else
                 gp->u.bigblue.car.lanes[arg1].collision_slot = slot;
+#endif
                 gp->u.bigblue.car.lanes[arg1].direction = 0;
 
                 gp->u.bigblue.car.lanes[arg1].pos.x = pos->x;
@@ -4135,7 +4194,11 @@ static inline void grBigBlue_801EE398_inline(Ground* gp, s32 arg1, s32 arg2,
 
                 lanes = gp->u.bigblue.car.lanes;
                 car_d4 = &gp->u.bigblue.car.lanes[arg1];
+#ifdef TARGET_PC
+                grBb_SetSlot(&lanes[arg1], slot);
+#else
                 lanes[arg1].collision_slot = slot;
+#endif
                 gp->u.bigblue.car.lanes[arg1].direction = 0;
 
                 gp->u.bigblue.car.lanes[arg1].pos.x = pos->x;

@@ -856,6 +856,32 @@ struct MotionState {
 
     enum_t x4_flags;
 
+#ifdef TARGET_PC
+    /* Every motion state table initialises this union through `_` with a
+     * whole word (FtMoveId_X << 24, sometimes | 1 << 23 | 1 << 22) and
+     * fighter.c reads it back through move_id, x9_b0 and x9_b1. On PowerPC
+     * move_id is the top byte and x9_b0 is bit 23; clang's little-endian word
+     * would put move_id in the bottom byte (always 0 here) and x9_b0 at bit 8.
+     * This mirrors the PowerPC bit positions of the word. */
+    union {
+        u32 _;
+        struct {
+            u8 xB;
+            u8 xA;
+            struct {
+                u8 x9_b7 : 1;
+                u8 x9_b6 : 1;
+                u8 x9_b5 : 1;
+                u8 x9_b4 : 1;
+                u8 x9_b3 : 1;
+                u8 x9_b2 : 1;
+                u8 x9_b1 : 1;
+                u8 x9_b0 : 1;
+            };
+            u8 move_id : 8;
+        };
+    };
+#else
     union {
         /// @todo Try to match without this being a @c union.
         u32 _;
@@ -875,6 +901,7 @@ struct MotionState {
             u8 xB;
         };
     };
+#endif
 
     HSD_GObjEvent anim_cb;
     HSD_GObjEvent input_cb;
@@ -906,6 +933,37 @@ struct Fighter_DemoStrings {
 };
 
 /// @todo Rename this and its members; investigate using it elsewhere.
+#ifdef TARGET_PC
+/* ft_800895E0 fills this union through x2070_int with a whole word (the
+ * motion state's flags word, or the literals 0x240063 and 0x44003D), pltrick.c
+ * and it_279C.c cast plain ints to it, and every reader uses the named bytes
+ * and bits (x2073, the attack id, is the low byte). CodeWarrior lays the
+ * struct out from the top byte of the big-endian word down and packs each
+ * byte's bits MSB-first; clang's little-endian word would put x2070 in the
+ * low byte, x2073 in the high one, and reverse the bits within each byte.
+ * This mirrors the PowerPC positions. UnkPlBonusBits is cast to and from
+ * this union and is mirrored the same way. */
+/* fp+2070 */ union Struct2070 {
+    /* fp+2070 */ struct {
+        /* fp+2073 */ u8 x2073;
+        /* fp+2072:7 */ u8 count_specials : 1;
+        /* fp+2072:6 */ u8 count_x1A0 : 1;
+        /* fp+2072:5 */ u8 count_aerials : 1;
+        /* fp+2072:4 */ u8 count_thrown_items : 1;
+        /* fp+2072:3 */ u8 count_x1A4 : 1;
+        /* fp+2072:2 */ u8 x2072_b2 : 1;
+        /* fp+2072:1 */ u8 x2072_b1 : 1;
+        /* fp+2072:0 */ u8 x2072_b0 : 1;
+        /* fp+2071:7 */ u8 x2071_b7 : 1;
+        /* fp+2071:6 */ u8 x2071_b6 : 1;
+        /* fp+2071:5 */ u8 x2071_b5 : 1;
+        /* fp+2071:4 */ u8 x2071_b4 : 1;
+        /* fp+2071:0 */ u8 x2071_b0_3 : 4;
+        /* fp+2070 */ s8 x2070;
+    };
+    /* fp+2070 */ int x2070_int;
+};
+#else
 /* fp+2070 */ union Struct2070 {
     /* fp+2070 */ struct {
         /* fp+2070 */ s8 x2070;
@@ -926,6 +984,7 @@ struct Fighter_DemoStrings {
     };
     /* fp+2070 */ int x2070_int;
 };
+#endif
 
 /// @todo See if this should likewise be instituted for item->xD94 thru
 /// xDA4_word/xDA8_short
@@ -1091,6 +1150,23 @@ struct Fighter_x59C_t {
 };
 ASSERT_SIZE(struct Fighter_x59C_t, 0x8000);
 
+#ifdef TARGET_PC
+/* Written as a whole s32 and cast to and from Struct2070 (ft_0892.c,
+ * pltrick.c); mirrored the same way so both name the same PowerPC bits. */
+struct UnkPlBonusBits {
+    u8 x3;
+    u8 x2_b7 : 1;
+    u8 x2_b6 : 1;
+    u8 x2_b5 : 1;
+    u8 x2_b4 : 1;
+    u8 x2_b3 : 1;
+    u8 x2_b2 : 1;
+    u8 x2_b1 : 1;
+    u8 x2_b0 : 1;
+    u8 x1;
+    u8 x0;
+};
+#else
 struct UnkPlBonusBits {
     u8 x0, x1;
     u8 x2_b0 : 1;
@@ -1103,6 +1179,7 @@ struct UnkPlBonusBits {
     u8 x2_b7 : 1;
     u8 x3;
 };
+#endif
 
 struct ft_800898B4_t {
     /*  +0  */ int x0;

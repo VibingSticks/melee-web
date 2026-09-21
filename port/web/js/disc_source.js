@@ -30,11 +30,22 @@ export class DiscSource {
   }
 
   /** Fetch blocks [first, last] that are missing, coalescing a contiguous run
-   * of misses into a single slice so a cold sequential read costs one call. */
+   * of misses into a single slice so a cold sequential read costs one call.
+   *
+   * Returns the bytes for every block in the range. The caller must assemble
+   * its result from these references and NOT from the cache: `await` gives
+   * other reads a turn, and a big request can push its own earlier blocks out
+   * while its later ones are still being fetched, so a block present when the
+   * fetch began need not still be resident when the copy runs. Holding the
+   * references keeps the data alive whatever the cache does with it. */
   async #fill(first, last) {
+    const parts = new Map();
+    for (let b = first; b <= last; b++) {
+      if (this.blocks.has(b)) parts.set(b, this.#touch(b));
+    }
     let run = -1;
     for (let b = first; b <= last + 1; b++) {
-      const missing = b <= last && !this.blocks.has(b);
+      const missing = b <= last && !parts.has(b);
       if (missing && run < 0) {
         run = b;
       } else if (!missing && run >= 0) {
@@ -46,11 +57,14 @@ export class DiscSource {
         for (let i = run; i < b; i++) {
           const off = (i - run) * BLOCK_SIZE;
           if (off >= buf.length) break;
-          this.#store(i, buf.subarray(off, Math.min(off + BLOCK_SIZE, buf.length)));
+          const bytes = buf.subarray(off, Math.min(off + BLOCK_SIZE, buf.length));
+          parts.set(i, bytes);
+          this.#store(i, bytes);
         }
         run = -1;
       }
     }
+    return parts;
   }
 
   #store(index, bytes) {
@@ -89,13 +103,19 @@ export class DiscSource {
       return this.file.slice(offset, end).arrayBuffer();
     }
 
-    await this.#fill(first, last);
+    const parts = await this.#fill(first, last);
 
     const out = new Uint8Array(end - offset);
     let written = 0;
     for (let b = first; b <= last; b++) {
-      const block = this.blocks.has(b) ? this.#touch(b) : null;
-      if (block === null) continue;           // past end of file
+      const block = parts.get(b);
+      if (block === undefined) {
+        // `end` is clamped to the file size, so every block in the range holds
+        // real bytes. Missing one means the fetch above did not deliver it,
+        // and quietly leaving zeros here would corrupt an archive in a way
+        // that surfaces much later as unexplained data.
+        throw new Error(`disc read ${offset}+${length}: block ${b} was not fetched`);
+      }
       const blockStart = b * BLOCK_SIZE;
       const from = Math.max(offset, blockStart) - blockStart;
       const to = Math.min(end, blockStart + block.length) - blockStart;

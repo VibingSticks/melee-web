@@ -141,8 +141,11 @@ export async function bootToMainMenu(page, { timeout = 90000 } = {}) {
   const trail = [];
   const note = async (why) => { const s = await scene(page); trail.push(`${why}: ${sceneName(s)}`); return s; };
 
-  // The boot scene ignores input for its first few hundred frames.
-  await waitForScene(page, s => s.mode === 40 || s.mode === 0 || s.mode === 1, { timeout, what: 'the boot sequence' });
+  // The boot scene ignores input for its first few hundred frames. With a save
+  // present it lasts only a frame or two, and the game is in the opening movie
+  // (24) before this first poll -- since the movie is skipped, that scene just
+  // waits for A or START, which the presses below provide.
+  await waitForScene(page, s => s.mode === 40 || s.mode === 0 || s.mode === 1 || s.mode === 24, { timeout, what: 'the boot sequence' });
   await note('booted');
 
   // BOOT -> (intro movie) -> TITLE -> MENU. The movie is skipped in this port,
@@ -301,6 +304,11 @@ export async function cssIcons(page) {
  */
 export async function cssPickCharacter(page, icon, { steps = 26, tol = 1.2 } = {}) {
   const tx = icon.x - 2.7, ty = icon.y + 2.0;
+  // The hand moves a fixed distance per frame, so a push sized in milliseconds
+  // covers twice the ground at 60 fps that it did at 30, and the loop below
+  // overshoots and oscillates instead of converging. Size pushes in frames.
+  const fps = (await measureFps(page, 800)) ?? 30;
+  const msPerFrame = 1000 / Math.max(5, Math.min(60, fps));
   for (let n = 0; n < steps; n++) {
     const cur = (await cssCursors(page))?.[0];
     if (!cur) return { ok: false, why: 'port 1 has no cursor' };
@@ -311,8 +319,9 @@ export async function cssPickCharacter(page, icon, { steps = 26, tol = 1.2 } = {
     if (dx > tol) dir.push('SRIGHT'); else if (dx < -tol) dir.push('SLEFT');
     if (dir.length === 0) break;
     // Roughly proportional, clamped: long pushes when far, taps when close.
+    // dist * 1.35 frames is the old dist * 45 ms at the 30 fps it was tuned on.
     const dist = Math.max(Math.abs(dx), Math.abs(dy));
-    await press(page, dir.join('+'), Math.min(900, Math.max(90, Math.round(dist * 45))));
+    await press(page, dir.join('+'), Math.round(Math.min(27, Math.max(2.7, dist * 1.35)) * msPerFrame));
     await sleep(140);
   }
   const before = (await cssSlots(page))?.[0]?.ckind;

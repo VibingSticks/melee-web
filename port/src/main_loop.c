@@ -172,7 +172,7 @@ double port_yield_ms(void) { return g_yield.sleep_ms + g_yield.pump_ms; }
  * to hit 60 Hz: while it is large the frame has headroom, and when it falls to
  * zero the frame is late and the other columns say why. */
 static struct {
-    double game, present, events, pace, dvd, alarm, vi, audio, begin;
+    double game, present, events, pace, browser, dvd, alarm, vi, audio, begin;
     double worst;
     double window_start; /* wall clock when this reporting window opened */
     unsigned frames;
@@ -190,11 +190,11 @@ static void prof_report(unsigned frame)
      * by an assumed 60. */
     double now = emscripten_get_now();
     double fps = g_prof.window_start > 0.0 && now > g_prof.window_start ? n * 1000.0 / (now - g_prof.window_start) : 0.0;
-    port_log("frame %u | %.1f fps (%.1f ms/frame) | game %.1f present %.1f events %.1f pace %.1f "
+    port_log("frame %u | %.1f fps (%.1f ms/frame) | game %.1f present %.1f events %.1f pace %.1f browser %.1f "
              "dvd %.1f alarm %.1f vi %.1f audio %.1f begin %.1f | worst %.1f",
              frame, fps, fps > 0.0 ? 1000.0 / fps : 0.0, g_prof.game / n, g_prof.present / n, g_prof.events / n,
-             g_prof.pace / n, g_prof.dvd / n, g_prof.alarm / n, g_prof.vi / n, g_prof.audio / n, g_prof.begin / n,
-             g_prof.worst);
+             g_prof.pace / n, g_prof.browser / n, g_prof.dvd / n, g_prof.alarm / n, g_prof.vi / n, g_prof.audio / n,
+             g_prof.begin / n, g_prof.worst);
     memset(&g_prof, 0, sizeof(g_prof));
     g_prof.window_start = now;
 }
@@ -331,6 +331,7 @@ void port_vblank(void)
     if (g_next_vblank_ms == 0.0 || now > g_next_vblank_ms + 4 * kFrameMs) {
         g_next_vblank_ms = now;
     }
+    bool yielded = false;
     while (now < g_next_vblank_ms) {
         double remaining = g_next_vblank_ms - now;
         if (remaining >= 2.0) {
@@ -338,18 +339,31 @@ void port_vblank(void)
         } else {
             port_yield_browser(); /* a timer here would overshoot by 4 ms */
         }
+        yielded = true;
         now = emscripten_get_now();
     }
     g_next_vblank_ms += kFrameMs;
     double t_pace = emscripten_get_now();
     g_prof.pace += t_pace - t_events;
 
+    /* A late frame has no wait to take, but the browser still needs the turn:
+     * the canvas is only composited, and the renderer's map-completion
+     * callbacks only run, when this task ends. Running late frames back to
+     * back put one frame in five on screen and stalled every fifth frame about
+     * 60 ms in aurora_begin_frame, once all five staging buffers were waiting
+     * on callbacks that had never had a chance to run. */
+    if (!yielded) {
+        port_yield_browser();
+    }
+    double t_browser = emscripten_get_now();
+    g_prof.browser += t_browser - t_pace;
+
     if (g_yields_since_frame != NULL) {
         *g_yields_since_frame = 0;
     }
     port_dvd_pump();
     double t_dvd = emscripten_get_now();
-    g_prof.dvd += t_dvd - t_pace;
+    g_prof.dvd += t_dvd - t_browser;
     /* Alarms run on a virtual clock that advances exactly one frame per
      * vblank, not on the wall clock. The game's pad queue is filled only by a
      * periodic alarm of about 1/60 s, and gmscene's wait loop presents another
@@ -401,11 +415,11 @@ void port_vblank(void)
             unsigned reads, bytes;
             double read_wait, read_max;
             port_dvd_stats(&reads, &bytes, &read_wait, &read_max);
-            port_log("spike: frame %u busy %.0f ms | game %.0f (yield %u x: sleep %.0f pump %.0f) present %.0f begin %.0f "
-                     "| disc %u reads %u KB, wait %.0f ms (max %.0f)",
+            port_log("spike: frame %u busy %.0f ms | game %.0f (yield %u x: sleep %.0f pump %.0f) present %.0f "
+                     "browser %.0f begin %.0f | disc %u reads %u KB, wait %.0f ms (max %.0f)",
                      g_frame_count, busy, g_prof_left != 0.0 ? t_enter - g_prof_left : 0.0, g_yield.count,
-                     g_yield.sleep_ms, g_yield.pump_ms, t_present - t_enter, t_begin - t_audio, reads, bytes >> 10,
-                     read_wait, read_max);
+                     g_yield.sleep_ms, g_yield.pump_ms, t_present - t_enter, t_browser - t_pace, t_begin - t_audio,
+                     reads, bytes >> 10, read_wait, read_max);
         }
         memset(&g_yield, 0, sizeof g_yield);
         port_dvd_stats_reset();

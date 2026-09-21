@@ -1,0 +1,107 @@
+--- a/lib/gfx/frame.cpp
++++ b/lib/gfx/frame.cpp
+@@ -19,6 +19,7 @@
+ #include <atomic>
+ #include <chrono>
+ #include <cstdint>
++#include <cstdlib>
+ #include <deque>
+ #include <mutex>
+ #include <optional>
+@@ -60,6 +61,17 @@
+ 
+ std::array<wgpu::Buffer, StagingBufferCount> g_stagingBuffers;
+ std::array<std::atomic<BufferMapState>, StagingBufferCount> g_mappingStates;
++#ifdef __EMSCRIPTEN__
++// Browser build: the frame is recorded into this wasm-side arena, and only the
++// used prefix of each region is written into the mapped staging buffer at end
++// of frame (see begin_frame). One arena is enough because the render worker
++// runs inline here, so a frame's end_frame work finishes before the next
++// begin_frame. Allocated at the first begin_frame, not in initialize(): that
++// is where emdawnwebgpu's GetMappedRange used to malloc its StagingBufferSize
++// copy, so the heap layout the game sees (its MEM1 block is allocated by
++// OSInit, after gfx::initialize) is unchanged, and so is the footprint.
++uint8_t* g_stagingArena = nullptr;
++#endif
+ uint32_t g_frameIndex = UINT32_MAX;
+ 
+ std::array<FramePacket, FrameSlotCount> g_framePackets;
+@@ -615,6 +627,10 @@
+   g_resources.indexBuffer = {};
+   g_resources.storageBuffer = {};
+   g_stagingBuffers.fill({});
++#ifdef __EMSCRIPTEN__
++  std::free(g_stagingArena);
++  g_stagingArena = nullptr;
++#endif
+   for (auto& packet : g_framePackets) {
+     packet = {};
+   }
+@@ -690,6 +706,26 @@
+   frame.frameIndex = g_frameIndex;
+   frame.stagingBuffer = *stagingSlot;
+   size_t bufferOffset = 0;
++#ifdef __EMSCRIPTEN__
++  if (g_stagingArena == nullptr) {
++    g_stagingArena = static_cast<uint8_t*>(std::aligned_alloc(4096, StagingBufferSize));
++    AURORA_ASSERT(g_stagingArena != nullptr, "Failed to allocate the {} byte staging arena", StagingBufferSize);
++  }
++  // Not GetMappedRange. emdawnwebgpu implements it by mallocing and zeroing a
++  // wasm copy of the range, and at Unmap copies the whole range back through
++  // JavaScript; for the full StagingBufferSize every frame that was 17-30 ms
++  // of memory traffic per frame to move a few hundred KiB of real data, and
++  // 63 MiB of JavaScript garbage per frame on the WebGL2 fallback. Record into
++  // the arena instead; end_frame writes just the used prefix of each region
++  // with WriteMappedRange.
++  const auto mapBuffer = [&](ByteBuffer& buf, uint64_t size) {
++    if (size <= 0) {
++      return;
++    }
++    buf = ByteBuffer{g_stagingArena + bufferOffset, static_cast<size_t>(size)};
++    bufferOffset += size;
++  };
++#else
+   const auto& stagingBuf = g_stagingBuffers[*stagingSlot];
+   const auto mapBuffer = [&](ByteBuffer& buf, uint64_t size) {
+     if (size <= 0) {
+@@ -698,6 +734,7 @@
+     buf = ByteBuffer{static_cast<u8*>(stagingBuf.GetMappedRange(bufferOffset, size)), static_cast<size_t>(size)};
+     bufferOffset += size;
+   };
++#endif
+   mapBuffer(frame.verts, VertexBufferSize);
+   mapBuffer(frame.uniforms, UniformBufferSize);
+   mapBuffer(frame.indices, IndexBufferSize);
+@@ -735,6 +772,32 @@
+   const size_t stagingSlot = frame.stagingBuffer;
+   render_worker::enqueue_end_frame(frameId, [frameSlot, stagingSlot, callback = std::move(callback)]() mutable {
+     auto& packet = g_framePackets[frameSlot];
++#ifdef __EMSCRIPTEN__
++    {
++      // Same region order and offsets as begin_frame. Sizes are rounded up to
++      // 4, which WebGPU's getMappedRange requires; every region's capacity is
++      // a multiple of 4 so the rounded size still fits. The GPU-side copies
++      // only ever read up to each region's high-water mark, so nothing past
++      // the used prefix needs to reach the buffer.
++      size_t offset = 0;
++      const auto writeRegion = [&](uint64_t capacity, size_t used) {
++        if (capacity <= 0) {
++          return;
++        }
++        if (used > 0) {
++          g_stagingBuffers[stagingSlot].WriteMappedRange(offset, g_stagingArena + offset, AURORA_ALIGN(used, 4));
++        }
++        offset += static_cast<size_t>(capacity);
++      };
++      writeRegion(VertexBufferSize, packet.stats.lastVertSize);
++      writeRegion(UniformBufferSize, packet.stats.lastUniformSize);
++      writeRegion(IndexBufferSize, packet.stats.lastIndexSize);
++      writeRegion(StorageBufferSize, packet.stats.lastStorageSize);
++      if constexpr (UseTextureBuffer) {
++        writeRegion(TextureUploadSize, packet.stats.lastTextureUploadSize);
++      }
++    }
++#endif
+     g_stagingBuffers[stagingSlot].Unmap();
+     g_mappingStates[stagingSlot].store(BufferMapState::Unmapped, std::memory_order_release);
+     auto encoder = std::move(packet.encoder);

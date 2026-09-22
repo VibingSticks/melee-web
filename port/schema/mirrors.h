@@ -247,4 +247,410 @@ typedef struct { f32 v[1]; } port_F32Run;
  * the rows run to the next object. */
 typedef struct { struct itFoodsAttributes rows[1]; } port_itFoodsAttrs;
 
+/* --- Stage parameter blocks: the "yakumono_param" root --------------------
+ * Every stage archive exports `yakumono_param`, and every stage reads it
+ * through a struct declared inside its own gr*.c (or .static.h), so the
+ * symbol alone says nothing about the layout: roots.yml scopes each rule to
+ * its archive (`archive: GrCs.`). Each mirror is the game's declaration
+ * copied field for field and checked against the disc: the object's size
+ * (the distance to the next object) and the relocation slots inside it.
+ *
+ * Fields the game declares as int but the archive relocates are pointers --
+ * colour-overlay scripts the stage plays on its background through
+ * grMaterial_801C9604 -- and are wrapped in port_GrColorScript so the loader
+ * finds and converts the script too (archive_swap.c collect_ground_scripts).
+ * Padding the game never reads keeps its disc bytes (big-endian). */
+
+typedef struct { void* script; } port_GrColorScript;
+
+/* The stage device descriptors the gr*.c files declare as DynamicsDesc*
+ * (the pointers a stage's ftDevice callback returns, and Pushon's x0) are
+ * not DynamicsDesc on the disc: each points at a 0x24-byte block with no
+ * relocated slot, holding {1, damage, angle, ...} -- and ftCo_800C08A0, the
+ * only reader, reads it as a hit descriptor (lbColl_80008D30_arg1: state,
+ * damage, kb_angle, ..., element, sfx) after taking `count` (+4, the damage)
+ * through the DynamicsDesc name. Nine 32-bit words either way. */
+typedef lbColl_80008D30_arg1 port_GrDeviceHit;
+
+/* grbattle.c (GrNBa.dat, 8 bytes): two colour-overlay scripts. */
+typedef struct {
+    port_GrColorScript bg_curr_color_overlay;
+    port_GrColorScript bg_prev_color_overlay;
+} port_grBattle_YakumonoParam;
+
+/* grbigblue.static.h grBb_YakumonoParam (GrBb.dat, 0x144 bytes). */
+typedef struct {
+    f32 x0, x4, x8, xC;
+    s32 x10, x14, x18, x1C, x20;
+    f32 x24, x28, x2C, x30, x34, x38, x3C, x40, x44, x48, x4C, x50, x54, x58, x5C, x60;
+    u8 pad64[0x68 - 0x64];
+    f32 x68, x6C, x70, x74, x78, x7C, x80, x84;
+    s32 x88, x8C;
+    f32 x90, x94, x98, x9C, xA0, xA4, xA8, xAC;
+    s32 xB0, xB4, xB8;
+    f32 xBC, xC0, xC4, xC8, xCC, xD0, xD4, xD8;
+    s32 xDC, xE0;
+    f32 xE4, xE8, xEC, xF0, xF4, xF8, xFC, x100, x104, x108;
+    s32 x10C, x110;
+    u8 pad114[0x11C - 0x114];
+    s32 x11C, x120;
+    f32 x124, x128, x12C, x130;
+    Vec3 x134_translate;
+    f32 x140_scale;
+} port_grBb_YakumonoParam;
+
+/* grbigblueroute.c (GrNBr.dat, 0x50 bytes). */
+typedef struct {
+    s32 x0;
+    f32 x4;
+    u8 pad_8[0x20 - 0x8];
+    f32 x20;
+    u8 pad_24[0x3C - 0x24];
+    f32 x3C, x40, x44, x48, x4C;
+} port_grBigBlueRoute_YakumonoParam;
+
+/* grcastle.c (GrCs.dat, 0x148 bytes on the disc; the game declares 0x144).
+ * x114 is relocated: grCastle_801D... plays it through grMaterial_801C9604. */
+typedef struct {
+    s16 x0;
+    u8 pad_x2[2];
+    f32 x4;
+    Vec3 rot;
+} port_grCastleParams_Entry;
+typedef struct {
+    s16 x0, x2, x4, x6, x8, xA, xC, xE;
+    f32 x10, x14, x18;
+    u8 pad_x1C[4];
+    f32 x20, x24, x28, x2C, x30, x34, x38, x3C;
+    s16 x40, x42, x44;
+    u8 pad_x46[2];
+    f32 x48, x4C, x50;
+    s16 x54;
+    u8 pad_x56[2];
+    s16 x58;
+    u8 pad_x5A[2];
+    port_grCastleParams_Entry entries[9];
+    f32 x110;
+    port_GrColorScript x114;
+    f32 x118, x11C, x120, x124;
+    u8 pad_x128[4];
+    s16 x12C[4];
+    f32 x134, x138, x13C, x140;
+} port_grCastle_YakumonoParam;
+
+/* grcorneria.c (GrCn.dat / GrCn.usd, 0x8C bytes). x84 is relocated: a
+ * colour-overlay script (grMaterial_801C9604 at two sites). */
+typedef struct {
+    f32 x0, x4, x8, xC, x10, x14, x18, x1C, x20, x24, x28, x2C, x30, x34, x38, x3C, x40, x44, x48, x4C;
+    u8 pad50[0x18];
+    f32 x68;
+    u8 pad6C[0x4];
+    f32 x70;
+    s32 x74, x78, x7C, x80;
+    port_GrColorScript x84;
+    f32 x88;
+} port_grCorneria_YakumonoParam;
+
+/* grflatzone.c (GrFz.dat, 0x40 bytes). */
+typedef struct {
+    s32 unk0, unk4, unk8, unkC, unk10, unk14, unk18, unk1C, unk20;
+    f32 unk24, unk28;
+    s32 unk2C, unk30, unk34;
+    f32 unk38;
+    s32 unk3C;
+} port_grFlatzone_YakumonoParam;
+
+/* grfourside.c (GrFs.dat, 0x4C bytes). */
+typedef struct {
+    s32 heli_wait, heli_wait_add, heli_stay_time, crane_wait, crane_wait_add, crane_iron_wait, crane_iron_wait_add;
+    f32 crane_iron_up_min, crane_iron_up_max, crane_iron_down_min, crane_iron_down_max, crane_iron_spd,
+        crane_iron_stop_acl;
+    s32 ufo_wait;
+    f32 ufo_cs_offs;
+    s32 ufo_stay_time, ufo_stay_time_add;
+    u16 ufo_challenge, x46, x48;
+} port_grFourside_YakumonoParam;
+
+/* grgarden.c (GrGd.dat, 0x20 bytes). */
+typedef struct {
+    f32 x0, x4;
+    s32 x8, xC, x10, x14;
+    f32 x18, x1C;
+} port_grGarden_YakumonoParam;
+
+/* grgreatbay.c grGb_StageAttr (GrGb.dat, 0xA4 bytes). */
+typedef struct { s16 kind; s16 weight; } port_grGb_ItemEntry;
+typedef struct {
+    s16 moon_fall_wait_a, moon_fall_wait_b;
+    f32 floatfloor_landing_rate, floatfloor_slant_mul, floatfloor_slant_add, floatfloor_slant_limit,
+        floatfloor_slant_rate, floatfloor_slant_reb_rate, floatfloor_slide_mul, floatfloor_slide_add,
+        floatfloor_slide_limit, floatfloor_slide_rate, floatfloor_slide_reb_rate, floatfloor_down_mul,
+        floatfloor_down_add, floatfloor_down_limit, floatfloor_down_up_rate, floatfloor_down_down_rate;
+    s16 kame_wait_frame_a, kame_wait_frame_b, kame_rebirth_frame_a, kame_rebirth_frame_b;
+    f32 kame_x, kame_y, kame_x_offset_init, kame_x_lr_offset_a, kame_x_lr_offset_b, kame_x_fb_offset_a,
+        kame_x_fb_offset_b, kame_scale, kame_ud_scale;
+    s16 kame_dir_prob[4];
+    f32 kame_item_prob;
+    port_grGb_ItemEntry items[10];
+} port_grGb_StageAttr;
+
+/* grgreens.c (GrGr.dat, 0x7C bytes). */
+typedef struct {
+    s32 x0_blockTimerMin, x4_blockTimerMax, x8_blockBombChance, xC, x10, x14, x18, x1C, x20, x24, x28;
+    f32 x2C, x30;
+    s32 x34_windTimerMin, x38_windTimerMax;
+    f32 x3C_windSpeed, x40_left, x44_right, x48_top, x4C_bottom, x50, x54, x58;
+    s32 x5C, x60, x64, x68;
+    f32 x6C, x70, x74, x78;
+} port_grGreens_YakumonoParam;
+
+/* grheal.c grHeal_UnkData (GrHe.dat, 8 bytes). */
+typedef struct { s32 x0; s32 x4; } port_grHeal_UnkData;
+
+/* gricemt.c (GrIm.dat, 0x13C bytes on the disc; the game declares 0xD0).
+ * field_ixs is read at indices 0..4 (annotations.yml); xB0 and xB4 are
+ * relocated too but nothing decompiled reads them, so their length is not
+ * known and what they point at stays big-endian. */
+typedef struct {
+    s16 x0, x2, x4;
+    f32 x8, xC, x10, x14, x18, x1C, x20, x24, x28, x2C, x30;
+    s16 x34, x36, x38;
+    u16 x3A;
+    f32 x3C, x40, x44, x48, x4C, x50, x54, x58, x5C, x60, x64, x68, x6C, x70, x74, x78, x7C, x80, x84, x88, x8C,
+        x90, x94;
+    s16 ft_max_y, x9E;
+    f32 x9C, xA0;
+    s16 xA4, xA6, xA8;
+    s16* field_ixs;
+    s16* xB0;
+    s16* xB4;
+    s16 xB8, pad;
+    grZakoGenerator_SpawnDesc xBC;
+    f32 xC0, xC4, xC8, xCC;
+} port_grIceMt_YakumonoParam;
+
+/* grinishie1.c (GrI1.dat, 0x54 bytes). */
+typedef struct {
+    f32 unk0, unk4, unk8, unkC, unk10;
+    s16 unk14, unk16;
+    u16 unk18;
+    s16 unk1A, unk1C, unk1E;
+    f32 unk20, unk24, unk28;
+    Vec3 unk2C[2];
+    f32 unk44, unk48, unk4C, unk50;
+} port_grInishie1_YakumonoParam;
+
+/* grinishie2.c (GrI2.dat, 0x4C bytes). */
+typedef struct {
+    s16 unk0, unk2, unk4, unk6, unk8, unkA, unkC, unkE;
+    s16 unk10[2];
+    Vec3 unk14[2];
+    f32 unk2C;
+    Vec3 unk30[2];
+    s16 unk48, unk4A;
+} port_grInishie2_YakumonoParam;
+
+/* grizumi.c (GrIz.dat, 0x54 bytes). */
+typedef struct {
+    f32 x0;
+    s32 x4;
+    f32 x8, xC, x10, x14, x18, x1C, x20, x24, x28, x2C, x30, x34, x38, x3C, x40, x44, x48, x4C, x50;
+} port_grIzumi_YakumonoParam;
+
+/* grkinokoroute.c (GrNKr.dat, 0x184 bytes on the disc; the game reads 8). */
+typedef struct {
+    s32 x0;
+    grZakoGenerator_SpawnDesc x4;
+} port_grKinokoRoute_YakumonoParam;
+
+/* grkongo.static.h (GrKg.dat, 0xBC bytes). unk84 is relocated: a
+ * colour-overlay script (grMaterial_801C9604 at two sites). */
+typedef struct {
+    f32 unk0, unk4, unk8, unkC, unk10, unk14, unk18, unk1C, unk20, unk24, unk28, unk2C, unk30, unk34, unk38, unk3C,
+        unk40;
+    s16 unk44, unk46, unk48, unk4A, unk4C, unk4E, unk50, unk52;
+    f32 unk54, unk58, unk5C, unk60;
+    s32 unk64, unk68;
+    f32 unk6C, unk70, unk74, unk78, unk7C, unk80;
+    port_GrColorScript unk84;
+    f32 unk88, unk8C, unk90, unk94, unk98, unk9C, unkA0, unkA4, unkA8, unkAC, unkB0, unkB4, unkB8;
+} port_grKongo_YakumonoParam;
+
+/* grkraid.c (GrKr.dat, 0x34 bytes). */
+typedef struct {
+    u32 map_time_min, map_time_max;
+    s32 map_time_acl;
+    f32 map_rot_spd_min, map_rot_spd_max;
+    u32 kraid_wait_time, kraid_wait_time_add;
+    f32 kraid_pos_x[6];
+} port_grKraid_YakumonoParam;
+
+/* grlast.c (GrNLa.dat, 0x10 bytes): grLast reads it as int[4], each played
+ * through grMaterial_801C9604; all four are relocated. */
+typedef struct {
+    port_GrColorScript x0, x4, x8, xC;
+} port_grLast_YakumonoParam;
+
+/* grmutecity.c grMc_YakumonoParam (GrMc.dat, 0x50 bytes). x0 (declared int)
+ * and x4 (declared void*, cast to s32) are both relocated and both go to
+ * grMaterial_801C9604; x8 and xC are the stage's bury-device hit descriptors
+ * (see port_GrDeviceHit below). */
+typedef struct {
+    port_GrColorScript x0;
+    port_GrColorScript x4;
+    port_GrDeviceHit* x8;
+    port_GrDeviceHit* xC;
+    u8 pad10[0x1C];
+    f32 x2C, x30, x34, x38, x3C, x40, x44, x48, x4C;
+} port_grMc_YakumonoParam;
+
+/* groldkongo.c (GrOk.dat, 0x70 bytes). x6C is relocated: a colour-overlay
+ * script (grMaterial_801C9604). */
+typedef struct {
+    s16 rframe_bird_wait_a, rframe_bird_wait_b;
+    f32 rrange_bird_random_offset_y, rframe_barrel_shoot_a, rframe_barrel_shoot_b, rframe_barrel_in,
+        rframe_barrel_wait_a, rframe_barrel_wait_b, rspeed_barrel_rot_accel, rspeed_barrel_rot_max,
+        rframe_barrel_roll_a, rframe_barrel_roll_b;
+    s16 rrate_barrel_ld, rrate_barrel_l, rrate_barrel_lu, rrate_barrel_u, rrate_barrel_ru, rrate_barrel_r,
+        rrate_barrel_rd, rrate_barrel_d;
+    s32 rframe_barrel_interval_a, rframe_barrel_interval_b;
+    f32 rspeed_barrel_move_accel, rspeed_barrel_move_max;
+    s32 rframe_barrel_stop_a, rframe_barrel_stop_b, rpower_barrel_attack, rvector_barrel_attack,
+        rreff_barrel_attack, rrfix_barrel_attack, rradd_barrel_attack, x68;
+    port_GrColorScript x6C;
+} port_grOldKongo_YakumonoParam;
+
+/* groldpupupu.c (GrOp.dat, 0x34 bytes). */
+typedef struct {
+    s16 x0, x2, x4, x6;
+    s32 x8, xC;
+    f32 x10, x14, x18, x1C, x20, x24, x28, x2C, x30;
+} port_grOldpupupu_YakumonoParam;
+
+/* groldyoshi.c (GrOy.dat, 0x1C bytes; an anonymous struct there). */
+typedef struct {
+    s16 x0, x2;
+    f32 x4, x8, xC;
+    s16 x10, x12, x14, x16, x18;
+} port_grOldYoshi_YakumonoParam;
+
+/* gronett.c grOnett_StageParam (GrOt.dat / GrOt.usd, 0x68 bytes). */
+typedef struct {
+    f32 awning_initial, max_velocity, vel_threshold, pos_threshold, damping, spring_force, spring_constant,
+        max_displacement, awning_delta, x24, x28, x2C, x30, x34, x38, x3C, x40, x44, x48, x4C, x50, x54, x58, x5C,
+        x60, x64;
+} port_grOnett_StageParam;
+
+/* grpstadium.c (GrPs.dat / GrPs.usd, 0x54 bytes; an anonymous struct there). */
+typedef struct {
+    s32 x0, x4, x8, xC, x10, x14, x18;
+    u8 r, g, b;
+    u32 x20, x24, x28, x2C, x30, x34, x38, x3C, x40, x44;
+    s16 x48, x4A, x4C, x4E, x50;
+} port_grPStadium_YakumonoParam;
+
+/* grpushon.c (GrNPo.dat, 0x214 bytes). x0 (declared s32) is relocated: the
+ * descriptor fn_802192A4 hands ftCo_800C08A0 as a bury device, like x4..x14.
+ * x18 is the game's 4-byte bool. */
+typedef struct { s32 x0; s16 x4; s16 x6; } port_grPushOn_Entry;
+typedef struct { s32 key; s32 value; } port_grPushOn_Lookup;
+typedef struct {
+    port_GrDeviceHit* x0;
+    port_GrDeviceHit* x4;
+    port_GrDeviceHit* x8;
+    port_GrDeviceHit* xC;
+    port_GrDeviceHit* x10;
+    port_GrDeviceHit* x14;
+    s32 x18;
+    port_grPushOn_Entry x1c[0x1E];
+    port_grPushOn_Lookup x10c[0x21];
+} port_grPushon_YakumonoParam;
+
+/* grrcruise.c (GrRc.dat, 0x48 bytes). */
+typedef struct {
+    f32 x0, x4, x8;
+    s32 xC, x10, x14, x18, x1C, x20, x24, x28;
+    f32 x2C, x30, x34, x38;
+    s32 x3C, x40, x44;
+} port_grRCruise_YakumonoParam;
+
+/* grshrineroute.c (GrNSr.dat, 0x128 bytes on the disc; the game declares
+ * 0x2C). x0..x10 are relocated: x0, x4, x8 and xC are colour-overlay scripts
+ * (grMaterial_801C9604); nothing decompiled reads x10, so what it points at
+ * stays big-endian. */
+typedef struct {
+    port_GrColorScript x0, x4, x8, xC;
+    void* x10;
+    f32 x14, x18, x1C, x20;
+    s32 x24;
+    grZakoGenerator_SpawnDesc spawn_desc;
+} port_grShrineRoute_YakumonoParam;
+
+/* grstory.c (GrSt.dat, 0x24 bytes). */
+typedef struct {
+    f32 timer_min, timer_rand, spawnmany_rarity;
+    f32 vpos[6];
+} port_grStory_YakumonoParam;
+
+/* Break-the-Targets stages whose yakumono_param is a table of device hit
+ * descriptors, one per collision line kind the stage's device callback
+ * answers (grtfalco.c grTFalco_80220ACC, grtfox.c, grtganon.c, grtmewtwo.c
+ * inlineA0, grtpurin.c). Falco's and Fox's are declared UNK_T; the returning
+ * function's type is DynamicsDesc*, and every slot is relocated on the disc. */
+typedef struct { port_GrDeviceHit* unk_0; port_GrDeviceHit* unk_4; port_GrDeviceHit* unk_8; port_GrDeviceHit* unk_C; } port_grTFalco_YakumonoParam;
+typedef struct { port_GrDeviceHit* unk0; port_GrDeviceHit* unk4; port_GrDeviceHit* unk8; port_GrDeviceHit* unkC; } port_grTFox_YakumonoParam;
+typedef struct { port_GrDeviceHit* x0; port_GrDeviceHit* x4; port_GrDeviceHit* x8; } port_grTGn_YakumonoParam;
+typedef struct {
+    port_GrDeviceHit* x0;
+    port_GrDeviceHit* x4;
+    port_GrDeviceHit* xC;
+    port_GrDeviceHit* x8;
+    port_GrDeviceHit* x10;
+    port_GrDeviceHit* x14;
+    port_GrDeviceHit* x1C;
+    port_GrDeviceHit* x18;
+} port_grTMewtwo_UnkStruct;
+typedef struct { port_GrDeviceHit* x0; } port_grTPrSpecialParams;
+
+/* grvenom.c (GrVe.dat / GrVe.usd, 0x3C bytes). x38 is relocated: a
+ * colour-overlay script (grMaterial_801C9604). */
+typedef struct {
+    f32 x0, x4, x8, xC, x10;
+    u8 x14[0x2C - 0x14];
+    f32 x2C;
+    u8 x30[0x34 - 0x30];
+    f32 x34;
+    port_GrColorScript x38;
+} port_grVenom_YakumonoParam;
+
+/* gryorster.c YorsterParams (GrYt.dat, 0x24 bytes on the disc; the game
+ * declares 0x20). */
+typedef struct {
+    f32 x00, x04, x08, x0C;
+    s32 x10, x14, x18, x1C;
+} port_YorsterParams;
+
+/* grzebes.c grZe_YakumonoParam (GrZe.dat, 0x190 bytes). The disc relocates
+ * a slot at +0x2C, inside pad_14; nothing decompiled reads it. */
+typedef struct {
+    s16 x0_base, x2_delay_min, x4_delay_max, x6_level;
+} port_grZe_AcidLevelEntry;
+typedef struct {
+    f32 x00, x04, x08, x0C;
+    s32 x10;
+    u8 pad_14[0x30 - 0x14];
+    f32 x30, x34, x38, x3C, x40, x44, x48, x4C, x50, x54, x58, x5C, x60, x64, x68, x6C, x70, x74, x78, x7C, x80,
+        x84, x88, x8C, x90, x94, x98, x9C;
+    port_grZe_AcidLevelEntry xA0_entries[30];
+} port_grZe_YakumonoParam;
+
+/* grzebesroute.c (GrNZr.dat, 8 bytes). */
+typedef struct { s32 camera_timer; s32 zako_spawn_chance; } port_grZebesRoute_YakumonoParam;
+
+/* grfigureget.c grFigureGet_Params (GrNFg.dat, 0x18 bytes). */
+typedef struct {
+    s32 x0, x4, x8;
+    f32 xC, x10, x14;
+} port_grFigureGet_Params;
+
 #endif

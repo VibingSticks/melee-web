@@ -75,11 +75,22 @@ void port_swap_ft_cmd_scripts(const void* base, void* entries_a, uint32_t count_
 void port_swap_it_cmd_scripts(const void* base, const void* const* slots, uint32_t nslots,
                               void (*note_ptr)(void* user, const void* slot), void* user);
 
-/* Colour-overlay scripts (lb_013B.c): `slots` are the script pointer words of
- * Fighter_804D653C_t rows (the tables ftcolanim.c and itanimlist.c pass to
- * lb_800144C8); `item_scripts` picks the item command set for opcodes 21+
- * over the fighter one. Otherwise as port_swap_it_cmd_scripts. */
-void port_swap_co_cmd_scripts(const void* base, const void* const* slots, uint32_t nslots, int item_scripts,
+/* Who plays a colour-overlay script decides what its opcodes from 21 mean:
+ * fighters run their subaction commands (ftAction_80071028 ...), items theirs
+ * (it_80278F2C ...), and a stage's background the one ground command
+ * (grMaterial_801C9490). */
+typedef enum {
+    PORT_CO_FIGHTER = 0,
+    PORT_CO_ITEM = 1,
+    PORT_CO_GROUND = 2,
+} port_co_script_kind;
+
+/* Colour-overlay scripts (lb_013B.c): `slots` are script pointer words -- the
+ * first word of Fighter_804D653C_t rows (the tables ftcolanim.c and
+ * itanimlist.c pass to lb_800144C8), or a stage's yakumono_param fields that
+ * grMaterial_801C9604 plays; `kind` picks the command set for opcodes 21+.
+ * Otherwise as port_swap_it_cmd_scripts. */
+void port_swap_co_cmd_scripts(const void* base, const void* const* slots, uint32_t nslots, port_co_script_kind kind,
                               void (*note_ptr)(void* user, const void* slot), void* user);
 
 /* Per-costume texture-animation id lists (ftData::x8->x8.xC): an array of

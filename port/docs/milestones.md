@@ -88,7 +88,12 @@ the rest. Arrays whose length lives in the code rather than the archive are
 converted where the game reads them (`port/src/hsd_endian/formats.c`): the
 `.ssm` and `.sem` audio headers, the particle command and texture banks, and
 the fighter animation tables. Known gaps: `lbRefData`'s float array,
-`ALDYakuAll`, `yakumono_param`, `itPublicData` and the trophy tables are left
-big-endian behind relocated pointers.
+`ALDYakuAll`, `itPublicData` and the trophy tables are left big-endian behind
+relocated pointers. `yakumono_param` -- one symbol, a different struct in every
+stage archive -- is matched by archive name (`archive:` in `roots.yml`, the
+file name coming from the DVD layer's record of the buffer, since
+`HSD_Archive::name` is never set) for the 40 stages whose struct the decomp
+declares; the stages whose parameters nothing decompiled reads (Hyrule Temple,
+Poke Floats, Home-Run Contest, most target tests) stay opaque.
 
 All other units, including `lb_01F8.c`, `lbmthp.c`, `fog.c`, `pobj.c`, `video.c`, `lb_0195.c`, `lbcardnew.c` and `gmmain.c`, now build (THP decoding itself is stubbed until Task 22).

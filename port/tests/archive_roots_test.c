@@ -12,10 +12,13 @@ static const port_type Leaf_t = { "Leaf", 8, leaf_fields, 3 };
 static const port_field root_fields[] = { { F_U32, 0 }, { F_PTR_ARRAY, 4, &Leaf_t, LEN_FIELD_U32, 0 } };
 static const port_type Root_t = { "Root", 8, root_fields, 2 };
 const port_root port_roots[] = {
-    { "leaf", NULL, &Leaf_t },        /* prefix only */
-    { NULL, "_root", &Root_t },       /* suffix only */
-    { "x", "_root", &Leaf_t },        /* prefix+suffix: longer match, wins for "x_root" */
-    { NULL, NULL, NULL },
+    { "leaf", NULL, NULL, &Leaf_t },        /* prefix only */
+    { NULL, "_root", NULL, &Root_t },       /* suffix only */
+    { "x", "_root", NULL, &Leaf_t },        /* prefix+suffix: longer match, wins for "x_root" */
+    { "mystery", NULL, NULL, &Root_t },     /* unscoped, the longest prefix ... */
+    { "myst", NULL, "test.", &Leaf_t },     /* ... loses to a rule scoped to the archive */
+    { "myst", NULL, "other.", &Root_t },    /* a rule for another archive never applies */
+    { NULL, NULL, NULL, NULL },
 };
 
 static void be32(uint8_t* p, uint32_t v) { p[0] = (uint8_t) (v >> 24); p[1] = (uint8_t) (v >> 16); p[2] = (uint8_t) (v >> 8); p[3] = (uint8_t) v; }
@@ -45,8 +48,27 @@ static uint8_t* build(uint32_t* size_out)
     return f;
 }
 
+static void lookup(void)
+{
+    /* Longest prefix+suffix wins among unscoped rules. */
+    CHECK(port_archive_find_root("leafB", NULL) == &port_roots[0]);
+    CHECK(port_archive_find_root("a_root", NULL) == &port_roots[1]);
+    CHECK(port_archive_find_root("x_root", NULL) == &port_roots[2]);
+    CHECK(port_archive_find_root("nothing", NULL) == NULL);
+    /* An archive-scoped rule needs the archive's name and then beats any
+     * unscoped one, however long that one's prefix; another archive's rule
+     * is skipped; no name means no scoped rule. */
+    CHECK(port_archive_find_root("mystery", NULL) == &port_roots[3]);
+    CHECK(port_archive_find_root("mystery", "test.dat") == &port_roots[4]);
+    CHECK(port_archive_find_root("mystery", "test.usd") == &port_roots[4]);
+    CHECK(port_archive_find_root("mystery", "other.dat") == &port_roots[5]);
+    CHECK(port_archive_find_root("mystery", "third.dat") == &port_roots[3]);
+    CHECK(port_archive_find_root("leafB", "test.dat") == &port_roots[0]);
+}
+
 static void run(void)
 {
+    lookup();
     uint32_t size;
     uint8_t* file = build(&size);
     port_archive_hdr hdr;
@@ -64,7 +86,8 @@ static void run(void)
     ar.symbols = (char*) (ar.public_info + hdr.nb_public);
     ar.name = "test.dat";
 
-    CHECK_EQ_U32(port_archive_swap_roots(&ar, rs, rn), 0); /* "mystery" only logs in non-strict mode */
+    /* "mystery" names the same Leaf as "leafB" through the scoped rule: visited once, converted once */
+    CHECK_EQ_U32(port_archive_swap_roots(&ar, rs, rn), 0);
     uint8_t* d = ar.data;
     uint32_t n; memcpy(&n, d, 4); CHECK_EQ_U32(n, 2);
     uint16_t a; memcpy(&a, d + 8, 2); CHECK_EQ_U32(a, 0x0102);

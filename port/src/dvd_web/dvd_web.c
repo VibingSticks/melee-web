@@ -77,6 +77,54 @@ static pending* g_done_head;
 static pending* g_done_tail;
 static uint32_t g_in_flight;
 
+/* Which file each buffer most recently received the start of, so the archive
+ * parsed out of it can be told apart by file name (port_disc_file_at). The
+ * preload cache reads up to 80 files ahead of parsing them; 128 entries keep
+ * every one of those on record. */
+#define FILE_AT_ENTRIES 128
+static struct {
+    const void* addr;
+    const char* name;
+} g_file_at[FILE_AT_ENTRIES];
+static unsigned g_file_at_next;
+
+static void note_file_at(const void* addr, uint32_t start)
+{
+    if (g_fst == NULL) {
+        return;
+    }
+    const char* name = NULL;
+    int32_t n = port_fst_entry_count(g_fst);
+    for (int32_t e = 1; e < n; e++) {
+        if (!port_fst_is_dir(g_fst, e) && port_fst_file_offset(g_fst, e) == start) {
+            name = port_fst_entry_name(g_fst, e);
+            break;
+        }
+    }
+    if (name == NULL) {
+        return;
+    }
+    for (unsigned i = 0; i < FILE_AT_ENTRIES; i++) {
+        if (g_file_at[i].addr == addr) { /* the buffer was reused for another file */
+            g_file_at[i].name = name;
+            return;
+        }
+    }
+    unsigned i = g_file_at_next++ % FILE_AT_ENTRIES;
+    g_file_at[i].addr = addr;
+    g_file_at[i].name = name;
+}
+
+const char* port_disc_file_at(const void* buf)
+{
+    for (unsigned i = 0; i < FILE_AT_ENTRIES; i++) {
+        if (g_file_at[i].addr == buf && buf != NULL) {
+            return g_file_at[i].name;
+        }
+    }
+    return NULL;
+}
+
 int port_dvd_init(const uint8_t* fst_bytes, uint32_t n)
 {
     port_fst_free(g_fst);
@@ -170,6 +218,9 @@ s32 DVDReadAsyncPrio(DVDFileInfo* fi, void* addr, s32 length, s32 offset, DVDCal
     }
     if (n < (uint32_t) length) {
         memset((uint8_t*) addr + n, 0, (uint32_t) length - n);
+    }
+    if (offset == 0) {
+        note_file_at(addr, fi->startAddr);
     }
     fi->callback = callback;
     fi->cb.state = DVD_STATE_BUSY;

@@ -204,12 +204,8 @@ typedef struct {
     int oom;
 } script_slots;
 
-static void collect_item_scripts(void* user, const uint8_t* obj, const port_type* t)
+static void push_slot(script_slots* s, const void* slot)
 {
-    script_slots* s = user;
-    if (strcmp(t->name, "ItemStateDesc") != 0) {
-        return;
-    }
     if (s->n == s->cap) {
         uint32_t ncap = s->cap != 0 ? s->cap * 2 : 256;
         const void** p = realloc((void*) s->slots, ncap * sizeof *p);
@@ -220,7 +216,14 @@ static void collect_item_scripts(void* user, const uint8_t* obj, const port_type
         s->slots = p;
         s->cap = ncap;
     }
-    s->slots[s->n++] = obj + 12; /* ItemStateDesc::xC_script */
+    s->slots[s->n++] = slot;
+}
+
+static void collect_item_scripts(void* user, const uint8_t* obj, const port_type* t)
+{
+    if (strcmp(t->name, "ItemStateDesc") == 0) {
+        push_slot(user, obj + 12); /* ItemStateDesc::xC_script */
+    }
 }
 
 static void note_script_ptr(void* user, const void* slot)
@@ -249,17 +252,10 @@ static void collect_yaku_scripts(const port_walk_ctx* c, const HSD_ArchivePublic
             if (v == 0) {
                 break;
             }
-            if (s->n == s->cap) {
-                uint32_t ncap = s->cap != 0 ? s->cap * 2 : 256;
-                const void** p = realloc((void*) s->slots, ncap * sizeof *p);
-                if (p == NULL) {
-                    s->oom = 1;
-                    return;
-                }
-                s->slots = p;
-                s->cap = ncap;
+            push_slot(s, list + 4u * k);
+            if (s->oom) {
+                return;
             }
-            s->slots[s->n++] = list + 4u * k;
         }
     }
 }
@@ -270,21 +266,20 @@ static void collect_yaku_scripts(const port_walk_ctx* c, const HSD_ArchivePublic
  * first word is its script. */
 static void collect_colanim_scripts(void* user, const uint8_t* obj, const port_type* t)
 {
-    script_slots* s = user;
-    if (strcmp(t->name, "Fighter_804D653C_t") != 0) {
-        return;
+    if (strcmp(t->name, "Fighter_804D653C_t") == 0) {
+        push_slot(user, obj); /* Fighter_804D653C_t::unk */
     }
-    if (s->n == s->cap) {
-        uint32_t ncap = s->cap != 0 ? s->cap * 2 : 256;
-        const void** p = realloc((void*) s->slots, ncap * sizeof *p);
-        if (p == NULL) {
-            s->oom = 1;
-            return;
-        }
-        s->slots = p;
-        s->cap = ncap;
+}
+
+/* Stage colour-overlay scripts: the fields of a stage's yakumono_param that
+ * grMaterial_801C9604 plays on the background (port_GrColorScript in
+ * port/schema/mirrors.h wraps each such pointer so the walk records it). From
+ * opcode 21 these run the ground's own command (grMaterial_801C9490). */
+static void collect_ground_scripts(void* user, const uint8_t* obj, const port_type* t)
+{
+    if (strcmp(t->name, "port_GrColorScript") == 0) {
+        push_slot(user, obj); /* port_GrColorScript::script */
     }
-    s->slots[s->n++] = obj; /* Fighter_804D653C_t::unk */
 }
 
 static int has_root(const HSD_ArchivePublicInfo* pub, uint32_t nb_public, const char* syms, const char* sym)
@@ -319,20 +314,32 @@ void port_archive_convert_scripts(port_walk_ctx* c, const HSD_ArchivePublicInfo*
         port_log("hsd_endian: out of memory collecting colour-overlay scripts in %s", name);
     } else if (s.n != 0) {
         int item_scripts = has_root(pub, nb_public, syms, "itPublicData");
-        port_swap_co_cmd_scripts(c->base, s.slots, s.n, item_scripts, note_script_ptr, c);
+        port_swap_co_cmd_scripts(c->base, s.slots, s.n, item_scripts ? PORT_CO_ITEM : PORT_CO_FIGHTER,
+                                 note_script_ptr, c);
+    }
+    free((void*) s.slots);
+
+    memset(&s, 0, sizeof s);
+    port_walk_visited_foreach(c, collect_ground_scripts, &s);
+    if (s.oom) {
+        port_log("hsd_endian: out of memory collecting stage colour-overlay scripts in %s", name);
+    } else if (s.n != 0) {
+        port_swap_co_cmd_scripts(c->base, s.slots, s.n, PORT_CO_GROUND, note_script_ptr, c);
     }
     free((void*) s.slots);
 }
 
 /* Longest prefix+suffix match of `sym` in port_roots; NULL when none matches. */
-static const port_root* find_root(const char* sym)
+const port_root* port_archive_find_root(const char* sym, const char* archive)
 {
     const port_root* best = NULL;
     size_t best_len = 0;
+    int best_scoped = 0;
     size_t n = strlen(sym);
     for (const port_root* r = port_roots; r->type != NULL; r++) {
         size_t lp = r->prefix != NULL ? strlen(r->prefix) : 0;
         size_t ls = r->suffix != NULL ? strlen(r->suffix) : 0;
+        int scoped = 0;
         if (lp + ls > n || lp + ls == 0) {
             continue;
         }
@@ -342,12 +349,49 @@ static const port_root* find_root(const char* sym)
         if (ls != 0 && strcmp(sym + n - ls, r->suffix) != 0) {
             continue;
         }
-        if (best == NULL || lp + ls > best_len) {
+        if (r->archive != NULL) {
+            /* Same symbol, different meaning per archive: the rule only applies
+             * to the archive it names. */
+            if (archive == NULL ||
+                strncmp(archive, r->archive, strlen(r->archive)) != 0) {
+                continue;
+            }
+            scoped = 1;
+        }
+        /* An archive-qualified rule is more specific than any unqualified one,
+         * however long that one's prefix is. */
+        if (best == NULL || (scoped && !best_scoped) ||
+            (scoped == best_scoped && lp + ls > best_len))
+        {
             best = r;
             best_len = lp + ls;
+            best_scoped = scoped;
         }
     }
     return best;
+}
+
+/* Does any archive-scoped rule name `sym`? When one does and the archive's
+ * name is not known, the unscoped rule that applied instead is a fallback
+ * worth reporting, not a match. */
+static int has_scoped_rule(const char* sym)
+{
+    size_t n = strlen(sym);
+    for (const port_root* r = port_roots; r->type != NULL; r++) {
+        size_t lp = r->prefix != NULL ? strlen(r->prefix) : 0;
+        size_t ls = r->suffix != NULL ? strlen(r->suffix) : 0;
+        if (r->archive == NULL || lp + ls > n || lp + ls == 0) {
+            continue;
+        }
+        if (lp != 0 && strncmp(sym, r->prefix, lp) != 0) {
+            continue;
+        }
+        if (ls != 0 && strcmp(sym + n - ls, r->suffix) != 0) {
+            continue;
+        }
+        return 1;
+    }
+    return 0;
 }
 
 int port_archive_swap_roots(HSD_Archive* ar, const uint32_t* reloc_set, uint32_t reloc_count)
@@ -358,9 +402,15 @@ int port_archive_swap_roots(HSD_Archive* ar, const uint32_t* reloc_set, uint32_t
 #else
     const int strict = 0;
 #endif
-    /* HSD_ArchiveParse runs before the loader names the archive: fall back to its first symbol */
-    const char* name = ar->name != NULL ? ar->name
-                       : ar->header.nb_public != 0 ? ar->symbols + ar->public_info[0].symbol : "?";
+    /* HSD_ArchiveParse runs before the loader names the archive (nothing in
+     * the game sets HSD_Archive::name at all): the DVD layer remembers which
+     * file it read into the buffer being parsed. A root rule scoped to an
+     * archive can only fire through that name; the first symbol is only a
+     * label for the log. */
+    const char* file = ar->name != NULL ? ar->name : port_disc_file_at(ar->top_ptr);
+    const char* name = file != NULL                 ? file
+                       : ar->header.nb_public != 0 ? ar->symbols + ar->public_info[0].symbol
+                                                   : "?";
     int rc = 0;
     if (port_walk_ctx_init(&c, ar->data, ar->header.data_size, reloc_set, reloc_count, strict) != 0) {
         port_log("hsd_endian: out of memory converting %s", name);
@@ -387,13 +437,17 @@ int port_archive_swap_roots(HSD_Archive* ar, const uint32_t* reloc_set, uint32_t
     }
     for (uint32_t i = 0; i < ar->header.nb_public; i++) {
         const char* sym = ar->symbols + ar->public_info[i].symbol;
-        const port_root* root = find_root(sym);
+        const port_root* root = port_archive_find_root(sym, file);
         if (root == NULL) {
             port_log("hsd_endian: no schema for root symbol '%s' in %s", sym, name);
             if (strict) {
                 abort();
             }
             continue;
+        }
+        if (file == NULL && root->archive == NULL && has_scoped_rule(sym)) {
+            port_log("hsd_endian: archive name unknown; '%s' in %s converted as %s, not its per-archive struct",
+                     sym, name, root->type->name);
         }
         c.error = NULL;
         if (port_walk(&c, root->type, ar->data + ar->public_info[i].offset) != 0 || c.error != NULL) {

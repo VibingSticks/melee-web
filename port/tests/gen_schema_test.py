@@ -24,7 +24,7 @@ def test_fixture():
     assert "{F_U8" not in out, out                      # char name[8] is skipped
     assert re.search(r'\{F_STRUCT, 40, &port_T_Leaf, \.name = "inl"\}', out), out
     assert 'const port_type port_T_Root = { "Root", 48,' in out, out
-    assert '{ "root", NULL, &port_T_Root }' in out, out
+    assert '{ "root", NULL, NULL, &port_T_Root }' in out, out
     assert "extern const port_type port_T___f32;" in out, out
 
 

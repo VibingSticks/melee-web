@@ -1,8 +1,10 @@
 #include "check.h"
 #include "dvd_web/disc_io.h"
 #include "dvd_web/dvd_web.h"
+#include "port.h"
 
 #include <dolphin/dvd.h>
+#include <string.h>
 
 /* --- fake disc: reads are queued and delivered by the test --- */
 static uint8_t disc[0x2000];
@@ -64,7 +66,11 @@ static void run(void)
     uint8_t out[32];
     memset(out, 0xAA, sizeof out);
     done_result = -99;
+    CHECK(port_disc_file_at(out) == NULL);
     CHECK_EQ_U32(DVDReadAsyncPrio(&fi, out, 32, 0, cb, 2), 1);
+    /* a read of a file's first byte names the file for the buffer */
+    CHECK(port_disc_file_at(out) != NULL && strcmp(port_disc_file_at(out), "a.dat") == 0);
+    CHECK(port_disc_file_at(out + 1) == NULL);
     CHECK_EQ_U32(DVDGetCommandBlockStatus(&fi.cb), DVD_STATE_BUSY);
     CHECK_EQ_U32(port_dvd_pending(), 1);
     CHECK_EQ_U32(q.off, 0x1000);

@@ -28,9 +28,16 @@ typedef struct {
 int port_archive_fixup(uint8_t* file, uint32_t file_size, port_archive_hdr* hdr, uint32_t** reloc_set_out,
                        uint32_t* reloc_count_out);
 
-/* Step 2: walk every public root with its schema and swap scalar fields.
- * Implemented by plan Task 14; until then a no-op returning 0. */
+/* Step 2: walk every public root with its schema and swap scalar fields. The
+ * archive's file name comes from HSD_Archive::name when set, else from the DVD
+ * layer's record of the buffer (port_disc_file_at). */
 int port_archive_swap_roots(HSD_Archive* archive, const uint32_t* reloc_set, uint32_t reloc_count);
+
+/* The root rule for public symbol `sym` in the archive named `archive` (a
+ * file name such as "GrCs.dat", or NULL when unknown): the longest
+ * prefix+suffix match, an archive-scoped rule beating any unscoped one. NULL
+ * when nothing matches. */
+const port_root* port_archive_find_root(const char* sym, const char* archive);
 
 /* Records whether the parse of the archive whose data starts at `data`
  * converted it (`fresh`), or found it native already (a buffer the preload

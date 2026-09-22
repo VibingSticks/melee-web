@@ -41,7 +41,17 @@ static void put_ptr(uint32_t at, uint32_t target_off)
 #define U(off) ((const union CmdUnion*) (buf + (off)))
 #define F(...) be_fields(sizeof((int[]){ __VA_ARGS__ }) / (2 * sizeof(int)), (const int[]){ __VA_ARGS__ })
 
-enum { ROWS = 0, SCRIPT_FT = 0x40, TAIL = 0xC0, SCRIPT_IT = 0x100 };
+enum { ROWS = 0, SCRIPT_FT = 0x40, TAIL = 0xC0, SCRIPT_IT = 0x100, SCRIPT_GR = 0x140 };
+
+/* grMaterial_801C9490's word under TARGET_PC (grmaterial.c): the value the
+ * PowerPC build reads as (top halfword >> 2) & 0xFF. */
+struct gr_cmd_word {
+    u32 opcode : 6;
+    u32 value : 8;
+    u32 pad : 2;
+    u32 rest : 16;
+};
+#define G(off) ((const struct gr_cmd_word*) (buf + (off)))
 
 static unsigned nnoted;
 static void note(void* user, const void* slot)
@@ -92,10 +102,20 @@ static void run(void)
     put_be32(p, F(6, 0, 26, 0)); p += 4;                                    /* Command_00 */
     const uint32_t it_after_end = p;
 
+    /* A stage background script, pointed at by a bare word (a yakumono_param field). */
+    put_ptr(ROWS + 16, SCRIPT_GR);
+    p = SCRIPT_GR;
+    put_be32(p, F(6, 11, 26, 3)); p += 4;                                   /* unk.timer 3 */
+    put_be32(p, F(6, 21, 8, 0xC3, 2, 1, 16, 0x5A5A)); p += 4;               /* ground opcode 21: value 0xC3 */
+    put_be32(p, F(6, 10, 26, 0)); p += 4;                                   /* end */
+    const uint32_t gr_after_end = p;
+
     const void* ft_slots[1] = { buf + ROWS };
-    port_swap_co_cmd_scripts(buf, ft_slots, 1, 0, note, buf);
+    port_swap_co_cmd_scripts(buf, ft_slots, 1, PORT_CO_FIGHTER, note, buf);
     const void* it_slots[1] = { buf + ROWS + 8 };
-    port_swap_co_cmd_scripts(buf, it_slots, 1, 1, note, buf);
+    port_swap_co_cmd_scripts(buf, it_slots, 1, PORT_CO_ITEM, note, buf);
+    const void* gr_slots[1] = { buf + ROWS + 16 };
+    port_swap_co_cmd_scripts(buf, gr_slots, 1, PORT_CO_GROUND, note, buf);
 
     uint32_t w = SCRIPT_FT;
     CHECK_EQ_U32(CO(w)->unk.unk, 11);
@@ -152,6 +172,18 @@ static void run(void)
     w += 8;
     CHECK_EQ_U32(U(w)->Command_00.code, 0);
     CHECK_EQ_U32(*(const u32*) (buf + it_after_end), 0xEEEEEEEEu);
+
+    w = SCRIPT_GR;
+    CHECK_EQ_U32(CO(w)->unk.unk, 11);
+    CHECK_EQ_U32(CO(w)->unk.timer, 3);
+    w += 4;
+    CHECK_EQ_U32(CO(w)->unk.unk, 21);                                       /* the dispatch read */
+    CHECK_EQ_U32(G(w)->value, 0xC3);                                        /* grMaterial_801C9490's read */
+    CHECK_EQ_U32(G(w)->pad, 1);
+    CHECK_EQ_U32(G(w)->rest, 0x5A5A);
+    w += 4;
+    CHECK_EQ_U32(CO(w)->unk.unk, 10);
+    CHECK_EQ_U32(*(const u32*) (buf + gr_after_end), 0xEEEEEEEEu);
 }
 
 TEST_MAIN(run)

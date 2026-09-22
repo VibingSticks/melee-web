@@ -57,21 +57,6 @@ static int cmp_vis(const void* a, const void* b)
     return x->obj < y->obj ? -1 : x->obj > y->obj;
 }
 
-/* Longest prefix+suffix root match, duplicated from archive_swap.c (static there). */
-static const port_root* find_root(const char* sym)
-{
-    const port_root* best = NULL;
-    size_t best_len = 0, n = strlen(sym);
-    for (const port_root* r = port_roots; r->type != NULL; r++) {
-        size_t lp = r->prefix ? strlen(r->prefix) : 0, ls = r->suffix ? strlen(r->suffix) : 0;
-        if (lp + ls > n || lp + ls == 0) continue;
-        if (lp && strncmp(sym, r->prefix, lp) != 0) continue;
-        if (ls && strcmp(sym + n - ls, r->suffix) != 0) continue;
-        if (!best || lp + ls > best_len) { best = r; best_len = lp + ls; }
-    }
-    return best;
-}
-
 static int g_strict, g_max_slots = 12;
 static int g_total_unknown, g_total_violations, g_total_unreached;
 
@@ -102,7 +87,7 @@ static void check_archive(const char* name, uint8_t* file, uint32_t size)
     int unknown = 0, violations = 0;
     for (uint32_t i = 0; i < hdr.nb_public; i++) {
         const char* sym = syms + pub[i].symbol;
-        const port_root* r = find_root(sym);
+        const port_root* r = port_archive_find_root(sym, name);
         if (r == NULL) {
             printf("%s: no schema for root '%s'\n", name, sym);
             unknown++;

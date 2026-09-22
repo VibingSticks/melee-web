@@ -508,7 +508,21 @@ void grMaterial_801C9470(Item_GObj* gobj, CommandInfo* cmd)
 void grMaterial_801C9490(Item_GObj* gobj, CommandInfo* cmd)
 {
     Ground* gp = gobj->user_data;
+#ifdef TARGET_PC
+    /* The archive loader repacked this word for little-endian bitfield reads
+     * (port/src/hsd_endian/formats.c, co_gr_cmd_layouts opcode 21: 6, 8, 2,
+     * 16 bits): the 8 bits after the opcode that the PowerPC build takes out
+     * of the top halfword are this field. */
+    struct grMaterial_CmdWord {
+        u32 opcode : 6;
+        u32 value : 8;
+        u32 pad : 2;
+        u32 rest : 16;
+    };
+    u32 val = ((struct grMaterial_CmdWord*) cmd->ptr[0])->value;
+#else
     u32 val = (*(u16*) cmd->ptr[0] >> 2) & 0xFF;
+#endif
     gp->xC0 = (f32) val;
     gp->x10_flags.b6 = 1;
 }

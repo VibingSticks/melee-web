@@ -76,6 +76,11 @@ struct port_type {
 typedef struct {
     const char* prefix; /* public symbol prefix (may be NULL) ... */
     const char* suffix; /* ... and/or suffix; the longest matching prefix+suffix wins */
+    /* Optional archive-name prefix. One symbol can mean different things in
+     * different archives -- every stage exports `yakumono_param`, each with its
+     * own struct -- so a rule can require the archive it came from. A rule with
+     * an archive set is preferred over one without when both match. */
+    const char* archive;
     const port_type* type;
 } port_root;
 

@@ -253,6 +253,10 @@ port_ItemDynamics:
 # (the run-time DynamicsData is a different, allocated struct).
 DynamicsDesc:
   data: { ptr_array: lb_00F9_UnkDesc1Inner, len_field: count }
+# gricemt.c reads field_ixs[0..4] (icemt_field indices); the archive holds no
+# count.
+port_grIceMt_YakumonoParam:
+  field_ixs: { ptr_array: u16, len_const: 5 }
 # ftdynamics.c reads dynamicsNum rows of ftDynamicBones; the header's
 # ArticleDynamicBones declares the maximum (10), and the rows past the count
 # are whatever the archive packed next.

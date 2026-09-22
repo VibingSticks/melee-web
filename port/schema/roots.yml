@@ -50,7 +50,49 @@
 - { prefix: map_ptcl, type: opaque }        # particle banks: converted in particle.c
 - { prefix: map_texg, type: opaque }
 - { prefix: ALDYakuAll, type: opaque }      # pointer table; element type not known yet
+# Every stage's own parameter block, a different struct per stage (see the
+# mirrors): matched by archive name, the rest (Shrine, Poke Floats, Home-Run,
+# the trophy/target stages without a struct, GrPs1-4) staying opaque.
 - { prefix: yakumono_param, type: opaque }
+- { prefix: yakumono_param, archive: GrNBa., type: port_grBattle_YakumonoParam }
+- { prefix: yakumono_param, archive: GrBb.,  type: port_grBb_YakumonoParam }
+- { prefix: yakumono_param, archive: GrNBr., type: port_grBigBlueRoute_YakumonoParam }
+- { prefix: yakumono_param, archive: GrCs.,  type: port_grCastle_YakumonoParam }
+- { prefix: yakumono_param, archive: GrCn.,  type: port_grCorneria_YakumonoParam }
+- { prefix: yakumono_param, archive: GrFz.,  type: port_grFlatzone_YakumonoParam }
+- { prefix: yakumono_param, archive: GrFs.,  type: port_grFourside_YakumonoParam }
+- { prefix: yakumono_param, archive: GrGd.,  type: port_grGarden_YakumonoParam }
+- { prefix: yakumono_param, archive: GrGb.,  type: port_grGb_StageAttr }
+- { prefix: yakumono_param, archive: GrGr.,  type: port_grGreens_YakumonoParam }
+- { prefix: yakumono_param, archive: GrHe.,  type: port_grHeal_UnkData }
+- { prefix: yakumono_param, archive: GrIm.,  type: port_grIceMt_YakumonoParam }
+- { prefix: yakumono_param, archive: GrI1.,  type: port_grInishie1_YakumonoParam }
+- { prefix: yakumono_param, archive: GrI2.,  type: port_grInishie2_YakumonoParam }
+- { prefix: yakumono_param, archive: GrIz.,  type: port_grIzumi_YakumonoParam }
+- { prefix: yakumono_param, archive: GrNKr., type: port_grKinokoRoute_YakumonoParam }
+- { prefix: yakumono_param, archive: GrKg.,  type: port_grKongo_YakumonoParam }
+- { prefix: yakumono_param, archive: GrKr.,  type: port_grKraid_YakumonoParam }
+- { prefix: yakumono_param, archive: GrNLa., type: port_grLast_YakumonoParam }
+- { prefix: yakumono_param, archive: GrMc.,  type: port_grMc_YakumonoParam }
+- { prefix: yakumono_param, archive: GrOk.,  type: port_grOldKongo_YakumonoParam }
+- { prefix: yakumono_param, archive: GrOp.,  type: port_grOldpupupu_YakumonoParam }
+- { prefix: yakumono_param, archive: GrOy.,  type: port_grOldYoshi_YakumonoParam }
+- { prefix: yakumono_param, archive: GrOt.,  type: port_grOnett_StageParam }
+- { prefix: yakumono_param, archive: GrPs.,  type: port_grPStadium_YakumonoParam }
+- { prefix: yakumono_param, archive: GrNPo., type: port_grPushon_YakumonoParam }
+- { prefix: yakumono_param, archive: GrRc.,  type: port_grRCruise_YakumonoParam }
+- { prefix: yakumono_param, archive: GrNSr., type: port_grShrineRoute_YakumonoParam }
+- { prefix: yakumono_param, archive: GrSt.,  type: port_grStory_YakumonoParam }
+- { prefix: yakumono_param, archive: GrTFc., type: port_grTFalco_YakumonoParam }
+- { prefix: yakumono_param, archive: GrTFx., type: port_grTFox_YakumonoParam }
+- { prefix: yakumono_param, archive: GrTGn., type: port_grTGn_YakumonoParam }
+- { prefix: yakumono_param, archive: GrTMt., type: port_grTMewtwo_UnkStruct }
+- { prefix: yakumono_param, archive: GrTPr., type: port_grTPrSpecialParams }
+- { prefix: yakumono_param, archive: GrVe.,  type: port_grVenom_YakumonoParam }
+- { prefix: yakumono_param, archive: GrYt.,  type: port_YorsterParams }
+- { prefix: yakumono_param, archive: GrZe.,  type: port_grZe_YakumonoParam }
+- { prefix: yakumono_param, archive: GrNZr., type: port_grZebesRoute_YakumonoParam }
+- { prefix: yakumono_param, archive: GrNFg., type: port_grFigureGet_Params }
 - { prefix: plLoadCommonData, type: port_PlLoadCommonDataRef }
 - { prefix: eff, suffix: DataTable, type: port_EfDataTable }
 - { prefix: itPublicData, type: it_804D6D20_t }   # ItCo.dat: see annotations.yml

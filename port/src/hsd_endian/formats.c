@@ -383,8 +383,17 @@ static const ft_cmd_layout co_it_cmd_layouts[] = {
     /* 21 */ { 5, { OP(10, 16), B(16, 16), B(16, 16), B(16, 16), B(16, 16) } }, /* it_80278F2C: item opcode 10 */
     /* 22 */ { 3, { OP(8, 2, 16), B(32), { 0, { 0 } } } },   /* it_8027978C: item opcode 16 */
 };
+/* A stage background's scripts (grMaterial_801C9604 -> lb_80014258 with
+ * grMaterial_801C9664 for opcodes 21+): grMaterial_804D456C has the one
+ * command, grMaterial_801C9490, which reads the 8 bits after the opcode out
+ * of the word's top halfword (a bitfield read under TARGET_PC). */
+static const ft_cmd_layout co_gr_cmd_layouts[] = {
+    CO_COMMON_LAYOUTS,
+    /* 21 */ { 1, { OP(8, 2, 16) } },                        /* grMaterial_801C9490: Ground::xC0 */
+};
 #define CO_FT_CMD_OPCODES (sizeof co_ft_cmd_layouts / sizeof co_ft_cmd_layouts[0])
 #define CO_IT_CMD_OPCODES (sizeof co_it_cmd_layouts / sizeof co_it_cmd_layouts[0])
+#define CO_GR_CMD_OPCODES (sizeof co_gr_cmd_layouts / sizeof co_gr_cmd_layouts[0])
 #define CO_CMD_END 10
 
 #undef B
@@ -427,6 +436,7 @@ static const cmd_set it_cmd_set = { "it_script", it_cmd_layouts, IT_CMD_OPCODES,
 static const cmd_set co_ft_cmd_set = { "co_ft_script", co_ft_cmd_layouts, CO_FT_CMD_OPCODES, NULL, CO_CMD_END };
 static const cmd_set co_it_cmd_set = { "co_it_script", co_it_cmd_layouts, CO_IT_CMD_OPCODES, co_it_cmd_nwords,
                                        CO_CMD_END };
+static const cmd_set co_gr_cmd_set = { "co_gr_script", co_gr_cmd_layouts, CO_GR_CMD_OPCODES, NULL, CO_CMD_END };
 
 enum { FT_CMD_END = 0, FT_CMD_SUBROUTINE = 5, FT_CMD_RETURN = 6, FT_CMD_GOTO = 7 };
 
@@ -595,13 +605,13 @@ void port_swap_it_cmd_scripts(const void* base, const void* const* slots, uint32
     free(c.seen.slots);
 }
 
-void port_swap_co_cmd_scripts(const void* base, const void* const* slots, uint32_t nslots, int item_scripts,
+void port_swap_co_cmd_scripts(const void* base, const void* const* slots, uint32_t nslots, port_co_script_kind kind,
                               void (*note_ptr)(void* user, const void* slot), void* user)
 {
     ft_script_ctx c;
     memset(&c, 0, sizeof c);
     c.base = base;
-    c.set = item_scripts ? &co_it_cmd_set : &co_ft_cmd_set;
+    c.set = kind == PORT_CO_ITEM ? &co_it_cmd_set : kind == PORT_CO_GROUND ? &co_gr_cmd_set : &co_ft_cmd_set;
     c.note_ptr = note_ptr;
     c.note_user = user;
     for (uint32_t i = 0; i < nslots; i++) {

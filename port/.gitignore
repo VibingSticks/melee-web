@@ -10,3 +10,6 @@ tests/browser/test-results/
 spikes/*/*.png
 web/js/naga/naga.wasm
 tests/browser/*.png
+
+# Built offline bundle (tools/pack_single_html.py); a ~14 MB artifact.
+melee-offline.html

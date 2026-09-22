@@ -27,6 +27,35 @@ static void PObjInfoInit(void);
 
 HSD_PObjInfo hsdPObj = { PObjInfoInit };
 
+#ifdef TARGET_PC
+/// Vertex arrays are left big-endian in memory: the GX layer reads them the
+/// way the GameCube's did, and nothing in the archive walk swaps them
+/// (port/schema/annotations.yml leaves HSD_VtxDescList::vertex alone). The
+/// shape-animation path is the one place the CPU reads them, so it has to
+/// read them as big-endian too. Without this the stage select's morphing
+/// meshes (the only shape-animated models in the menus) were built from
+/// byte-reversed floats.
+static inline u16 port_be_u16(const void* p)
+{
+    const u8* b = p;
+    return (u16) ((b[0] << 8) | b[1]);
+}
+static inline s16 port_be_s16(const void* p)
+{
+    return (s16) port_be_u16(p);
+}
+static inline f32 port_be_f32(const void* p)
+{
+    const u8* b = p;
+    union {
+        u32 u;
+        f32 f;
+    } v;
+    v.u = ((u32) b[0] << 24) | ((u32) b[1] << 16) | ((u32) b[2] << 8) | b[3];
+    return v.f;
+}
+#endif
+
 static HSD_PObjInfo* default_class = NULL;
 
 static f32 (*vertex_buffer)[3] = NULL;
@@ -608,6 +637,31 @@ static inline void decode_s8_xyz(void* src_base, f32 dst[3], int scale)
     dst[2] = (f32) src[2] / scale;
 }
 
+#ifdef TARGET_PC
+static inline void decode_u16_xyz(void* src_base, f32 dst[3], int scale)
+{
+    u16* src = src_base;
+    dst[0] = (f32) port_be_u16(&src[0]) / scale;
+    dst[1] = (f32) port_be_u16(&src[1]) / scale;
+    dst[2] = (f32) port_be_u16(&src[2]) / scale;
+}
+
+static inline void decode_s16_xyz(void* src_base, f32 dst[3], int scale)
+{
+    s16* src = src_base;
+    dst[0] = (f32) port_be_s16(&src[0]) / scale;
+    dst[1] = (f32) port_be_s16(&src[1]) / scale;
+    dst[2] = (f32) port_be_s16(&src[2]) / scale;
+}
+
+static inline void decode_f32_xyz(void* src_base, f32 dst[3])
+{
+    f32* src = src_base;
+    dst[0] = port_be_f32(&src[0]);
+    dst[1] = port_be_f32(&src[1]);
+    dst[2] = port_be_f32(&src[2]);
+}
+#else
 static inline void decode_u16_xyz(void* src_base, f32 dst[3], int scale)
 {
     u16* src = src_base;
@@ -623,6 +677,7 @@ static inline void decode_s16_xyz(void* src_base, f32 dst[3], int scale)
     dst[1] = (f32) src[1] / scale;
     dst[2] = (f32) src[2] / scale;
 }
+#endif
 
 static void get_shape_vertex_xyz(HSD_ShapeSet* shape_set, int shape_id,
                                  int arrayidx, f32 dst[3])
@@ -643,7 +698,11 @@ static void get_shape_vertex_xyz(HSD_ShapeSet* shape_set, int shape_id,
                idx * shape_set->vertex_desc->stride;
 
     if (shape_set->vertex_desc->comp_type == GX_F32) {
+#ifdef TARGET_PC
+        decode_f32_xyz(src_base, dst);
+#else
         memcpy(dst, src_base, sizeof(f32[3]));
+#endif
     } else {
         int decimal_point = 1 << shape_set->vertex_desc->frac;
         switch (shape_set->vertex_desc->comp_type) {
@@ -688,7 +747,11 @@ static void get_shape_normal_xyz(HSD_ShapeSet* shape_set, int shape_id,
                idx * shape_set->normal_desc->stride;
 
     if (shape_set->normal_desc->comp_type == GX_F32) {
+#ifdef TARGET_PC
+        decode_f32_xyz(src_base, dst);
+#else
         memcpy(dst, src_base, sizeof(f32[3]));
+#endif
     } else {
         int decimal_point = 1 << shape_set->normal_desc->frac;
         switch (shape_set->normal_desc->comp_type) {
@@ -733,7 +796,13 @@ static void get_shape_nbt_xyz(HSD_ShapeSet* shape_set, int shape_id,
                idx * shape_set->normal_desc->stride;
 
     if (shape_set->normal_desc->comp_type == GX_F32) {
+#ifdef TARGET_PC
+        for (i = 0; i < 9; i++) {
+            dst[i] = port_be_f32(&((f32*) src_base)[i]);
+        }
+#else
         memcpy(dst, src_base, sizeof(f32[9]));
+#endif
     } else {
         int decimal_point = 1 << shape_set->normal_desc->frac;
         switch (shape_set->normal_desc->comp_type) {
@@ -747,6 +816,18 @@ static void get_shape_nbt_xyz(HSD_ShapeSet* shape_set, int shape_id,
                 dst[i] = (float) ((s8*) src_base)[i] / decimal_point;
             }
             break;
+#ifdef TARGET_PC
+        case GX_U16:
+            for (i = 0; i < 9; i++) {
+                dst[i] = (float) port_be_u16(&((u16*) src_base)[i]) / decimal_point;
+            }
+            break;
+        case GX_S16:
+            for (i = 0; i < 9; i++) {
+                dst[i] = (float) port_be_s16(&((s16*) src_base)[i]) / decimal_point;
+            }
+            break;
+#else
         case GX_U16:
             for (i = 0; i < 9; i++) {
                 dst[i] = (float) ((u16*) src_base)[i] / decimal_point;
@@ -757,6 +838,7 @@ static void get_shape_nbt_xyz(HSD_ShapeSet* shape_set, int shape_id,
                 dst[i] = (float) ((s16*) src_base)[i] / decimal_point;
             }
             break;
+#endif
         default:
             HSD_Panic(__FILE__, 1261, "unexpected normal type.");
         }

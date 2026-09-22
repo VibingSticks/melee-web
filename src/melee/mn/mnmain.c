@@ -1204,7 +1204,14 @@ void fn_8022AFEC(HSD_GObj* gp)
     u8 state;
     u8 option_count;
     u8 pad[0x20];
+#ifdef TARGET_PC
+    /* One entry per option: the loop below fills sp20[i] for every option
+     * of the menu (up to ARRAY_SIZE(mn_803EAE68)); on the GameCube the extra
+     * entries fell into the padding above. */
+    HSD_JObj* sp20[ARRAY_SIZE(mn_803EAE68)];
+#else
     HSD_JObj* sp20[4];
+#endif
     PAD_STACK(18);
 
     var_r26 = 0;

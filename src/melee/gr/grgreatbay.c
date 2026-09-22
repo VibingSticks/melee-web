@@ -325,9 +325,20 @@ void grGreatBay_801F451C(Ground_GObj* gobj)
     return;
 }
 
+#ifdef TARGET_PC
+/* Registered as the fighters' collision device (ftCo_800C07F8), whose slot is
+ * called with the ground, the fighter and a result pointer; grGreatBay_801F6708 takes
+ * two arguments (see PORT_FNCAST). */
+static bool grGreatBay_801F6708__as_device_cb(Ground_GObj* gobj, Fighter_GObj* fighter_gobj, Vec3* out)
+{
+    (void) out;
+    return grGreatBay_801F6708((u32) (uintptr_t) gobj, fighter_gobj);
+}
+#endif
+
 void fn_801F4520(HSD_GObj* gobj)
 {
-    ftCo_800C07F8(gobj, 6, grGreatBay_801F6708);
+    ftCo_800C07F8(gobj, 6, PORT_FNCAST(grGreatBay_801F6708__as_device_cb, grGreatBay_801F6708));
 }
 
 void grGreatBay_801F454C(Ground_GObj* gobj)

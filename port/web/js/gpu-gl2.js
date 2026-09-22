@@ -24,6 +24,28 @@ const ColorWrite = { RED: 1, GREEN: 2, BLUE: 4, ALPHA: 8, ALL: 15 };
 let nextId = 1;
 const uid = () => nextId++;
 
+// One turn of the event loop, without setTimeout's clamping.
+//
+// mapAsync used setTimeout(..., 0). A page the browser considers hidden --
+// which a headless tab is, and a backgrounded one is -- clamps timers to about
+// one a second, and a nested timer is clamped to 4 ms even in a visible page.
+// Aurora asks for a staging buffer every frame and waits for the map, so on a
+// screen that cycles several buffers the frame spent whole seconds waiting on
+// the timer queue with nothing to compute: the profiler showed 6-13 s inside
+// the per-frame yield against ~1 ms of game work, and a CPU profile put 99.5%
+// of the main thread outside JS entirely. A MessageChannel message is a plain
+// macrotask and is not clamped.
+let deferChannel = null;
+const deferQueue = [];
+function defer(fn) {
+  if (deferChannel === null) {
+    deferChannel = new MessageChannel();
+    deferChannel.port1.onmessage = () => { const next = deferQueue.shift(); if (next) next(); };
+  }
+  deferQueue.push(fn);
+  deferChannel.port2.postMessage(0);
+}
+
 // --- errors -------------------------------------------------------------------------
 class GPUErrorImpl { constructor(message) { this.message = message; } }
 class GPUValidationErrorImpl extends GPUErrorImpl {}
@@ -216,7 +238,7 @@ export function installWebGL2Fallback({ canvas, naga, force = false }) {
       } else {
         this.mapping = { offset, size, ab: (offset === 0 && size === this.size) ? this.backing : new ArrayBuffer(size) };
       }
-      return new Promise(res => setTimeout(() => { this.mapState = 'mapped'; res(); }, 0));
+      return new Promise(res => defer(() => { this.mapState = 'mapped'; res(); }));
     }
     getMappedRange(offset = 0, size) {
       const m = this.mapping;
@@ -717,7 +739,7 @@ export function installWebGL2Fallback({ canvas, naga, force = false }) {
       gl.pixelStorei(gl.UNPACK_ROW_LENGTH, 0);
       if (tex.isCanvas) tex.dirty = true;
     }
-    onSubmittedWorkDone() { return new Promise(r => setTimeout(r, 0)); }
+    onSubmittedWorkDone() { return new Promise(r => defer(r)); }
   }
 
   class GPUDeviceImpl {

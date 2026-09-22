@@ -314,9 +314,20 @@ void grKinokoRoute_80207B28(Ground_GObj* arg) {}
 
 void grKinokoRoute_80207B2C(Ground_GObj* arg) {}
 
+#ifdef TARGET_PC
+/* Registered as the fighters' collision device (ftCo_800C07F8), whose slot is
+ * called with the ground, the fighter and a result pointer; grKinokoRoute_80208660 takes
+ * two arguments (see PORT_FNCAST). */
+static bool grKinokoRoute_80208660__as_device_cb(Ground_GObj* gobj, Fighter_GObj* fighter_gobj, Vec3* out)
+{
+    (void) out;
+    return grKinokoRoute_80208660((int) (intptr_t) gobj, fighter_gobj);
+}
+#endif
+
 void grKinokoRoute_80207B30(HSD_GObj* gobj)
 {
-    ftCo_800C07F8(gobj, 6, grKinokoRoute_80208660);
+    ftCo_800C07F8(gobj, 6, PORT_FNCAST(grKinokoRoute_80208660__as_device_cb, grKinokoRoute_80208660));
 }
 
 void grKinokoRoute_80207B5C(Ground_GObj* gobj)

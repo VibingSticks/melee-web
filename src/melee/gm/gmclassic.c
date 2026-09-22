@@ -13,7 +13,11 @@ extern UNK_T gmClassic_80470708[];
 extern DebugGameOverData gmClassic_80470850;
 extern UNK_T gmClassic_8047086C;
 extern UNK_T gmClassic_80472AF8;
+#ifdef TARGET_PC
+/* Defined with gmClassicIntroDataBuffer below, as one object. */
+#else
 u8 gm_804908A0[112];
+#endif
 UNK_T gmClassic_804D68D0;
 
 typedef struct gmClassicMatchup {
@@ -92,7 +96,18 @@ typedef struct gmClassicSceneData {
 } gmClassicSceneData;
 ASSERT_SIZE(gmClassicSceneData, 0x560);
 
+#ifdef TARGET_PC
+/* On the GameCube gm_804908A0 follows gmClassicIntroDataBuffer in .bss, and
+ * gm_Mode_Classic_OnLoad and gmClassic_801B2xxx address the pair as one
+ * gmClassicRuntimeData (its `state` is gm_804908A0). wasm-ld placed
+ * gmClassic_804D68D0 between the two, so every order table was read and
+ * written four bytes off. Keep both in one object. */
+static gmClassicRuntimeData port_classic_runtime;
+#define gmClassicIntroDataBuffer (port_classic_runtime.intro)
+#define gm_804908A0 (port_classic_runtime.state.bytes)
+#else
 gmClassicIntroData gmClassicIntroDataBuffer;
+#endif
 
 GameModeState gm_Mode_Classic_States[] = {
     {

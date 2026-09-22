@@ -35,6 +35,17 @@
 
 int melee_main(void); /* the game's main(), renamed under TARGET_PC */
 
+#if defined(__has_feature)
+#if __has_feature(address_sanitizer)
+/* Sanitizer builds (port/build/web-asan): keep running after a report so one
+ * run lists every bad access, not only the first. Needs -fsanitize-recover. */
+const char* __asan_default_options(void)
+{
+    return "halt_on_error=0:print_stats=0:malloc_context_size=12:quarantine_size_mb=8";
+}
+#endif
+#endif
+
 /* One turn of the browser's event loop (port/web/js/imports.js). Unlike
  * emscripten_sleep(0) this is not a timer, so it is not subject to the 4 ms
  * minimum Chrome applies to nested setTimeout -- which every Asyncify wake-up

@@ -368,7 +368,13 @@ Vec3* lbVector_WorldToScreen(HSD_CObj* cobj, const Vec3* pos3d,
 {
     u8 _[16];
 
+#ifdef TARGET_PC
+    /* MTXPerspective fills a 4x4: its fourth row landed on the GameCube's
+     * stack padding and, here, on whatever local the compiler put next. */
+    Mtx44 projMtx;
+#else
     Mtx projMtx;
+#endif
     float projection[7]; // projection params
     float viewport[6];   // viewport params
     Mtx m;

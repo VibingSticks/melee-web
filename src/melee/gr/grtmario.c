@@ -131,9 +131,20 @@ void grTMario_8021FA00(Ground_GObj* gobj) {}
 
 void grTMario_8021FA04(Ground_GObj* gobj) {}
 
+#ifdef TARGET_PC
+/* Registered as the fighters' collision device (ftCo_800C07F8), whose slot is
+ * called with the ground, the fighter and a result pointer; lbl_8021FB50 takes
+ * two arguments (see PORT_FNCAST). */
+static bool lbl_8021FB50__as_device_cb(Ground_GObj* gobj, Fighter_GObj* fighter_gobj, Vec3* out)
+{
+    (void) out;
+    return (bool) lbl_8021FB50((s32) (intptr_t) gobj, fighter_gobj);
+}
+#endif
+
 void lbl_8021FA08(HSD_GObj* gobj)
 {
-    ftCo_800C07F8(gobj, 6, lbl_8021FB50);
+    ftCo_800C07F8(gobj, 6, PORT_FNCAST(lbl_8021FB50__as_device_cb, lbl_8021FB50));
 }
 
 void grTMario_8021FA34(Ground_GObj* gobj)

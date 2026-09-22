@@ -186,8 +186,16 @@ void ft_80089B08(Fighter_GObj* gobj)
                 guess = 0.5 * guess * (3.0 - guess * guess * line_len);
                 guess = 0.5 * guess * (3.0 - guess * guess * line_len);
                 guess = 0.5 * guess * (3.0 - guess * guess * line_len);
+#ifdef TARGET_PC
+                /* The slot four bytes before sp1C is line_len_sqrt on the
+                 * GameCube's stack; here it is whatever the compiler put
+                 * there, so name the variable. */
+                line_len_sqrt = (f32) ((f64) line_len * guess);
+                line_len = line_len_sqrt;
+#else
                 ((volatile f32*) &sp1C)[-1] = (f32) ((f64) line_len * guess);
                 line_len = ((volatile f32*) &sp1C)[-1];
+#endif
             }
             if (line_len < 5.0f) {
                 adj_angle = 0.0f;

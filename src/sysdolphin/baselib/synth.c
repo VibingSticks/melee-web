@@ -469,13 +469,27 @@ void HSD_SynthSFXBankDeflag(int bank_id)
         offset += vpb->userContext;
         vpb = vpb->next;
     }
+#ifdef TARGET_PC
+    /* On the GameCube hsd_SynthSFXBank sits 0x80 bytes after this table in
+     * .bss and the game reaches it by running the index off the end. wasm-ld
+     * lays the globals out differently: there the overrun landed on
+     * HSD_Synth_804C29E0, the sfx hash-bucket list heads, and stored an ARAM
+     * offset as a list pointer -- every later HSD_SynthSFXPlayWithGroup of an
+     * sfx in that bucket walked from garbage. Name the table instead. */
+    hsd_SynthSFXBank[bank_id] = (int) offset;
+#else
     HSD_Synth_804C2AE0[bank_id + 0x80 / 4] = (void*) offset;
+#endif
 }
 
 void HSD_SynthSFXBankDeflagSync(void)
 {
     while (sfxGroupDataReaddressCounter) {
+#ifdef TARGET_PC
+        port_yield(); /* the ARAM moves complete from the host pump */
+#else
         continue;
+#endif
     }
 }
 

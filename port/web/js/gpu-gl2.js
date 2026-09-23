@@ -296,10 +296,10 @@ export function installWebGL2Fallback({ canvas, naga, force = false }) {
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAX_LEVEL, this.mipLevelCount - 1);
       }
-      this.fbos = new Map();
+      this.fboKeys = new Set(); // framebuffers this texture is attached to (see fboFor)
     }
     createView(desc) { return new GPUTextureViewImpl(this, desc); }
-    destroy() { if (this.gl) gl.deleteTexture(this.gl); if (this.rb) gl.deleteRenderbuffer(this.rb); for (const f of this.fbos.values()) gl.deleteFramebuffer(f); this.gl = this.rb = null; this.fbos.clear(); }
+    destroy() { if (this.gl) gl.deleteTexture(this.gl); if (this.rb) gl.deleteRenderbuffer(this.rb); dropFbos(this); this.gl = this.rb = null; }
   }
   class GPUSamplerImpl {
     constructor(desc = {}) {
@@ -319,11 +319,23 @@ export function installWebGL2Fallback({ canvas, naga, force = false }) {
     }
   }
 
-  // Framebuffer for a (color view, depth view) pair, cached on the color texture (or depth texture).
+  // Framebuffer for a (color view, depth view) pair.
+  //
+  // Keyed on the textures and mip levels, not the views: a view is a fresh
+  // object with a fresh id every time it is created, and the swapchain path
+  // creates one per frame for the same canvas texture. Keyed on view ids this
+  // cache missed once every frame, which cost a framebuffer object never
+  // deleted (one leaked per frame) and a checkFramebufferStatus -- a
+  // synchronous round trip to the GPU process that showed up as 9.5% of all
+  // main-thread time in a profile. The attachment is the texture object and
+  // level, so that is what identifies a framebuffer.
+  //
+  // A framebuffer references both textures, so it is dropped when either one
+  // is destroyed, not only the one it happened to be cached on.
+  const fboCache = new Map();
   function fboFor(colorView, depthView) {
-    const owner = colorView?.texture ?? depthView?.texture;
-    const key = `${colorView?.id ?? 0}|${colorView?.baseMipLevel ?? 0}|${depthView?.id ?? 0}`;
-    let fbo = owner.fbos.get(key);
+    const key = `${colorView?.texture.id ?? 0}:${colorView?.baseMipLevel ?? 0}|${depthView?.texture.id ?? 0}:${depthView?.baseMipLevel ?? 0}`;
+    let fbo = fboCache.get(key);
     if (fbo) return fbo;
     fbo = gl.createFramebuffer();
     gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
@@ -331,8 +343,17 @@ export function installWebGL2Fallback({ canvas, naga, force = false }) {
     if (depthView) attach(depthView.texture.fmt[4] === 'depth-stencil' ? gl.DEPTH_STENCIL_ATTACHMENT : gl.DEPTH_ATTACHMENT, depthView);
     const status = gl.checkFramebufferStatus(gl.FRAMEBUFFER);
     if (status !== gl.FRAMEBUFFER_COMPLETE) throw new Error(`gpu-gl2: framebuffer incomplete (0x${status.toString(16)}) for ${colorView?.format}/${depthView?.format}`);
-    owner.fbos.set(key, fbo);
+    fboCache.set(key, fbo);
+    colorView?.texture.fboKeys.add(key);
+    depthView?.texture.fboKeys.add(key);
     return fbo;
+  }
+  function dropFbos(texture) {
+    for (const key of texture.fboKeys) {
+      const fbo = fboCache.get(key);
+      if (fbo) { gl.deleteFramebuffer(fbo); fboCache.delete(key); }
+    }
+    texture.fboKeys.clear();
   }
   function attach(point, view) {
     const t = view.texture;
@@ -713,12 +734,18 @@ export function installWebGL2Fallback({ canvas, naga, force = false }) {
 
   // ----- queue + device -----
   class GPUQueueImpl {
-    constructor() { this.label = ''; }
+    constructor() { this.label = ''; this.submits = 0; }
     submit(buffers) {
       for (const cb of buffers) for (const c of cb.cmds) c();
       present();
-      const err = gl.getError();
-      if (err !== gl.NO_ERROR) raise(new ValidationError(`WebGL error 0x${err.toString(16)} during submit`));
+      // gl.getError() is a synchronous round trip to the GPU process. Polling it
+      // every submit was a stall per frame for a diagnostic; polling it once a
+      // second keeps the diagnostic (an error still surfaces within a second,
+      // and the flag sticks until read) at a sixtieth of the cost.
+      if (++this.submits % 60 === 0) {
+        const err = gl.getError();
+        if (err !== gl.NO_ERROR) raise(new ValidationError(`WebGL error 0x${err.toString(16)} during submit`));
+      }
     }
     writeBuffer(buffer, offset, data, dataOffset = 0, size) {
       const bytes = ArrayBuffer.isView(data) ? new Uint8Array(data.buffer, data.byteOffset + dataOffset * (data.BYTES_PER_ELEMENT ?? 1), size ?? (data.byteLength - dataOffset * (data.BYTES_PER_ELEMENT ?? 1))) : new Uint8Array(data, dataOffset, size);

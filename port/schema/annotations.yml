@@ -100,6 +100,10 @@ port_GroundItemData:
   # converted after the walk. x4_specialAttributes stays an unfollowed
   # pointer: its type is per stage.
   article: { ptr: Article }
+# Great Bay's entry (see mirrors.h): as Article, with Tingle's attributes typed.
+port_GbArticle:
+  xC_itemStates: { ptr_array: ItemStateDesc, object_run: true }
+  x14_dynamics:  { ptr: port_ItemDynamics }
 
 # --- player, item and effect tables ------------------------------------------
 port_PlLoadCommonDataRef:

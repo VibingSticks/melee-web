@@ -68,6 +68,16 @@ export class DiscSource {
   }
 
   #store(index, bytes) {
+    // Two reads that miss the same block at the same time both fetch it (the
+    // first fetch is still in flight when the second looks). The second store
+    // replaces the first, so its bytes must come off the count, or every such
+    // pair leaves a phantom block's worth in cachedBytes and the cache evicts
+    // itself down to nothing over a long session.
+    const old = this.blocks.get(index);
+    if (old !== undefined) {
+      this.cachedBytes -= old.length;
+      this.blocks.delete(index);            // re-insert at the recently-used end
+    }
     this.blocks.set(index, bytes);
     this.cachedBytes += bytes.length;
     while (this.cachedBytes > CACHE_BYTES && this.blocks.size > 1) {

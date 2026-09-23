@@ -102,6 +102,37 @@ typedef struct {
     Article* article;
 } port_GroundItemData;
 
+/* Great Bay's itemdata (GrGb.dat): its one entry is Tingle on his balloon
+ * (It_Kind_Tincle), whose Article::x4_specialAttributes is ittincle.c's
+ * itTincleAttributes. The generic itemdata rule leaves that block alone, so
+ * the balloon's start position (xC = -60, x14 = 200) was read byte-swapped,
+ * the item's CollData landed 4e8 units away and the stepped collision pass
+ * (mpColl_80043754) then ran 71 million steps a frame: Great Bay took 30 s
+ * per frame. x0 is relocated on the disc (the header declares f32; nothing
+ * in ittincle.c reads it), so it is a pointer here. */
+typedef struct {
+    void* x0;
+    s32 x4, x8;
+    f32 xC, x10, x14, x18, x1C, x20, x24;
+    s32 x28, x2C, x30;
+    f32 x34, x38;
+    s32 x3C, x40;
+    f32 x44, x48, x4C, x50;
+    s8 x54, x55;
+} port_itTincleAttributes;
+typedef struct {
+    ItemAttr* x0_common_attr;
+    port_itTincleAttributes* x4_specialAttributes;
+    ItHurtBoneList* x8_hurtbones;
+    ItemStateArray* xC_itemStates;
+    ItemModelDesc* x10_modelDesc;
+    ItemDynamics* x14_dynamics;
+} port_GbArticle;
+typedef struct {
+    s32 kind;
+    port_GbArticle* article;
+} port_GbGroundItemData;
+
 /* player.c: "plLoadCommonData" is a pointer to the common player parameters. */
 typedef struct { struct pl_804D6470_t* data; } port_PlLoadCommonDataRef;
 

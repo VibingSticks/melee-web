@@ -47,6 +47,7 @@
 # (the `_image` rule does not match: the symbol ends in `_desc`).
 - { suffix: _image_desc, type: HSD_ImageDesc }
 - { prefix: itemdata, type: "port_GroundItemData*", array: null_term }
+- { prefix: itemdata, archive: GrGb., type: "port_GbGroundItemData*", array: null_term }  # Tingle: mirrors.h port_GbArticle
 - { prefix: map_ptcl, type: opaque }        # particle banks: converted in particle.c
 - { prefix: map_texg, type: opaque }
 - { prefix: ALDYakuAll, type: opaque }      # pointer table; element type not known yet

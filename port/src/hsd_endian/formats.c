@@ -442,11 +442,7 @@ enum { FT_CMD_END = 0, FT_CMD_SUBROUTINE = 5, FT_CMD_RETURN = 6, FT_CMD_GOTO = 7
 
 /* Words already converted, so a subroutine two scripts share, or a goto into
  * a stream walked earlier, is repacked once. Open addressing on the address. */
-typedef struct {
-    uintptr_t* slots;
-    uint32_t cap;
-    uint32_t n;
-} word_set;
+typedef port_word_set word_set;
 
 static int word_set_add(word_set* s, uintptr_t a) /* 1 if new, 0 if present, -1 out of memory */
 {
@@ -587,8 +583,9 @@ void port_swap_ft_cmd_scripts(const void* base, void* entries_a, uint32_t count_
     free(c.seen.slots);
 }
 
-void port_swap_it_cmd_scripts(const void* base, const void* const* slots, uint32_t nslots,
-                              void (*note_ptr)(void* user, const void* slot), void* user)
+void port_swap_it_cmd_scripts_seen(const void* base, const void* const* slots, uint32_t nslots,
+                                   void (*note_ptr)(void* user, const void* slot), void* user,
+                                   port_word_set* seen)
 {
     ft_script_ctx c;
     memset(&c, 0, sizeof c);
@@ -596,13 +593,26 @@ void port_swap_it_cmd_scripts(const void* base, const void* const* slots, uint32
     c.set = &it_cmd_set;
     c.note_ptr = note_ptr;
     c.note_user = user;
+    if (seen != NULL) {
+        c.seen = *seen;
+    }
     for (uint32_t i = 0; i < nslots; i++) {
         convert_stream(&c, resolve_slot(&c, slots[i]), 0);
     }
     if (c.errors != 0) {
         port_log("it_script: %d problems converting %u scripts", c.errors, (unsigned) nslots);
     }
-    free(c.seen.slots);
+    if (seen != NULL) {
+        *seen = c.seen; /* the table may have grown */
+    } else {
+        free(c.seen.slots);
+    }
+}
+
+void port_swap_it_cmd_scripts(const void* base, const void* const* slots, uint32_t nslots,
+                              void (*note_ptr)(void* user, const void* slot), void* user)
+{
+    port_swap_it_cmd_scripts_seen(base, slots, nslots, note_ptr, user, NULL);
 }
 
 void port_swap_co_cmd_scripts(const void* base, const void* const* slots, uint32_t nslots, port_co_script_kind kind,

@@ -102,7 +102,7 @@ static void check_archive(const char* name, uint8_t* file, uint32_t size)
     }
     /* coverage: relocated slots not inside any visited object */
     g_nvis = 0;
-    port_archive_convert_scripts(&c, pub, hdr.nb_public, syms, name);
+    port_archive_convert_scripts(&c, pub, hdr.nb_public, syms, name, NULL);
     port_walk_visited_foreach(&c, collect, NULL);
     qsort(g_vis, g_nvis, sizeof *g_vis, cmp_vis);
     int unreached = 0;

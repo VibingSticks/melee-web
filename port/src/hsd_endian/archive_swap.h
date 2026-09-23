@@ -69,8 +69,10 @@ int port_archive_take_fresh(const void* p);
  * does this itself; a caller that drives port_walk directly (the coverage tool)
  * calls it before reading the visited set. */
 struct port_walk_ctx_s;
+struct port_word_set_s;
 void port_archive_convert_scripts(struct port_walk_ctx_s* ctx, const HSD_ArchivePublicInfo* pub,
-                                  uint32_t nb_public, const char* syms, const char* archive_name);
+                                  uint32_t nb_public, const char* syms, const char* archive_name,
+                                  struct port_word_set_s* it_seen);
 
 /* Replacement for the tail of HSD_ArchiveLocateExtern: the in-data chain of
  * reference sites is big-endian and not covered by the relocation table. */

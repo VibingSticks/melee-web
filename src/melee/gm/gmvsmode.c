@@ -202,6 +202,16 @@ void onEnterDebugVs(GameModeState* state)
 
     start->players[0].slot_type = Gm_PKind_Human;
     start->players[1].slot_type = Gm_PKind_Human;
+#ifdef TARGET_PC
+    /* ... and for a computer opponent of a given level. */
+    {
+        extern int port_debug_vs_cpu_level;
+        if (port_debug_vs_cpu_level >= 0) {
+            start->players[1].slot_type = Gm_PKind_Cpu;
+            start->players[1].cpu_level = port_debug_vs_cpu_level;
+        }
+    }
+#endif
     start->players[2].slot_type = Gm_PKind_NA;
     start->players[3].slot_type = Gm_PKind_NA;
 

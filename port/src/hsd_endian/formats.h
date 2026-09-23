@@ -72,6 +72,22 @@ void port_swap_ft_cmd_scripts(const void* base, void* entries_a, uint32_t count_
  * rows are converted once per call. `note_ptr`, when given, is called with
  * every subroutine or goto pointer word left in place, so a coverage walk can
  * count it as reached. */
+/* Words already converted by the script converters: open addressing on the
+ * address. A caller that converts scripts in several batches over one archive
+ * (the fighters' item Articles, registered one at a time) keeps one across
+ * batches, so a stream two Articles share is repacked once. Zeroed to init;
+ * free `slots` when done. */
+typedef struct port_word_set_s {
+    uintptr_t* slots;
+    uint32_t cap;
+    uint32_t n;
+} port_word_set;
+
+/* As port_swap_it_cmd_scripts, remembering converted words in `seen` (NULL
+ * for a set that lives only for this call). */
+void port_swap_it_cmd_scripts_seen(const void* base, const void* const* slots, uint32_t nslots,
+                                   void (*note_ptr)(void* user, const void* slot), void* user,
+                                   port_word_set* seen);
 void port_swap_it_cmd_scripts(const void* base, const void* const* slots, uint32_t nslots,
                               void (*note_ptr)(void* user, const void* slot), void* user);
 

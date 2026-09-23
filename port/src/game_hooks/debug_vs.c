@@ -40,6 +40,9 @@ int port_debug_vs_requested = 0;
  * -1 keeps its defaults, Link and Mario. */
 int port_debug_vs_ckind[2] = { -1, -1 };
 
+/* Player 2 as a CPU of this level (1..9); -1 keeps it a second human. */
+int port_debug_vs_cpu_level = -1;
+
 /*   Module._port_debug_start_vs_stage(stkind);   // StKind, e.g. 4 = Castle */
 EMSCRIPTEN_KEEPALIVE void port_debug_start_vs_stage(int stkind)
 {
@@ -57,4 +60,12 @@ EMSCRIPTEN_KEEPALIVE void port_debug_start_vs_match(int stkind, int p1, int p2)
     port_debug_vs_ckind[0] = p1;
     port_debug_vs_ckind[1] = p2;
     port_debug_start_vs_stage(stkind);
+}
+
+/*   Module._port_debug_start_vs_cpu(stkind, p1_ckind, p2_ckind, level);
+ * Same, with player 2 a computer player of `level` (1..9). */
+EMSCRIPTEN_KEEPALIVE void port_debug_start_vs_cpu(int stkind, int p1, int p2, int level)
+{
+    port_debug_vs_cpu_level = level;
+    port_debug_start_vs_match(stkind, p1, p2);
 }

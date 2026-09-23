@@ -432,6 +432,15 @@ static int fail(port_walk_ctx* c, const char* what, const void* slot)
 
 static int walk_obj(port_walk_ctx* c, const port_type* t, uint8_t* obj);
 
+/* An all-ones word in a pointer slot the relocation table does not name: the
+ * archive tool's "no object" for a slot it would otherwise relocate. */
+static int word_is_none(const uint8_t* p)
+{
+    uint32_t v;
+    memcpy(&v, p, 4);
+    return v == 0xFFFFFFFFu;
+}
+
 static int walk_field(port_walk_ctx* c, const port_field* f, uint8_t* obj)
 {
     uint8_t* p = obj + f->offset;
@@ -571,6 +580,9 @@ static int walk_field(port_walk_ctx* c, const port_field* f, uint8_t* obj)
             return 0;
         }
         if (r == -2) {
+            if (word_is_none(p)) {
+                return 0; /* Pokemon Stadium's map rows: -1 where a form has no model */
+            }
             return fail(c, "pointer descriptor on an unrelocated slot", p);
         }
         if (r < 0) {
@@ -585,6 +597,9 @@ static int walk_field(port_walk_ctx* c, const port_field* f, uint8_t* obj)
             return 0;
         }
         if (r == -2) {
+            if (word_is_none(p)) {
+                return 0;
+            }
             return fail(c, "array pointer descriptor on an unrelocated slot", p);
         }
         if (r < 0) {

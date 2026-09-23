@@ -137,10 +137,12 @@ typedef struct {
 
 #include <stdio.h>
 
+#include "formats.h"
 #include "walker.h"
 
 struct port_archive_keep_s {
     port_walk_ctx c;
+    port_word_set it_seen; /* item-script words converted so far, across batches */
     uint32_t* reloc_set; /* owned; c.reloc_set points at it */
     const HSD_ArchivePublicInfo* pub; /* in the archive buffer, which outlives the data */
     uint32_t nb_public;
@@ -152,6 +154,7 @@ static void keep_free(port_archive_keep* k)
 {
     if (k != NULL) {
         port_walk_ctx_free(&k->c);
+        free(k->it_seen.slots);
         free(k->reloc_set);
         free(k);
     }
@@ -326,7 +329,7 @@ static int has_root(const HSD_ArchivePublicInfo* pub, uint32_t nb_public, const 
 }
 
 void port_archive_convert_scripts(port_walk_ctx* c, const HSD_ArchivePublicInfo* pub, uint32_t nb_public,
-                                  const char* syms, const char* name)
+                                  const char* syms, const char* name, port_word_set* it_seen)
 {
     script_slots s;
     memset(&s, 0, sizeof s);
@@ -335,7 +338,7 @@ void port_archive_convert_scripts(port_walk_ctx* c, const HSD_ArchivePublicInfo*
     if (s.oom) {
         port_log("hsd_endian: out of memory collecting item scripts in %s", name);
     } else if (s.n != 0) {
-        port_swap_it_cmd_scripts(c->base, s.slots, s.n, note_script_ptr, c);
+        port_swap_it_cmd_scripts_seen(c->base, s.slots, s.n, note_script_ptr, c, it_seen);
     }
     free((void*) s.slots);
 
@@ -498,11 +501,12 @@ port_archive_keep* port_archive_swap_roots(HSD_Archive* ar, uint32_t* reloc_set,
             }
         }
     }
-    port_archive_convert_scripts(&c, ar->public_info, ar->header.nb_public, ar->symbols, name);
     port_archive_keep* keep = NULL;
     if (keep_it && rc == 0) {
         keep = calloc(1, sizeof *keep);
     }
+    port_archive_convert_scripts(&c, ar->public_info, ar->header.nb_public, ar->symbols, name,
+                                 keep != NULL ? &keep->it_seen : NULL);
     if (keep != NULL) {
         keep->c = c; /* the context's allocations move with it */
         keep->reloc_set = reloc_set;
@@ -523,13 +527,6 @@ port_archive_keep* port_archive_swap_roots(HSD_Archive* ar, uint32_t* reloc_set,
 
 /* --- objects the game registers after the parse --- */
 
-static int cmp_ptr(const void* a, const void* b)
-{
-    const void* x = *(const void* const*) a;
-    const void* y = *(const void* const*) b;
-    return x < y ? -1 : x > y;
-}
-
 int port_archive_swap_object(void* obj, const port_type* type, const char* what)
 {
     static unsigned logged;
@@ -548,36 +545,24 @@ int port_archive_swap_object(void* obj, const port_type* type, const char* what)
         return -1;
     }
     port_archive_keep* k = n->keep;
-    /* Item scripts hang off ItemStateDesc rows; the ones reached before this
-     * walk were converted after their own walk, so only rows first reached now
-     * get theirs converted. */
-    script_slots before, after;
-    memset(&before, 0, sizeof before);
-    memset(&after, 0, sizeof after);
-    port_walk_visited_foreach(&k->c, collect_item_scripts, &before);
     k->c.error = NULL;
     int rc = port_walk(&k->c, type, obj);
     if (rc != 0 || k->c.error != NULL) {
         port_log("hsd_endian: %s in %s (%s): %s", what, k->name, type->name,
                  k->c.error != NULL ? k->c.error : "violation");
     }
-    port_walk_visited_foreach(&k->c, collect_item_scripts, &after);
-    if (before.oom || after.oom) {
+    /* Item scripts hang off ItemStateDesc rows. Every row reached so far is
+     * offered again; the kept word set makes a stream converted by an earlier
+     * batch (or shared between two Articles) a no-op rather than a second,
+     * corrupting swap. */
+    script_slots s;
+    memset(&s, 0, sizeof s);
+    port_walk_visited_foreach(&k->c, collect_item_scripts, &s);
+    if (s.oom) {
         port_log("hsd_endian: out of memory collecting item scripts for %s in %s", what, k->name);
-    } else if (after.n > before.n) {
-        qsort((void*) before.slots, before.n, sizeof *before.slots, cmp_ptr);
-        uint32_t fresh_n = 0;
-        for (uint32_t i = 0; i < after.n; i++) {
-            const void* s = after.slots[i];
-            if (before.n == 0 || bsearch(&s, before.slots, before.n, sizeof s, cmp_ptr) == NULL) {
-                after.slots[fresh_n++] = s;
-            }
-        }
-        if (fresh_n != 0) {
-            port_swap_it_cmd_scripts(k->c.base, after.slots, fresh_n, note_script_ptr, &k->c);
-        }
+    } else if (s.n != 0) {
+        port_swap_it_cmd_scripts_seen(k->c.base, s.slots, s.n, note_script_ptr, &k->c, &k->it_seen);
     }
-    free((void*) before.slots);
-    free((void*) after.slots);
+    free((void*) s.slots);
     return 0;
 }

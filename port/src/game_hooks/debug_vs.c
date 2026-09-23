@@ -36,6 +36,10 @@ int port_debug_vs_stkind = -1;
  * exit, so gm_ChangeGameModeAfterCurrentScene alone is not enough there. */
 int port_debug_vs_requested = 0;
 
+/* The fighters the debug VS mode should give players 1 and 2 (CharacterKind);
+ * -1 keeps its defaults, Link and Mario. */
+int port_debug_vs_ckind[2] = { -1, -1 };
+
 /*   Module._port_debug_start_vs_stage(stkind);   // StKind, e.g. 4 = Castle */
 EMSCRIPTEN_KEEPALIVE void port_debug_start_vs_stage(int stkind)
 {
@@ -44,4 +48,13 @@ EMSCRIPTEN_KEEPALIVE void port_debug_start_vs_stage(int stkind)
     port_log("debug: starting the debug VS match on stage %d", stkind);
     gm_ChangeGameModeAfterCurrentScene(GM_DEBUG_VS);
     gm_801A4B60(); /* end the current scene */
+}
+
+/*   Module._port_debug_start_vs_match(stkind, p1_ckind, p2_ckind);
+ * Same, naming both fighters (CharacterKind; -1 keeps the default). */
+EMSCRIPTEN_KEEPALIVE void port_debug_start_vs_match(int stkind, int p1, int p2)
+{
+    port_debug_vs_ckind[0] = p1;
+    port_debug_vs_ckind[1] = p2;
+    port_debug_start_vs_stage(stkind);
 }

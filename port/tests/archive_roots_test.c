@@ -87,7 +87,8 @@ static void run(void)
     ar.name = "test.dat";
 
     /* "mystery" names the same Leaf as "leafB" through the scoped rule: visited once, converted once */
-    CHECK_EQ_U32(port_archive_swap_roots(&ar, rs, rn), 0);
+    /* no ftData root: nothing is kept, and the walk takes the reloc set */
+    CHECK(port_archive_swap_roots(&ar, rs, rn) == NULL);
     uint8_t* d = ar.data;
     uint32_t n; memcpy(&n, d, 4); CHECK_EQ_U32(n, 2);
     uint16_t a; memcpy(&a, d + 8, 2); CHECK_EQ_U32(a, 0x0102);
@@ -97,7 +98,6 @@ static void run(void)
     memcpy(&fl, d + 28, 4); CHECK(fl == 2.0f);
     /* the relocated pointer slot was not touched by the walker */
     uint32_t items; memcpy(&items, d + 4, 4); CHECK_EQ_U32(items, (uint32_t) (uintptr_t) (d + 8));
-    free(rs);
     free(file);
 }
 

@@ -122,19 +122,19 @@ static void run(void)
     {
         static uint8_t a[64], b[64];
         CHECK_EQ_U32(port_archive_take_fresh(a), 1); /* unknown buffer: convert, as before */
-        port_archive_note_parse(a, sizeof a, 1);     /* converting parse */
+        port_archive_note_parse(a, sizeof a, 1, NULL);     /* converting parse */
         CHECK_EQ_U32(port_archive_take_fresh(a + 10), 1);
         CHECK_EQ_U32(port_archive_take_fresh(a + 10), 0); /* handed back by the cache */
-        port_archive_note_parse(a, sizeof a, 0);     /* parsed again, native already */
+        port_archive_note_parse(a, sizeof a, 0, NULL);     /* parsed again, native already */
         CHECK_EQ_U32(port_archive_take_fresh(a), 0);
-        port_archive_note_parse(a, sizeof a, 1);     /* read from the disc again into the same memory */
+        port_archive_note_parse(a, sizeof a, 1, NULL);     /* read from the disc again into the same memory */
         CHECK_EQ_U32(port_archive_take_fresh(a), 1);
         CHECK_EQ_U32(port_archive_take_fresh(a), 0);
-        port_archive_note_parse(b, sizeof b, 1);     /* preloaded ... */
-        port_archive_note_parse(b, sizeof b, 0);     /* ... and parsed again before anyone asked */
+        port_archive_note_parse(b, sizeof b, 1, NULL);     /* preloaded ... */
+        port_archive_note_parse(b, sizeof b, 0, NULL);     /* ... and parsed again before anyone asked */
         CHECK_EQ_U32(port_archive_take_fresh(b + 63), 1); /* its tables are still big-endian */
         CHECK_EQ_U32(port_archive_take_fresh(b), 0);
-        port_archive_note_parse(NULL, 0, 1);         /* an empty archive is not a buffer */
+        port_archive_note_parse(NULL, 0, 1, NULL);         /* an empty archive is not a buffer */
         CHECK_EQ_U32(port_archive_take_fresh(b), 0);
     }
 }

@@ -86,11 +86,13 @@ s32 HSD_ArchiveParse(HSD_Archive* archive, u8* src, size_t file_size)
      * A preloaded archive can be parsed again over the same buffer, and the
      * fixup reports that (1) rather than converting twice; converting the
      * scalars again would swap them straight back to big-endian. */
+    port_archive_keep* port_keep = NULL;
     if (port_converted == 0) {
-        port_archive_swap_roots(archive, port_reloc_set, port_reloc_count);
+        port_keep = port_archive_swap_roots(archive, port_reloc_set, port_reloc_count); /* takes the set */
+    } else {
+        free(port_reloc_set);
     }
-    port_archive_note_parse(archive->data, archive->header.data_size, port_converted == 0);
-    free(port_reloc_set);
+    port_archive_note_parse(archive->data, archive->header.data_size, port_converted == 0, port_keep);
 #else
     Locate(archive);
 #endif

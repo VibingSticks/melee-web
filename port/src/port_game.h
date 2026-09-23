@@ -27,6 +27,10 @@ int port_is_aram_address(unsigned long addr);
 /* Browser console, "[melee]" prefix. */
 void port_log(const char* fmt, ...);
 
+/* Converts a fighter's item Article (ftData x48, big-endian until now) when
+ * it_8026B3F8 registers it; `slot` is its kind relative to It_Kind_Kuriboh. */
+void port_swap_ft_article(void* article, int slot);
+
 /* Aurora (port patch): deliver deferred memory-card operation callbacks. */
 void CARDPumpCallbacks(void);
 

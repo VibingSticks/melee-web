@@ -31,7 +31,22 @@ int port_archive_fixup(uint8_t* file, uint32_t file_size, port_archive_hdr* hdr,
 /* Step 2: walk every public root with its schema and swap scalar fields. The
  * archive's file name comes from HSD_Archive::name when set, else from the DVD
  * layer's record of the buffer (port_disc_file_at). */
-int port_archive_swap_roots(HSD_Archive* archive, const uint32_t* reloc_set, uint32_t reloc_count);
+/* What a converting parse keeps of its walk when the game registers objects
+ * out of the archive later: the fighters' item Articles hang off ftData x48, a
+ * pointer list with no count that the schema cannot follow, and each fighter's
+ * load code hands them to the item tables one by one (it_8026B3F8). Keeping the
+ * walk's context lets those be converted then with the same visited and
+ * converted-byte bookkeeping, so an object the roots already reached is not
+ * swapped twice. Takes ownership of `reloc_set`. Returns the kept context (only
+ * for archives with an ftData root) or NULL; hand it to port_archive_note_parse. */
+typedef struct port_archive_keep_s port_archive_keep;
+port_archive_keep* port_archive_swap_roots(HSD_Archive* archive, uint32_t* reloc_set, uint32_t reloc_count);
+
+/* Convert `obj` of `type`, and what it reaches, inside the parsed archive that
+ * holds it, using that archive's kept context (see port_archive_swap_roots);
+ * item scripts behind rows first reached now are converted too. Returns 0, or
+ * -1 when the object is in no archive with a kept context (nothing done). */
+int port_archive_swap_object(void* obj, const port_type* type, const char* what);
 
 /* The root rule for public symbol `sym` in the archive named `archive` (a
  * file name such as "GrCs.dat", or NULL when unknown): the longest
@@ -45,7 +60,7 @@ const port_root* port_archive_find_root(const char* sym, const char* archive);
  * archive's data: 1 the first time it is asked after a converting parse, 0
  * after that (the same parsed archive handed back by the cache), so a table
  * the game converts itself on its load path is converted exactly once. */
-void port_archive_note_parse(const void* data, uint32_t size, int fresh);
+void port_archive_note_parse(const void* data, uint32_t size, int fresh, port_archive_keep* keep);
 int port_archive_take_fresh(const void* p);
 
 /* The bytecode the walk reached but cannot describe (item scripts behind the

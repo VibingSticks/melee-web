@@ -188,6 +188,17 @@ void onEnterDebugVs(GameModeState* state)
     start->players[1].ckind = CKind_Mario;
     start->players[2].ckind = CKind_Link;
     start->players[3].ckind = CKind_Link;
+#ifdef TARGET_PC
+    /* ... and for particular fighters (port/src/game_hooks/debug_vs.c). */
+    {
+        extern int port_debug_vs_ckind[2];
+        for (i = 0; i < 2; i++) {
+            if (port_debug_vs_ckind[i] >= 0) {
+                start->players[i].ckind = port_debug_vs_ckind[i];
+            }
+        }
+    }
+#endif
 
     start->players[0].slot_type = Gm_PKind_Human;
     start->players[1].slot_type = Gm_PKind_Human;

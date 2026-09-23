@@ -132,7 +132,30 @@ typedef struct {
     const uint8_t* data;
     uint32_t size;
     int fresh;
+    port_archive_keep* keep; /* the converting parse's walk context, when kept */
 } parse_note;
+
+#include <stdio.h>
+
+#include "walker.h"
+
+struct port_archive_keep_s {
+    port_walk_ctx c;
+    uint32_t* reloc_set; /* owned; c.reloc_set points at it */
+    const HSD_ArchivePublicInfo* pub; /* in the archive buffer, which outlives the data */
+    uint32_t nb_public;
+    const char* syms;
+    char name[32];
+};
+
+static void keep_free(port_archive_keep* k)
+{
+    if (k != NULL) {
+        port_walk_ctx_free(&k->c);
+        free(k->reloc_set);
+        free(k);
+    }
+}
 
 /* Notes are never retired (nothing says when a buffer is freed), so a slot is
  * reused only when its memory is reused (below) or the ring wraps. The ring
@@ -143,10 +166,11 @@ typedef struct {
 static parse_note g_parse_notes[PORT_PARSE_NOTES];
 static unsigned g_parse_next;
 
-void port_archive_note_parse(const void* data, uint32_t size, int fresh)
+void port_archive_note_parse(const void* data, uint32_t size, int fresh, port_archive_keep* keep)
 {
     const uint8_t* d = data;
     if (d == NULL || size == 0) {
+        keep_free(keep);
         return;
     }
     for (unsigned i = 0; i < PORT_PARSE_NOTES; i++) {
@@ -154,6 +178,13 @@ void port_archive_note_parse(const void* data, uint32_t size, int fresh)
         if (n->data != NULL && d < n->data + n->size && n->data < d + size) {
             n->data = d; /* the same buffer, or one reusing its memory */
             n->size = size;
+            /* A converting parse's context replaces whatever the slot kept
+             * (the memory holds new data); a parse that found the buffer
+             * native brings none and the old one still describes it. */
+            if (fresh || keep != NULL) {
+                keep_free(n->keep);
+                n->keep = keep;
+            }
             /* A converting parse leaves big-endian tables behind, whatever the
              * memory held before (the file was read from the disc again, or the
              * memory was reused). A parse that found the buffer native already
@@ -168,9 +199,11 @@ void port_archive_note_parse(const void* data, uint32_t size, int fresh)
         }
     }
     parse_note* n = &g_parse_notes[g_parse_next++ % PORT_PARSE_NOTES];
+    keep_free(n->keep);
     n->data = d;
     n->size = size;
     n->fresh = fresh;
+    n->keep = keep;
 }
 
 int port_archive_take_fresh(const void* p)
@@ -394,9 +427,10 @@ static int has_scoped_rule(const char* sym)
     return 0;
 }
 
-int port_archive_swap_roots(HSD_Archive* ar, const uint32_t* reloc_set, uint32_t reloc_count)
+port_archive_keep* port_archive_swap_roots(HSD_Archive* ar, uint32_t* reloc_set, uint32_t reloc_count)
 {
     port_walk_ctx c;
+    int keep_it = 0;
 #ifdef PORT_STRICT_SCHEMA
     const int strict = 1;
 #else
@@ -414,7 +448,8 @@ int port_archive_swap_roots(HSD_Archive* ar, const uint32_t* reloc_set, uint32_t
     int rc = 0;
     if (port_walk_ctx_init(&c, ar->data, ar->header.data_size, reloc_set, reloc_count, strict) != 0) {
         port_log("hsd_endian: out of memory converting %s", name);
-        return -1;
+        free(reloc_set);
+        return NULL;
     }
     double t0 = PORT_NOW_MS();
     {
@@ -432,12 +467,16 @@ int port_archive_swap_roots(HSD_Archive* ar, const uint32_t* reloc_set, uint32_t
         if (set != 0) {
             port_log("hsd_endian: out of memory converting %s", name);
             port_walk_ctx_free(&c);
-            return -1;
+            free(reloc_set);
+            return NULL;
         }
     }
     for (uint32_t i = 0; i < ar->header.nb_public; i++) {
         const char* sym = ar->symbols + ar->public_info[i].symbol;
         const port_root* root = port_archive_find_root(sym, file);
+        if (strncmp(sym, "ftData", 6) == 0) {
+            keep_it = 1; /* a fighter archive: its item Articles come later */
+        }
         if (root == NULL) {
             port_log("hsd_endian: no schema for root symbol '%s' in %s", sym, name);
             if (strict) {
@@ -460,10 +499,85 @@ int port_archive_swap_roots(HSD_Archive* ar, const uint32_t* reloc_set, uint32_t
         }
     }
     port_archive_convert_scripts(&c, ar->public_info, ar->header.nb_public, ar->symbols, name);
-    port_walk_ctx_free(&c);
+    port_archive_keep* keep = NULL;
+    if (keep_it && rc == 0) {
+        keep = calloc(1, sizeof *keep);
+    }
+    if (keep != NULL) {
+        keep->c = c; /* the context's allocations move with it */
+        keep->reloc_set = reloc_set;
+        keep->pub = ar->public_info;
+        keep->nb_public = ar->header.nb_public;
+        keep->syms = ar->symbols;
+        snprintf(keep->name, sizeof keep->name, "%s", name);
+    } else {
+        port_walk_ctx_free(&c);
+        free(reloc_set);
+    }
     /* This runs synchronously inside whatever frame asked for the archive, so
      * a large one is a visible pause rather than a slow average. */
     port_log("hsd_endian: converted %s (%u roots, %u bytes) in %.1f ms", name, (unsigned) ar->header.nb_public,
              (unsigned) ar->header.data_size, PORT_NOW_MS() - t0);
-    return rc;
+    return keep;
+}
+
+/* --- objects the game registers after the parse --- */
+
+static int cmp_ptr(const void* a, const void* b)
+{
+    const void* x = *(const void* const*) a;
+    const void* y = *(const void* const*) b;
+    return x < y ? -1 : x > y;
+}
+
+int port_archive_swap_object(void* obj, const port_type* type, const char* what)
+{
+    static unsigned logged;
+    parse_note* n = NULL;
+    for (unsigned i = 0; i < PORT_PARSE_NOTES; i++) {
+        parse_note* m = &g_parse_notes[i];
+        if (m->data != NULL && (const uint8_t*) obj >= m->data && (const uint8_t*) obj < m->data + m->size) {
+            n = m;
+            break;
+        }
+    }
+    if (n == NULL || n->keep == NULL) {
+        if (logged++ < 8) {
+            port_log("hsd_endian: %s %p is in no archive whose context was kept; left as is", what, obj);
+        }
+        return -1;
+    }
+    port_archive_keep* k = n->keep;
+    /* Item scripts hang off ItemStateDesc rows; the ones reached before this
+     * walk were converted after their own walk, so only rows first reached now
+     * get theirs converted. */
+    script_slots before, after;
+    memset(&before, 0, sizeof before);
+    memset(&after, 0, sizeof after);
+    port_walk_visited_foreach(&k->c, collect_item_scripts, &before);
+    k->c.error = NULL;
+    int rc = port_walk(&k->c, type, obj);
+    if (rc != 0 || k->c.error != NULL) {
+        port_log("hsd_endian: %s in %s (%s): %s", what, k->name, type->name,
+                 k->c.error != NULL ? k->c.error : "violation");
+    }
+    port_walk_visited_foreach(&k->c, collect_item_scripts, &after);
+    if (before.oom || after.oom) {
+        port_log("hsd_endian: out of memory collecting item scripts for %s in %s", what, k->name);
+    } else if (after.n > before.n) {
+        qsort((void*) before.slots, before.n, sizeof *before.slots, cmp_ptr);
+        uint32_t fresh_n = 0;
+        for (uint32_t i = 0; i < after.n; i++) {
+            const void* s = after.slots[i];
+            if (before.n == 0 || bsearch(&s, before.slots, before.n, sizeof s, cmp_ptr) == NULL) {
+                after.slots[fresh_n++] = s;
+            }
+        }
+        if (fresh_n != 0) {
+            port_swap_it_cmd_scripts(k->c.base, after.slots, fresh_n, note_script_ptr, &k->c);
+        }
+    }
+    free((void*) before.slots);
+    free((void*) after.slots);
+    return 0;
 }

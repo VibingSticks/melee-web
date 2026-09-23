@@ -1,3 +1,6 @@
+#ifdef TARGET_PC
+#include <port_game.h>
+#endif
 #include "it_26B1.h"
 
 #include <sysdolphin/baselib/forward.h>
@@ -204,6 +207,12 @@ int it_8026B3C0(ItemKind kind)
 /// Store Item article pointer to table
 void it_8026B3F8(Article* article, s32 kind)
 {
+#ifdef TARGET_PC
+    /* The fighter archives' Articles sit behind ftData x48, a pointer list
+     * with no count and other things past the Articles, so the archive
+     * walk cannot describe it; each one is converted as it is registered. */
+    port_swap_ft_article(article, kind - It_Kind_Kuriboh);
+#endif
     it_804D6D38[kind - It_Kind_Kuriboh] = article;
 }
 

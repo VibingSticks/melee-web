@@ -122,6 +122,10 @@ bool ftPp_SpecialS_80120FE0(Fighter_GObj* gobj)
     return false;
 end: {
     // original code returns without a value
+#ifdef TARGET_PC
+    /* r3 still holds the gobj there (80121010..801210B0), i.e. true. */
+    return true;
+#endif
 }
 }
 

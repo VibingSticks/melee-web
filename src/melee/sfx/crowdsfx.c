@@ -505,7 +505,11 @@ bool un_803224DC(s32 spawn_id, f32 pos_x, f32 kb_mag)
     }
 check:
     if (out_of_bounds != 0) {
+#ifdef TARGET_PC
+        return un_8032201C(spawn_id, cat); /* r3 as the original leaves it */
+#else
         un_8032201C(spawn_id, cat);
+#endif
     } else {
         return 0;
     }
@@ -531,5 +535,9 @@ int un_80322598(int arg0, float arg1)
     } else {
         cat = 1;
     }
+#ifdef TARGET_PC
+    return un_8032201C(arg0, cat);
+#else
     un_8032201C(arg0, cat);
+#endif
 }

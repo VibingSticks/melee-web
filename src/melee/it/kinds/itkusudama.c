@@ -198,6 +198,9 @@ static inline ItemKind it_80289BE8_spawn_random(Item_GObj* gobj, f32 vel_scale,
             return -1;
         }
     }
+#ifdef TARGET_PC
+    return rand_kind; /* -1: r3 as it_8026F3AC left it */
+#endif
 }
 
 static inline void it_80289BE8_spawn(Item_GObj* gobj, ItemKind kind,

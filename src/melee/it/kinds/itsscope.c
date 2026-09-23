@@ -133,6 +133,9 @@ int it_80291DAC(Item_GObj* gobj, int arg1)
     } else {
         return level;
     }
+#ifdef TARGET_PC
+    return level;
+#endif
 }
 
 void it_80291F14(Item_GObj* gobj, int charge_level)

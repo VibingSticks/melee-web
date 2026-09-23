@@ -132,7 +132,11 @@ void it_802EFD84(Item_GObj* gobj)
 
 bool itKyasarinegg_UnkMotion4_Anim(Item_GObj* gobj)
 {
+#ifdef TARGET_PC
+    return it_802751D8(gobj);
+#else
     it_802751D8(gobj);
+#endif
 }
 
 static inline bool it_damage_inline(Item_GObj* gobj)

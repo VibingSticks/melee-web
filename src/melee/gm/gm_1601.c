@@ -3082,6 +3082,13 @@ float fn_80166A8C(register Vec3* src, register Vec3* dst)
     register float x = src->x;
     asm { psq_st x, Vec3.x(dst), 1, qr3 }
     return x;
+#elif defined(TARGET_PC)
+    /* The game sets GQR3 to 0x00050005 (80160180): a quantized store of one
+     * value as an unscaled u16, which the caller then reads as a u16. */
+    float x = src->x;
+    u16 q = x <= 0.0f ? 0 : x >= 65535.0f ? 65535 : (u16) x;
+    *(u16*) dst = q;
+    return x;
 #endif
 }
 
@@ -3897,7 +3904,13 @@ void fn_80168A6C(void* arg0, void* arg1, s32 idx)
 
 f32 gm_80168B34(CharacterKind ckind, int arg1, int arg2)
 {
+#ifdef TARGET_PC
+    /* Below CKind_Seak the original leaves r3, which still holds ckind, as
+     * the base frame (80168BC0: cmpwi r3,0x13; ble; addi r3,r3,-1). */
+    int base = ckind;
+#else
     int base;
+#endif
     if (ckind == CKind_GKoops) {
         return 58.0F;
     }
@@ -3930,7 +3943,13 @@ float gm_80168BF8(int arg0)
 {
     CharacterKind ckind = Player_GetPlayerCharacter(arg0);
     u32 costume = Player_GetCostumeId(arg0);
+#ifdef TARGET_PC
+    /* The original falls off the end and the caller reads f1, which still
+     * holds gm_80168B34's result; wasm has no such register. */
+    return gm_80168B34(ckind, Player_80036394(arg0), costume);
+#else
     gm_80168B34(ckind, Player_80036394(arg0), costume);
+#endif
 }
 
 void gm_80168C5C(u32 arg0)

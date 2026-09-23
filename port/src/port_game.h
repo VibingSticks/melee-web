@@ -31,6 +31,9 @@ void port_log(const char* fmt, ...);
  * it_8026B3F8 registers it; `slot` is its kind relative to It_Kind_Kuriboh. */
 void port_swap_ft_article(void* article, int slot);
 
+/* 1 when `p` lies inside the wasm heap (NULL and wild values are 0). */
+int port_ptr_ok(const void* p);
+
 /* Aurora (port patch): deliver deferred memory-card operation callbacks. */
 void CARDPumpCallbacks(void);
 

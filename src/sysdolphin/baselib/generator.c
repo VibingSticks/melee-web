@@ -84,8 +84,37 @@ void hsd_8039D354(u32 unused)
     hsd_804D7900 = NULL;
 }
 
+#ifdef TARGET_PC
+#include <port_game.h>
+/* Diagnostics: a generator list walk that is about to trap on a wild pointer
+ * logs what it knows about the node first, so the effect it belongs to can be
+ * found from the crash report. */
+static void port_check_generator(const HSD_Generator* gen, const char* where)
+{
+    if (!port_ptr_ok(gen)) {
+        port_log("%s: generator node %p is not a heap address", where, (void*) gen);
+        return;
+    }
+    if (!port_ptr_ok(gen->next) && gen->next != NULL) {
+        port_log("%s: generator %p (kind %u bank %u link %u id %u type 0x%x life %u) next=%p is wild", where,
+                 (void*) gen, (unsigned) gen->kind, gen->bank, gen->linkNo, gen->idnum, gen->type, gen->life,
+                 (void*) gen->next);
+    }
+    if ((gen->jobj != NULL && !port_ptr_ok(gen->jobj)) || (gen->appsrt != NULL && !port_ptr_ok(gen->appsrt)) ||
+        (gen->userfunc != NULL && !port_ptr_ok(gen->userfunc)) || (gen->cmdList != NULL && !port_ptr_ok(gen->cmdList)))
+    {
+        port_log("%s: generator %p (kind %u bank %u link %u id %u type 0x%x) jobj=%p appsrt=%p userfunc=%p cmd=%p",
+                 where, (void*) gen, (unsigned) gen->kind, gen->bank, gen->linkNo, gen->idnum, gen->type,
+                 (void*) gen->jobj, (void*) gen->appsrt, (void*) gen->userfunc, (void*) gen->cmdList);
+    }
+}
+#endif
+
 HSD_Generator* hsd_8039D3AC(HSD_Generator* gen, HSD_Generator* prev)
 {
+#ifdef TARGET_PC
+    port_check_generator(gen, "hsd_8039D3AC");
+#endif
     if (gen->type & 0x80) {
         hsd_8039D0A0(gen);
     }

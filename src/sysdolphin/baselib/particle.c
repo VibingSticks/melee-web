@@ -1,4 +1,7 @@
 #include "particle.h"
+#ifdef TARGET_PC
+#include <port_game.h>
+#endif
 
 #include "generator.h"
 
@@ -3062,7 +3065,28 @@ void hsd_8039D0A0(HSD_Generator* gen)
         u8 pad[0x410];
         HSD_ObjAllocData alloc_data;
     } ParticleData;
+#ifdef TARGET_PC
+    /* ParticleData is the GameCube's .bss laid over hsd_804D08E8: the eight
+     * link joints, then the list heads (hsd_804D0908), then the allocator
+     * (hsd_804D0F60) 0x410 bytes on. wasm places those globals wherever it
+     * likes, so through the overlay the list head of link 0 read a float and
+     * unlinking a particle wrote over it: the wild generator nodes behind the
+     * particle-teardown traps. Name the globals instead. */
+    struct {
+        HSD_JObj** jobj;
+        HSD_Particle** particle;
+        HSD_ObjAllocData* alloc_data;
+    } data_pc = { hsd_804D08E8, hsd_804D0908, &hsd_804D0F60.alloc_data };
+#define data (&data_pc)
+#define PORT_PARTICLE_HEAD(i) (&data_pc.particle[i])
+#define PORT_PARTICLE_JOBJ(i) data_pc.jobj[i]
+#define PORT_PARTICLE_ALLOC (data_pc.alloc_data)
+#else
     ParticleData* data = (ParticleData*) hsd_804D08E8;
+#define PORT_PARTICLE_HEAD(i) (&data->particle[i])
+#define PORT_PARTICLE_JOBJ(i) data->jobj[i]
+#define PORT_PARTICLE_ALLOC (&data->alloc_data)
+#endif
     HSD_Particle* prev;
     HSD_Particle* prt;
     HSD_Particle* next;
@@ -3071,7 +3095,7 @@ void hsd_8039D0A0(HSD_Generator* gen)
 
     prev = NULL;
     idnum = gen->idnum;
-    head = &data->particle[gen->linkNo];
+    head = PORT_PARTICLE_HEAD(gen->linkNo);
     prt = *head;
 
     while (prt != NULL) {
@@ -3099,17 +3123,21 @@ void hsd_8039D0A0(HSD_Generator* gen)
 
             if (prt->kind & 0x8000) {
                 s32 jidx = (prt->kind >> 12) & 7;
-                if (data->jobj[jidx] != NULL) {
-                    HSD_JObjUnref(data->jobj[jidx]);
-                    data->jobj[jidx] = NULL;
+                if (PORT_PARTICLE_JOBJ(jidx) != NULL) {
+                    HSD_JObjUnref(PORT_PARTICLE_JOBJ(jidx));
+                    PORT_PARTICLE_JOBJ(jidx) = NULL;
                 }
             }
 
-            HSD_ObjFree(&data->alloc_data, prt);
+            HSD_ObjFree(PORT_PARTICLE_ALLOC, prt);
             hsd_804D78E2--;
         } else {
             prev = prt;
         }
         prt = next;
     }
+#undef data
+#undef PORT_PARTICLE_HEAD
+#undef PORT_PARTICLE_JOBJ
+#undef PORT_PARTICLE_ALLOC
 }

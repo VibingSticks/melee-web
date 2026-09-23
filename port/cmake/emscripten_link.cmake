@@ -25,7 +25,13 @@ set(PORT_LINK_FLAGS
 if (CMAKE_BUILD_TYPE STREQUAL "Debug")
     list(APPEND PORT_LINK_FLAGS -sASSERTIONS=1 -g2 --profiling-funcs)
 else ()
-    list(APPEND PORT_LINK_FLAGS -sASSERTIONS=0)
+    # Keep function names in release too. Without the name section a wasm trap
+    # reports "memory access out of bounds" and frames like wasm-function[9090],
+    # which is nothing to go on -- a crash report from someone else's machine
+    # has to name the function to be worth sending. The names live in a custom
+    # section the engine never loads into linear memory, so the cost is download
+    # size, not the game's heap.
+    list(APPEND PORT_LINK_FLAGS -sASSERTIONS=0 --profiling-funcs)
 endif ()
 if (PORT_SINGLE_FILE)
     list(APPEND PORT_LINK_FLAGS -sSINGLE_FILE=1)

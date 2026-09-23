@@ -23,8 +23,10 @@ The disc image is still chosen by the player at runtime; it is never packed.
 
 import argparse
 import base64
+import datetime
 import pathlib
 import re
+import subprocess
 import sys
 
 # Concatenated, in this order, into one module scope. boot.js goes last because
@@ -41,6 +43,29 @@ BOOT_IMPORT = re.compile(r"(?m)^import\s*\{[^}]*\}\s*from\s*'\./disc_source\.js'
 EXPORT_KEYWORD = re.compile(r"(?m)^export\s+")
 LEFTOVER_MODULE_SYNTAX = re.compile(r"(?m)^\s*(import|export)\s")
 BOOT_SCRIPT_TAG = re.compile(r"(?m)^\s*<script[^>]*\bsrc=[\"']boot\.js[\"'][^>]*>\s*</script>\s*\n")
+
+
+BUILD_META = re.compile(r'(<meta name="melee-build" content=")[^"]*(">)')
+
+
+def build_id() -> str:
+    """What the crash report will call this build.
+
+    The shell already carries CMake's configure-time id, but the offline file
+    is the artifact people actually run and report from, so it is stamped
+    afresh here from the tree it was packed from.
+    """
+    root = pathlib.Path(__file__).resolve().parents[2]
+    desc = ""
+    try:
+        r = subprocess.run(["git", "-C", str(root), "describe", "--always", "--dirty", "--abbrev=9"],
+                           capture_output=True, text=True, timeout=10)
+        if r.returncode == 0:
+            desc = r.stdout.strip()
+    except (OSError, subprocess.SubprocessError):
+        pass
+    # UTC, like CMake's stamp, so the two ids agree on the day.
+    return f"{desc or 'unknown'} {datetime.datetime.now(datetime.timezone.utc).date().isoformat()} offline"
 
 
 class PackError(Exception):
@@ -139,11 +164,16 @@ def verify(html: str, runtime_js: str = "") -> list[str]:
 def pack(build: pathlib.Path) -> tuple[str, str]:
     """Returns the packed page and the embedded Emscripten runtime text."""
     shell = read(build / "index.html")
+    shell = BUILD_META.sub(lambda m: m.group(1) + build_id() + m.group(2), shell, count=1)
     melee_js = read(build / "melee.js")
     if "createMelee" not in melee_js:
         raise PackError("melee.js does not define createMelee: build with -sMODULARIZE")
-    if "melee.wasm" in melee_js:
-        raise PackError("melee.js still names melee.wasm: build with -sSINGLE_FILE")
+    # A runtime that would fetch its wasm names it as a JS string literal
+    # ('melee.wasm', for locateFile). The bare text also appears *inside* the
+    # embedded binary since release builds keep the name section, whose
+    # module-name entry is the file name -- so only the quoted form counts.
+    if re.search(r"""['"]melee\.wasm['"]""", melee_js):
+        raise PackError("melee.js still loads melee.wasm by name: build with -sSINGLE_FILE")
 
     naga_wasm = build / "naga" / "naga.wasm"
     if not naga_wasm.exists():

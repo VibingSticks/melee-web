@@ -44,6 +44,8 @@ function status(text, isError = false) {
 }
 
 function appendLog(text) {
+  LOG_RING.push(text);
+  if (LOG_RING.length > LOG_RING_MAX) LOG_RING.splice(0, LOG_RING.length - LOG_RING_MAX);
   if (!logEl) return;
   logEl.textContent += text + '\n';
   if (logEl.textContent.length > 20000) logEl.textContent = logEl.textContent.slice(-15000);
@@ -51,6 +53,133 @@ function appendLog(text) {
 }
 
 const params = new URLSearchParams(location.search);
+
+// --- Crash reports -----------------------------------------------------------
+//
+// A crash on someone else's machine is unreportable without this: the page
+// shows one red line and the stack is gone. Everything that can end the game
+// funnels into one report -- an uncaught error (a wasm trap arrives here as a
+// RuntimeError whose stack names the frames, now that release builds keep
+// them), an unhandled rejection, Emscripten's abort, and a deliberate exit --
+// together with the scene the game was in, the memory it was using, and the
+// last few hundred log lines, which carry the profiler's frame timings.
+//
+// The report is also kept in localStorage, because the failure that matters
+// most on a small machine leaves no error at all: the browser kills the tab
+// for memory. A heartbeat records how far the game got, and the next start
+// notices a session that ended without either a clean unload or a recorded
+// crash and says so.
+const LOG_RING = [];
+const LOG_RING_MAX = 400;
+const CRASH_KEY = 'melee-last-crash';
+const HEARTBEAT_KEY = 'melee-heartbeat';
+let crashReported = false;
+
+function buildId() {
+  const content = document.querySelector('meta[name="melee-build"]')?.content ?? '';
+  return content && !content.startsWith('@') ? content : 'unknown';
+}
+
+// What the game was doing, read through the same exports the tests use.
+function gameState() {
+  const M = window.Module;
+  const out = {};
+  try { if (M?._port_scene_state) { const v = M._port_scene_state(); out.scene = `mode ${(v >> 8) & 0xff} index ${v & 0xff}`; } } catch { /* runtime gone */ }
+  try { if (M?._port_frame_count) out.frame = M._port_frame_count(); } catch { /* runtime gone */ }
+  try { if (M?.HEAPU8) out.wasmHeapMB = (M.HEAPU8.length / 1048576).toFixed(0); } catch { /* runtime gone */ }
+  try { const m = performance.memory; if (m) out.jsHeapMB = (m.usedJSHeapSize / 1048576).toFixed(0); } catch { /* not exposed */ }
+  return out;
+}
+
+const stateLine = () => Object.entries(gameState()).map(([k, v]) => `${k}=${v}`).join(' ') || '(runtime not up)';
+
+function crashReport(kind, detail) {
+  return [
+    'melee-web crash report',
+    `build: ${buildId()}`,
+    `when: ${new Date().toISOString()}`,
+    `kind: ${kind}`,
+    `page: ${location.protocol}//${location.host}${location.pathname}${location.search}`,
+    `renderer: ${$('renderer')?.textContent || '?'}`,
+    `browser: ${navigator.userAgent}`,
+    `cores: ${navigator.hardwareConcurrency ?? '?'}  deviceMemoryGB: ${navigator.deviceMemory ?? '?'}  screen: ${screen.width}x${screen.height}`,
+    `game: ${stateLine()}`,
+    '',
+    '--- error ---',
+    String(detail ?? '(none)'),
+    '',
+    `--- last ${LOG_RING.length} log lines ---`,
+    ...LOG_RING,
+  ].join('\n');
+}
+
+function writeHeartbeat(clean) {
+  try {
+    localStorage.setItem(HEARTBEAT_KEY, JSON.stringify({ at: new Date().toISOString(), clean, crashed: crashReported, game: stateLine() }));
+  } catch { /* storage unavailable: nothing to do */ }
+}
+
+function showCrash(text, headline) {
+  try { localStorage.setItem(CRASH_KEY, text); } catch { /* still shown on the page */ }
+  const box = $('crash');
+  if (box) { box.hidden = false; box.dataset.report = text; }
+  status(headline, true);
+}
+
+function reportCrash(kind, err) {
+  if (crashReported) return; // the first failure is the cause; what follows is fallout
+  crashReported = true;
+  const detail = err instanceof Error ? (err.stack || err.message)
+    : typeof err === 'string' ? err
+    : (() => { try { return JSON.stringify(err); } catch { return String(err); } })();
+  console.error(`[melee] crash (${kind}): ${detail}`);
+  showCrash(crashReport(kind, detail), `The game crashed (${kind}). Use "Copy crash report" and send it along.`);
+  writeHeartbeat(false);
+}
+
+function installCrashHandlers() {
+  window.addEventListener('error', (e) => reportCrash('uncaught error', e.error ?? e.message));
+  window.addEventListener('unhandledrejection', (e) => reportCrash('unhandled rejection', e.reason));
+
+  const box = $('crash');
+  if (!box) return;
+  $('crash-copy').addEventListener('click', async () => {
+    const text = box.dataset.report || '';
+    try {
+      await navigator.clipboard.writeText(text);
+      status('Crash report copied to the clipboard.');
+    } catch {
+      download(`melee-crash-${Date.now()}.txt`, text, 'text/plain'); // clipboard refused: hand over a file instead
+    }
+  });
+  $('crash-save').addEventListener('click', () => download(`melee-crash-${Date.now()}.txt`, box.dataset.report || '', 'text/plain'));
+
+  // Did the previous session end badly? A recorded crash is shown again; a
+  // heartbeat that never saw a clean unload and recorded no crash means the
+  // browser killed the tab, and on a small machine that is memory.
+  let hb = null;
+  try { hb = JSON.parse(localStorage.getItem(HEARTBEAT_KEY) ?? 'null'); } catch { /* absent or unreadable */ }
+  if (hb && (hb.crashed || !hb.clean)) {
+    let last = '';
+    try { last = localStorage.getItem(CRASH_KEY) || ''; } catch { /* absent */ }
+    if (hb.crashed && last) {
+      showCrash(last, 'The last session crashed. "Copy crash report" has the details.');
+    } else {
+      const note = `The previous session ended at ${hb.at} with no error recorded (${hb.game}).\n`
+        + 'No unload was seen either, so the browser most likely killed the tab -- on a small machine that is usually memory.';
+      showCrash(crashReport('tab killed (no error recorded)', note), 'The last session died without an error. "Copy crash report" has what is known.');
+    }
+    try { localStorage.removeItem(HEARTBEAT_KEY); } catch { /* fine */ }
+  }
+}
+
+function startHeartbeat() {
+  writeHeartbeat(false);
+  setInterval(() => writeHeartbeat(false), 5000);
+  addEventListener('pagehide', () => writeHeartbeat(true));
+}
+
+installCrashHandlers();
 
 // Renderer selection: WebGPU when the browser gives us an adapter, otherwise the WebGL2
 // polyfill (port/web/js/gpu-gl2.js). ?renderer=webgl2|webgpu forces one.
@@ -122,10 +251,14 @@ async function startGame(disc, fst) {
     print: (t) => { console.log(t); appendLog(t); },
     printErr: (t) => { console.error(t); appendLog(t); },
     setStatus: (t) => { if (t) status(t); },
-    onAbort(what) { status('The game stopped: ' + what, true); },
+    onAbort(what) { reportCrash('abort', what); },
+    // The port exits deliberately when the game panics (HSD_Panic); to the
+    // player that is a crash, and the log tail says why.
+    onExit(code) { reportCrash('exit', `the game exited with status ${code}`); },
   });
   window.Module = Module; // the browser tests reach the exports through this
   wireSaveButtons(Module);
+  startHeartbeat();
 
   const ptr = Module._malloc(fst.length);
   Module.HEAPU8.set(fst, ptr);

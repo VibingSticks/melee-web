@@ -71,8 +71,31 @@ if (EMSCRIPTEN)
     set_target_properties(melee PROPERTIES OUTPUT_NAME melee SUFFIX ".js")
     set_property(TARGET melee APPEND PROPERTY LINK_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/web/js/imports.js)
 
-    # Hosted page next to melee.js
-    foreach (f web/shell/index.html web/js/boot.js web/js/disc_source.js web/js/gpu-gl2.js)
+    # Hosted page next to melee.js. index.html carries a build id so a crash
+    # report from someone else's machine can be matched to a commit. It is
+    # `git describe` at configure time, and configure re-runs when HEAD moves
+    # (the reflog changes on every commit and checkout), so it does not go
+    # stale between builds. tools/pack_single_html.py stamps the offline file
+    # afresh regardless.
+    execute_process(COMMAND git -C ${GAME_ROOT} describe --always --dirty --abbrev=9
+                    OUTPUT_VARIABLE PORT_BUILD_ID OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
+    if (NOT PORT_BUILD_ID)
+        set(PORT_BUILD_ID "unknown")
+    endif ()
+    string(TIMESTAMP PORT_BUILD_DATE "%Y-%m-%d" UTC)
+    set(PORT_BUILD_ID "${PORT_BUILD_ID} ${PORT_BUILD_DATE}")
+    foreach (rel HEAD logs/HEAD)
+        execute_process(COMMAND git -C ${GAME_ROOT} rev-parse --git-path ${rel}
+                        OUTPUT_VARIABLE dep OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
+        if (dep AND NOT IS_ABSOLUTE ${dep})
+            set(dep ${GAME_ROOT}/${dep})
+        endif ()
+        if (dep AND EXISTS ${dep})
+            set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${dep})
+        endif ()
+    endforeach ()
+    configure_file(web/shell/index.html ${CMAKE_BINARY_DIR}/index.html @ONLY)
+    foreach (f web/js/boot.js web/js/disc_source.js web/js/gpu-gl2.js)
         get_filename_component(fn ${f} NAME)
         configure_file(${f} ${CMAKE_BINARY_DIR}/${fn} COPYONLY)
     endforeach ()

@@ -3,6 +3,9 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- Filled in at build time (CMake) and again when the offline file is packed,
+     so a crash report says which commit it came from. -->
+<meta name="melee-build" content="@PORT_BUILD_ID@">
 <title>Melee</title>
 <style>
   :root { color-scheme: dark; }
@@ -18,11 +21,13 @@
      stretching everything sideways. */
   #canvas { flex: 1; width: 100%; min-height: 0; background: #000; outline: none;
             object-fit: contain; }
-  #saves { display: flex; gap: 8px; align-items: center; }
-  #saves button, #saves .btn { font: inherit; color: #ddd; background: #24242c; border: 1px solid #3a3a46;
-                               border-radius: 4px; padding: 3px 9px; cursor: pointer; }
-  #saves button[disabled] { opacity: .45; cursor: default; }
-  #saves button:not([disabled]):hover, #saves .btn:hover { background: #2f2f3a; }
+  #saves, #crash { display: flex; gap: 8px; align-items: center; }
+  #bar button, #bar .btn { font: inherit; color: #ddd; background: #24242c; border: 1px solid #3a3a46;
+                           border-radius: 4px; padding: 3px 9px; cursor: pointer; }
+  #bar button[disabled] { opacity: .45; cursor: default; }
+  #bar button:not([disabled]):hover, #bar .btn:hover { background: #2f2f3a; }
+  #crash button { border-color: #a04040; background: #3a1c1c; }
+  #crash button:hover { background: #4a2424; }
   #log { height: 120px; margin: 0; padding: 6px 12px; overflow: auto; background: #101014; color: #9a9; font: 12px monospace; white-space: pre; }
 </style>
 </head>
@@ -35,6 +40,10 @@
     <span id="saves" hidden>
       <button id="export" type="button" disabled title="Download your memory-card save">Export save</button>
       <label class="btn">Import save<input id="import" type="file" accept=".gci,.raw,.bin,.json" hidden></label>
+    </span>
+    <span id="crash" hidden>
+      <button id="crash-copy" type="button" title="Copy the crash report to the clipboard">Copy crash report</button>
+      <button id="crash-save" type="button" title="Save the crash report as a text file">Save report</button>
     </span>
   </div>
   <canvas id="canvas" tabindex="-1" oncontextmenu="event.preventDefault()"></canvas>

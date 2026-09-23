@@ -52,6 +52,24 @@ function appendLog(text) {
   logEl.scrollTop = logEl.scrollHeight;
 }
 
+// Everything that reaches the console reaches the log ring and the panel.
+//
+// Only Module.print/printErr (Aurora's stdout/stderr) fed appendLog, but the
+// port's own port_log goes through emscripten_log straight to console.log,
+// and the renderer shim reports through console.error -- so the first crash
+// report from a real machine carried Aurora's boot banner and none of the
+// game's lines: no frame timings, no archive warnings, no loads. Wrapping the
+// console once makes it the single sink; print/printErr then only need to
+// forward to the console.
+for (const level of ['log', 'info', 'warn', 'error']) {
+  const orig = console[level].bind(console);
+  console[level] = (...args) => {
+    orig(...args);
+    try { appendLog(args.map(a => (typeof a === 'string' ? a : (a instanceof Error ? (a.stack || a.message) : JSON.stringify(a)))).join(' ')); }
+    catch { appendLog(String(args[0])); }
+  };
+}
+
 const params = new URLSearchParams(location.search);
 
 // --- Crash reports -----------------------------------------------------------
@@ -248,8 +266,8 @@ async function startGame(disc, fst) {
     renderHeight,
     yieldTimer,
     noInitialRun: true,
-    print: (t) => { console.log(t); appendLog(t); },
-    printErr: (t) => { console.error(t); appendLog(t); },
+    print: (t) => { console.log(t); },     // the console wrapper above feeds the log
+    printErr: (t) => { console.error(t); },
     setStatus: (t) => { if (t) status(t); },
     onAbort(what) { reportCrash('abort', what); },
     // The port exits deliberately when the game panics (HSD_Panic); to the

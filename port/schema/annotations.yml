@@ -175,7 +175,21 @@ FtSFXArr:
   # smash, x1C and x20 all stayed big-endian.
   sfx_ids: { ptr_array: u32, len_field: num }
 Fighter_804D64FC_t:
+  # The CPU's attack tables (ftcpuattack.c): per fighter kind, a list of
+  # candidates each of the six selectors filters by cpu level, range and
+  # weight. Left big-endian, no candidate ever passed and computer players
+  # only ever walked and jumped, whatever their level.
+  x4:  { ptr_array: port_CpuAttackList, len_const: 33 }
+  x8:  { ptr_array: port_CpuAttackList, len_const: 33 }
+  xC:  { ptr_array: port_CpuAttackList, len_const: 33 }
+  x10: { ptr_array: port_CpuAttackList, len_const: 33 }
+  x14: { ptr_array: port_CpuAttackList, len_const: 33 }
+  x18: { ptr_array: port_CpuAttackList, len_const: 33 }
+  x1C: { ptr_array: port_CpuAttackList, len_const: 33 }
   x20: { ptr_array: f32, len_const: 33 }   # per-fighter distance thresholds
+  x24: { ptr_array: f32, len_const: 6 }    # weapon reach by item kind (ftcpuattack.c:1849)
+port_CpuAttackList:
+  list: { ptr_array: port_ftCo_AttackEntry, term_value: 0 }
 ftData_x30:
   inits: { ptr_array: ftHurtboxInit, len_field: count }
 port_EfDataTable:

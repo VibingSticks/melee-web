@@ -678,6 +678,17 @@ typedef struct {
 /* grzebesroute.c (GrNZr.dat, 8 bytes). */
 typedef struct { s32 camera_timer; s32 zako_spawn_chance; } port_grZebesRoute_YakumonoParam;
 
+/* ftcpuattack.c ftCo_AttackEntry (PlCo.dat): the CPU's attack candidates,
+ * a list per fighter kind in each of Fighter_804D64FC's seven tables, ended
+ * by an entry whose cmd is 0. The struct lives in the .c file. */
+typedef struct {
+    s32 cmd;
+    s32 x04;
+    f32 x08, x0C, x10, x14, weight;
+    s32 x1C, x20;
+} port_ftCo_AttackEntry;
+typedef struct { port_ftCo_AttackEntry* list; } port_CpuAttackList;
+
 /* grfigureget.c grFigureGet_Params (GrNFg.dat, 0x18 bytes). */
 typedef struct {
     s32 x0, x4, x8;

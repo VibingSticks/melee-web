@@ -1133,7 +1133,15 @@ void grMuteCity_801F106C(s32 i)
         grMc_CarEntry cars[30];
     } grMc_CarState;
     f32 max_x8;
+#ifdef TARGET_PC
+    /* The overlay counts on the GameCube link placing the car entries right
+     * after the index array; here they are two globals wherever the linker
+     * put them, and writing through the overlay hit whatever came next. */
+    struct { s32* idx; grMc_CarEntry* cars; } state_pc = { grMc_8049F440, grMc_8049F4B8 };
+#define state (&state_pc)
+#else
     grMc_CarState* state = (grMc_CarState*) grMc_8049F440;
+#endif
     grMc_CarEntry* cars = state->cars;
     u16 flags16 = state->cars[i].x20;
 
@@ -1214,6 +1222,9 @@ void grMuteCity_801F106C(s32 i)
         }
     }
 }
+#ifdef TARGET_PC
+#undef state
+#endif
 
 static inline f32 grMc_DistanceSquared(const f32* a, const f32* b)
 {

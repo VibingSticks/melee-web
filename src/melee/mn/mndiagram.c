@@ -26,15 +26,21 @@
 #include <sysdolphin/baselib/memory.h>
 
 /// @todo Split-derived data; types are inferred.
+#ifdef TARGET_PC
+u32 port_mndiagram_blob[0x120 / 4]; /* see mndiagram.h */
+#else
 void* mnDiagram_804A0814[4];
 void* mnDiagram_804A07E4[4];
 void* mnDiagram_804A07F4[4];
 void* mnDiagram_804A0804[4];
 void* mnDiagram_804A0824[4];
+#endif
 HSD_GObj* mnDiagram_804D6C10;
+#ifndef TARGET_PC
 mnDiagram_ArchiveData mnDiagram_804A0854;
 mnDiagram_ArchiveData mnDiagram_804A0844;
 mnDiagram_ArchiveData mnDiagram_804A0834;
+#endif
 
 #define GET_DIAGRAM(gobj) ((Diagram*) HSD_GObjGetUserData(gobj))
 
@@ -88,8 +94,10 @@ typedef struct mnDiagram_PopupAnimTableHead {
 } mnDiagram_PopupAnimTableHead;
 
 /// BSS variables - sorted player arrays
+#ifndef TARGET_PC
 mnDiagram_804A0750_t mnDiagram_804A0750;
 mnDiagram_804A076C_t mnDiagram_804A076C;
+#endif
 
 static mnDiagram_PopupAnimTableHead mnDiagram_803EE728 = {
     {

@@ -122,5 +122,12 @@ extern ResultsDisplayData lbl_8046E1B0;
 extern HSD_GObj* lbl_8046E38C[4];
 extern HSD_JObj* lbl_8046E39C[4];
 extern lbl_8046E3AC_t lbl_8046E3AC;
+#ifdef TARGET_PC
+extern ResultsDisplayLayout port_results_layout; /* gm_1798.c: the four above, contiguous */
+#define lbl_8046E1B0 (*(ResultsDisplayData*) &port_results_layout)
+#define lbl_8046E38C (port_results_layout.gobjs)
+#define lbl_8046E39C (port_results_layout.jobjs)
+#define lbl_8046E3AC (port_results_layout.state)
+#endif
 
 #endif

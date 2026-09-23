@@ -40,10 +40,16 @@
 
 extern ResultsData lbl_8046DBE8;
 
+#ifdef TARGET_PC
+/* Read through one ResultsDisplayLayout laid over lbl_8046E1B0 (six
+ * functions below), which only works while the four are contiguous. */
+ResultsDisplayLayout port_results_layout;
+#else
 ResultsDisplayData lbl_8046E1B0;
 HSD_GObj* lbl_8046E38C[4];
 HSD_JObj* lbl_8046E39C[4];
 lbl_8046E3AC_t lbl_8046E3AC;
+#endif
 
 static U32Pair lbl_804D3FD0 ATTRIBUTE_ALIGN(8) = { 0x00500050, 0x00460034 };
 static U32Pair lbl_804D3FD8 = { 0x006E0072, 0x0064004A };
@@ -368,7 +374,19 @@ HSD_GObj* fn_8017A318(s32 arg0)
 {
     static Scissor const scissor_init = { 270, 370, 124, 276 };
     u32* config = (u32*) &lbl_803B7B68;
+#ifdef TARGET_PC
+    /* CameraKindData is gmresultplayer.c's data section laid over
+     * gmResultPlayerColors: the per-character camera parameters are
+     * gmResultCharacterScaleData, the slot offsets gmResultCharacterData's,
+     * and the camera descriptor gmResultCameraDesc. Name them. */
+    struct {
+        CameraKindParams* kind;
+        f32 (*slot_off)[3][4];
+    } data_pc = { (CameraKindParams*) gmResultCharacterScaleData, gmResultCharacterData.slot_off };
+#define data (&data_pc)
+#else
     CameraKindData* data = (CameraKindData*) gmResultPlayerColors;
+#endif
     ResultsDisplayLayout* disp = (ResultsDisplayLayout*) &lbl_8046E1B0;
     MatchEnd* match_end = &disp->state.match_end;
     s32 _pad[2];
@@ -401,7 +419,11 @@ HSD_GObj* fn_8017A318(s32 arg0)
     }
 
     gobj = GObj_Create(0x13, 0x14, 0);
+#ifdef TARGET_PC
+    cobj = HSD_CObjLoadDesc((HSD_CObjDesc*) &gmResultCameraDesc);
+#else
     cobj = HSD_CObjLoadDesc(&data->cobj_desc);
+#endif
     HSD_GObjObject_80390A70(gobj, HSD_GObj_CameraKind, cobj);
 
     {
@@ -464,6 +486,9 @@ HSD_GObj* fn_8017A318(s32 arg0)
         fn_8017A078(arg0);
     }
 }
+#ifdef TARGET_PC
+#undef data
+#endif
 
 Fighter_GObj* fn_8017A67C(CharacterKind kind, int arg1, int arg2)
 {

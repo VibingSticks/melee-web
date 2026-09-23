@@ -143,9 +143,13 @@ typedef struct grZe_BubbleSpawnPos {
     /* 0x1C */ f32 pad_1C[2];
 } grZe_BubbleSpawnPos;
 
+#ifndef TARGET_PC
 /* 8049F140 */ static Vec3 grZe_8049F140[2];
+#endif
 /* 8049F158 */ static Vec3 grZe_8049F158[2];
+#ifndef TARGET_PC
 /* 8049F170 */ static grZe_BubbleEntry grZe_8049F170[20];
+#endif
 
 typedef struct grZe_BubbleScales {
     f32 values[7];
@@ -160,6 +164,15 @@ typedef struct grZe_BubbleState {
     Vec3 positions[4];
     grZe_BubbleEntry bubbles[20];
 } grZe_BubbleState;
+
+#ifdef TARGET_PC
+/* grZebes_801DB700 reads the spawn positions and the bubbles through one
+ * grZe_BubbleState laid over grZe_8049F140, which needs grZe_8049F170 to sit
+ * 0x30 bytes past it as the GameCube link had it: keep them in one object. */
+static grZe_BubbleState port_grZe_bubbles;
+#define grZe_8049F140 (port_grZe_bubbles.positions)
+#define grZe_8049F170 (port_grZe_bubbles.bubbles)
+#endif
 
 typedef struct grZe_AcidState {
     /* +00 */ u8 x00_state;

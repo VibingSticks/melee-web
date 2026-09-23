@@ -61,5 +61,21 @@ mnDiagram_GetNamePlayTimeByFighter(int name_idx,
 /* 4A0834 */ extern mnDiagram_ArchiveData mnDiagram_804A0834;
 /* 4A0844 */ extern mnDiagram_ArchiveData mnDiagram_804A0844;
 /* 4A0854 */ extern mnDiagram_ArchiveData mnDiagram_804A0854;
+#ifdef TARGET_PC
+/* mndiagram.c reads these ten globals through one mnDiagram_Assets laid over
+ * mnDiagram_804A0750, so they must sit where the GameCube link put them:
+ * one blob, at the original offsets (0x804A0750 + off). */
+extern u32 port_mndiagram_blob[0x120 / 4];
+#define mnDiagram_804A0750 (*(mnDiagram_804A0750_t*) ((u8*) port_mndiagram_blob + 0x00))
+#define mnDiagram_804A076C (*(mnDiagram_804A076C_t*) ((u8*) port_mndiagram_blob + 0x1C))
+#define mnDiagram_804A07E4 (*(void* (*)[4]) ((u8*) port_mndiagram_blob + 0x94))
+#define mnDiagram_804A07F4 (*(void* (*)[4]) ((u8*) port_mndiagram_blob + 0xA4))
+#define mnDiagram_804A0804 (*(void* (*)[4]) ((u8*) port_mndiagram_blob + 0xB4))
+#define mnDiagram_804A0814 (*(void* (*)[4]) ((u8*) port_mndiagram_blob + 0xC4))
+#define mnDiagram_804A0824 (*(void* (*)[4]) ((u8*) port_mndiagram_blob + 0xD4))
+#define mnDiagram_804A0834 (*(mnDiagram_ArchiveData*) ((u8*) port_mndiagram_blob + 0xE4))
+#define mnDiagram_804A0844 (*(mnDiagram_ArchiveData*) ((u8*) port_mndiagram_blob + 0xF4))
+#define mnDiagram_804A0854 (*(mnDiagram_ArchiveData*) ((u8*) port_mndiagram_blob + 0x104))
+#endif
 
 #endif

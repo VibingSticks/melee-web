@@ -1710,10 +1710,17 @@ void fn_8018E618(int arg0, f32 farg0, int arg1)
             struct lbl_803D9DD0_t cobj_data;
         } CObjData;
         HSD_CObj* cobj = HSD_CObjLoadDesc((HSD_CObjDesc*) &cam);
+#ifdef TARGET_PC
+        /* CObjData spans lbl_803D9DAC and lbl_803D9DD0; only the latter is touched. */
+        lbl_803D9DD0.cobj = cobj;
+        {
+            HSD_CObj** cobj_ptr = &lbl_803D9DD0.cobj;
+#else
         CObjData* cobj_data = (CObjData*) &lbl_803D9DAC;
         cobj_data->cobj_data.cobj = cobj;
         {
             HSD_CObj** cobj_ptr = &cobj_data->cobj_data.cobj;
+#endif
             u8* kind_ptr = &HSD_GObj_CameraKind;
             HSD_GObjObject_80390A70(gobj, *kind_ptr, *cobj_ptr);
         }

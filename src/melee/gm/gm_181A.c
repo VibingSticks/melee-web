@@ -118,8 +118,16 @@ static RecordBlock lbl_803D8D08[6] = {
         0x0FFFFFFF, 0x0FFFFFFF } },
 };
 
+#ifdef TARGET_PC
+/* Three functions below read the record through a struct laid over
+ * lbl_80472ED8 that expects lbl_80473594 right after it (record[0]). */
+struct { lbl_80472ED8_t base; RegClearRecordState record; } port_regclear;
+#define lbl_80472ED8 (port_regclear.base)
+#define lbl_80473594 (port_regclear.record)
+#else
 lbl_80472ED8_t lbl_80472ED8;
 RegClearRecordState lbl_80473594;
+#endif
 
 int gm_80181A14(void)
 {

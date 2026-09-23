@@ -6,9 +6,12 @@ HSD_Joint:
   u: { union_on: flags, mask: 0x4020, cases: { 0: "HSD_DObjDesc*", 0x4000: "HSD_Spline*", 0x20: "HSD_SList*" } }
   mtx: { ptr_array: f32, len_const: 12 }
 HSD_Spline:
+  # spline.c splGetSplinePoint reads segPoly[idx] as the five Hermite
+  # coefficients of each segment: (numcv - 1) rows of floats, to the next
+  # object. Left opaque, Mute City's track ran on big-endian coefficients.
+  segPoly: { ptr_array: f32, object_run: true }
   cv: { ptr_array: Vec3, len_field: numcv }
   segLength: { ptr_array: f32, len_field: numcv }
-  segPoly: { opaque: true }   # f32[numcv][5]; not expressible yet, splines are rare
 HSD_PObjDesc:
   verts: { ptr_array: HSD_VtxDescList, term_value: 0xFF }   # GX_VA_NULL
   u: { union_on: flags, mask: 0x3000, cases: { 0: "HSD_Joint*", 0x1000: "HSD_ShapeSetDesc*", 0x2000: "port_EnvelopeList*" } }

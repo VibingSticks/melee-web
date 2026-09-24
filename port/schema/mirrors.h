@@ -710,6 +710,56 @@ typedef struct {
     u8 x12C[0x138 - 0x12C];
 } port_YoshiAttrs;
 
+/* PlKbCpXx.dat, the hat Kirby wears after copying XX; ft_80459B88 slot N is
+ * FighterKind N (the header's `hats[k]` is slot k + 1). Most files start with
+ * the hat's joint and a one-row parts table (KirbyHatStruct). DK, Jigglypuff,
+ * Mewtwo, Falco and Game & Watch instead start with a costume-indexed parts
+ * block like a fighter's own (ftData x8), a part mask and a joint tree that
+ * LOAD_HAT splices into Kirby's model. The pointer slots after that, the
+ * header's hat_dynamics[], hold something else for every character: the
+ * copied projectile's Articles (converted when ftKb_SpecialN_800F16D0
+ * registers them), physics-bone sets, joints, animations. Treating all of them
+ * as ftDynamics walked the Articles' attribute blocks as bone arrays with
+ * pointer-sized counts. Each file gets the type naming what its code reads. */
+typedef struct {
+    u32 num;
+    BoneDynamicsDesc* bones;
+} port_KbHatDyn;
+typedef struct {
+    HSD_Joint* joint;
+    FtPartsDesc desc;
+} port_KbHat;
+typedef struct { HSD_Joint* joint; FtPartsDesc desc; port_KbHatDyn* s0; } port_KbHatDyn0;
+typedef struct { HSD_Joint* joint; FtPartsDesc desc; void* s0; port_KbHatDyn* s1; } port_KbHatDyn1;
+typedef struct { HSD_Joint* joint; FtPartsDesc desc; void* s0; void* s1; port_KbHatDyn* s2; } port_KbHatDyn2;
+typedef struct { HSD_Joint* joint; FtPartsDesc desc; void* s0; HSD_Joint* s1; } port_KbHatPopo;
+typedef struct { HSD_Joint* joint; FtPartsDesc desc; HSD_Joint* s0; port_KbHatDyn* s1; } port_KbHatSword;
+typedef struct {
+    HSD_Joint* joint;
+    FtPartsDesc desc;
+    HSD_Joint* s0;
+    HSD_AnimJoint* s1;
+    HSD_AnimJoint* s2;
+    HSD_AnimJoint* s3;
+    HSD_AnimJoint* s4;
+} port_KbHatYoshi;
+/* The color block Kirby reads when he copies Game & Watch (+4 color, +8
+ * outline, as bytes). */
+typedef struct {
+    f32 x0;
+    GXColor x4;
+    GXColor x8;
+} port_KbGwColors;
+typedef struct {
+    FtPartsDesc desc;
+    ftData_x8_x8 anim;
+    u32 mask;
+    HSD_Joint* joint;
+} port_KbHatCostume;
+typedef struct { FtPartsDesc desc; ftData_x8_x8 anim; u32 mask; HSD_Joint* joint; port_KbHatDyn* s3; } port_KbHatPurin;
+typedef struct { FtPartsDesc desc; ftData_x8_x8 anim; u32 mask; HSD_Joint* joint; void* s3; port_KbHatDyn* s4; } port_KbHatMewtwo;
+typedef struct { FtPartsDesc desc; ftData_x8_x8 anim; u32 mask; HSD_Joint* joint; void* s3; port_KbGwColors* s4; } port_KbHatGw;
+
 /* grfigureget.c grFigureGet_Params (GrNFg.dat, 0x18 bytes). */
 typedef struct {
     s32 x0, x4, x8;

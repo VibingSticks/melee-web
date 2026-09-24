@@ -1,5 +1,8 @@
 #ifdef TARGET_PC
 #include <port_game.h>
+#include <hsd_endian/formats.h>
+int port_archive_take_fresh(const void* p);
+#include <melee/ft/ftdata.h>
 #endif
 #include "ftkirby.h"
 
@@ -2782,6 +2785,37 @@ void ftKb_SpecialN_800EED50(s32 arg0, s32 arg1)
                 lbArchive_80017040(NULL, ftKb_Init_803CA9D0[arg0].filename,
                                    &((HSD_Archive**) &ft_80459B88)[arg0],
                                    ftKb_Init_803CA9D0[arg0].name, 0);
+#ifdef TARGET_PC
+                /* The hat's parts tables have no counts in the archive, so
+                 * they are converted here, once per converting parse, like a
+                 * fighter's own in ftData_8008572C. Most hats have one
+                 * visibility row after their joint; the five that start with
+                 * a costume-indexed parts block (LOAD_HAT's) have one row and
+                 * one texture-animation list per Kirby costume, and Game &
+                 * Watch's adds the lookup ftKb_SpecialN_800F14B4 installs. */
+                {
+                    void* hat = ((void**) &ft_80459B88)[arg0];
+                    if (hat != NULL && port_archive_take_fresh(hat)) {
+                        u32 costumes = CostumeListsForeachCharacter[Ft_Kind_Kirby].numCostumes;
+                        switch (arg0) {
+                        case Ft_Kind_Donkey:
+                        case Ft_Kind_Purin:
+                        case Ft_Kind_Mewtwo:
+                        case Ft_Kind_Falco:
+                            port_swap_ft_parts_vis(hat, costumes);
+                            port_swap_ft_costume_tobjs(hat, costumes);
+                            break;
+                        case Ft_Kind_GameWatch:
+                            port_swap_ft_parts_vis_extra(hat, costumes, ((void**) hat)[6]);
+                            port_swap_ft_costume_tobjs(hat, costumes);
+                            break;
+                        default:
+                            port_swap_ft_parts_vis(&((KirbyHatStruct*) hat)->desc, 1);
+                            break;
+                        }
+                    }
+                }
+#endif
             }
         }
         if (ftKb_Init_803CB3E8[arg0] != NULL) {
@@ -3757,6 +3791,21 @@ void ftKb_SpecialN_800F14B4(Fighter_GObj* gobj)
     }
     LOAD_HAT(gobj, fp, fp, Ft_Kind_Pichu, hat, part_dobj_indices);
     lookup = (FtPartsVisLookup*) hat->hat_dynamics[3];
+#ifdef TARGET_PC
+    /* The lookup has one entry (the hat's one model), but Kirby's own parts
+     * table gets it too and has two models. On the GameCube the second
+     * entry's "count" is the visibility-table pointer stored after it,
+     * negative as an s32, so ftParts_80074D7C's loop skips it; a wasm
+     * pointer is a small positive number and the loop ran off the lists.
+     * Both tables get a copy whose second entry is empty. */
+    if (lookup != NULL) {
+        static FtPartsVisLookup port_lookup[2];
+        port_lookup[0] = lookup[0];
+        port_lookup[1].x0 = 0;
+        port_lookup[1].x4 = NULL;
+        lookup = port_lookup;
+    }
+#endif
     fp->u.kb.hat.x24.xC[4] = lookup;
     fp->x5AC.xC[4] = lookup;
     ftParts_80074D7C(&fp->u.kb.hat.x24, 4, &fp->u.kb.hat.x14);

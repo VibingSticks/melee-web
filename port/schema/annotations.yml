@@ -349,6 +349,8 @@ itSamusGrappleAttributes:
   xAC: { ptr_array: "HSD_ShapeAnimJoint*", len_const: 1 }
 itGamewatchchefAttributes:
   entries: { object_run: true }   # one row per pan item, indexed by item var x4; declared [1]
+port_KbHatDyn:
+  bones: { ptr_array: BoneDynamicsDesc, len_field: num }
 port_F32Run:
   v: { object_run: true }
 port_KinokoAttrs:

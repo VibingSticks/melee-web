@@ -105,6 +105,28 @@
 - { prefix: ftDataCrazyhand, type: ftData, field_types: { ext_attr: ftCrazyHand_DatAttrs } }
 - { prefix: ftDataFox, type: ftData, field_types: { ext_attr: ftFox_DatAttrs } }
 - { prefix: ftDataKirby, type: ftData, field_types: { ext_attr: ftKb_DatAttrs } }
+# PlKbCpXx.dat: the hat Kirby wears after copying XX. The symbol starts with
+# ftDataKirby, so without this longer rule every hat was converted as Kirby's
+# own ftData, and loading one panicked on a big-endian material. The slots
+# after the hat's parts table hold something different per character, so each
+# file has its own type (mirrors.h, port_KbHat*).
+- { prefix: ftDataKirbyCopy, type: port_KbHat }
+- { prefix: ftDataKirbyCopyZelda, type: port_KbHatDyn0 }
+- { prefix: ftDataKirbyCopyKoopa, type: port_KbHatDyn1 }
+- { prefix: ftDataKirbyCopyLink, type: port_KbHatDyn2 }
+- { prefix: ftDataKirbyCopyClink, type: port_KbHatDyn2 }
+- { prefix: ftDataKirbyCopySeak, type: port_KbHatDyn2 }
+- { prefix: ftDataKirbyCopyPikachu, type: port_KbHatDyn2 }
+- { prefix: ftDataKirbyCopyPichu, type: port_KbHatDyn2 }
+- { prefix: ftDataKirbyCopyPopo, type: port_KbHatPopo }
+- { prefix: ftDataKirbyCopyMars, type: port_KbHatSword }
+- { prefix: ftDataKirbyCopyEmblem, type: port_KbHatSword }
+- { prefix: ftDataKirbyCopyYoshi, type: port_KbHatYoshi }
+- { prefix: ftDataKirbyCopyDonkey, type: port_KbHatCostume }
+- { prefix: ftDataKirbyCopyFalco, type: port_KbHatCostume }
+- { prefix: ftDataKirbyCopyPurin, type: port_KbHatPurin }
+- { prefix: ftDataKirbyCopyMewtwo, type: port_KbHatMewtwo }
+- { prefix: ftDataKirbyCopyGamewatch, type: port_KbHatGw }
 - { prefix: ftDataLink, type: ftData, field_types: { ext_attr: ftLk_DatAttrs } }
 - { prefix: ftDataMario, type: ftData, field_types: { ext_attr: ftMario_DatAttrs } }
 - { prefix: ftDataPeach, type: ftData, field_types: { ext_attr: ftPe_DatAttrs } }

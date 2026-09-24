@@ -120,6 +120,10 @@ void port_swap_ft_costume_tobjs(void* ftdata_x8, uint32_t costumes);
  * { count, u8* } pair. Rows share tables, so each distinct one is converted
  * once within the call. Call once per archive load, as above. */
 void port_swap_ft_parts_vis(void* ftdata_x8, uint32_t costumes);
+/* Same, plus one more lookup table of the same shape that the fighter's own
+ * code installs (Game & Watch puts ftData x48[10] in FtPartsVis slot 4);
+ * converted in the same pass so lists it shares are swapped once. */
+void port_swap_ft_parts_vis_extra(void* ftdata_x8, uint32_t costumes, void* extra_lookup);
 
 /* A .thp movie header, which lbmthp.c reads raw off the disc into its player
  * struct. Everything from `version` on is a 32-bit field; the first eight bytes

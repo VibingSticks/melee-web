@@ -668,6 +668,11 @@ void port_swap_ft_costume_tobjs(void* ftdata_x8, uint32_t costumes)
 
 void port_swap_ft_parts_vis(void* ftdata_x8, uint32_t costumes)
 {
+    port_swap_ft_parts_vis_extra(ftdata_x8, costumes, NULL);
+}
+
+void port_swap_ft_parts_vis_extra(void* ftdata_x8, uint32_t costumes, void* extra_lookup)
+{
     if (ftdata_x8 == NULL) {
         return;
     }
@@ -684,9 +689,17 @@ void port_swap_ft_parts_vis(void* ftdata_x8, uint32_t costumes)
      * inside them, so every block is converted exactly once. */
     const void* seen[512];
     unsigned nseen = 0;
-    for (uint32_t c = 0; c < costumes; c++) {
+    for (uint32_t c = 0; c <= costumes; c++) {
         for (unsigned slot = 0; slot < 4; slot++) {
-            uint32_t* lookup = rows[c * 4 + slot];
+            uint32_t* lookup;
+            if (c == costumes) { /* the extra table, once */
+                if (slot != 0) {
+                    break;
+                }
+                lookup = extra_lookup;
+            } else {
+                lookup = rows[c * 4 + slot];
+            }
             if (lookup == NULL || !mark_seen(seen, &nseen, lookup)) {
                 continue;
             }

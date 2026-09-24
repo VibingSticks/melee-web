@@ -1597,7 +1597,11 @@ void ftData_8008572C(FighterKind kind)
             ftData* fd = gFtDataList[kind];
             u32 costumes = CostumeListsForeachCharacter[kind].numCostumes;
             port_swap_ft_costume_tobjs(fd->x8, costumes);
-            port_swap_ft_parts_vis(fd->x8, costumes);
+            /* Game & Watch's OnLoad installs x48[10] as FtPartsVis slot 4
+             * (ftGw_Init_OnLoad); unconverted, the first frame's parts pass
+             * read its counts big-endian and ran off the model. */
+            port_swap_ft_parts_vis_extra(fd->x8, costumes,
+                                         kind == Ft_Kind_GameWatch ? ((void**) fd->x48_items)[10] : NULL);
             /* The two animation tables (their lengths are the count tables
              * below, not anything in the archive) and the subaction scripts
              * they point at. The scripts of both tables go in one call, so

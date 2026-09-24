@@ -1,3 +1,6 @@
+#ifdef TARGET_PC
+#include <port_game.h>
+#endif
 #include "ftkirby.h"
 
 #include <stddef.h>
@@ -2573,6 +2576,10 @@ void ftKb_Init_OnLoad(HSD_GObj* gobj)
     fp->u.kb.hat.x8_b0 = Player_GetFlagsAEBit1(fp->player_idx);
     it_8026B3F8(item_list[0], It_Kind_Kirby_CBeam);
     it_8026B3F8(item_list[1], It_Kind_Kirby_Hammer);
+#ifdef TARGET_PC
+    /* the star a swallowed opponent rides in (ftKb_SpecialN_800F5898) */
+    port_swap_ft_model(item_list[4], PORT_FT_JOINT);
+#endif
     it_8026B3F8(item_list[2], It_Kind_Unk1);
     it_8026B3F8(item_list[3], It_Kind_Unk2);
 }

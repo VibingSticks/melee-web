@@ -1,3 +1,6 @@
+#ifdef TARGET_PC
+#include <port_game.h>
+#endif
 #include "ftyoshi.h"
 
 #include <melee/ft/forward.h>
@@ -472,6 +475,10 @@ void ftYs_Init_OnLoad(HSD_GObj* gobj)
     it_8026B3F8(item_list[0], It_Kind_Yoshi_EggThrow);
     it_8026B3F8(item_list[1], It_Kind_Yoshi_Star);
     it_8026B3F8(item_list[2], It_Kind_Yoshi_EggLay);
+#ifdef TARGET_PC
+    /* the egg shell an opponent is wrapped in (ftYs_SpecialN_8012CDD4) */
+    port_swap_ft_model(item_list[3], PORT_FT_JOINT);
+#endif
     fp->x2226_b1 = 1;
 }
 

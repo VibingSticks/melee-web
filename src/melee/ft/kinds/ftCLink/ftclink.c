@@ -1,3 +1,6 @@
+#ifdef TARGET_PC
+#include <port_game.h>
+#endif
 #include "ftclink.h"
 
 #include <melee/ft/kinds/ftCommon/forward.h>
@@ -334,6 +337,9 @@ void ftCl_Init_OnLoad(HSD_GObj* gobj)
     it_8026B3F8(items[3], ea->xC);
     it_8026B3F8(items[4], ea->x10);
     it_8026B3F8(items[5], It_Kind_CLink_Milk);
+#ifdef TARGET_PC
+    port_swap_ft_model(items[6], PORT_FT_JOINT); /* the parts model ftParts_800753D4 grafts on */
+#endif
     ftParts_800753D4(fp, Fighter_804D6540[fp->kind]->x0, items[6]);
 }
 

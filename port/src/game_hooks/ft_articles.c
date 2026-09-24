@@ -34,3 +34,19 @@ void port_swap_ft_article(void* article, int slot)
         port_archive_swap_object(article, t, "fighter article");
     }
 }
+
+/* The entries of ftData x48 past the Articles are models the fighter's own
+ * code loads (Samus' grab beam, Yoshi's egg shell, Kirby's star, Link's
+ * sword-and-shield joint). The archive walk never reaches them either;
+ * the fighter's OnLoad hands each one here with what it is. */
+extern const port_type port_T_HSD_Joint;
+extern const port_type port_T_HSD_AnimJoint;
+extern const port_type port_T_HSD_MatAnimJoint;
+
+void port_swap_ft_model(void* obj, int kind)
+{
+    static const port_type* const types[] = { &port_T_HSD_Joint, &port_T_HSD_AnimJoint, &port_T_HSD_MatAnimJoint };
+    if (obj != NULL && kind >= 0 && kind < 3) {
+        port_archive_swap_object(obj, types[kind], "fighter model");
+    }
+}

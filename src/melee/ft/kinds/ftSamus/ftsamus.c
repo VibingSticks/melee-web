@@ -1,4 +1,7 @@
 #include "ftsamus.h"
+#ifdef TARGET_PC
+#include <port_game.h>
+#endif
 
 #include <melee/ft/kinds/ftCommon/forward.h>
 
@@ -282,6 +285,23 @@ void ftSs_Init_OnLoad(HSD_GObj* gobj)
     it_8026B3F8(item_list[1], It_Kind_Samus_Charge);
     it_8026B3F8(item_list[2], It_Kind_Samus_Missile);
     it_8026B3F8(item_list[3], It_Kind_Samus_GBeam);
+#ifdef TARGET_PC
+    /* item_list[4] is the grab beam the throws load as an accessory
+     * (ftSs_Init_CreateThrowGrappleBeam); big-endian, its first material
+     * failed DObjLoad's blending check and every throw panicked. */
+    {
+        struct UNK_SAMUS_S1* beam = item_list[4];
+        int i;
+        if (beam != NULL) {
+            port_swap_ft_model(beam->x0_joint, PORT_FT_JOINT);
+            port_swap_ft_model(beam->x8_anim_joint, PORT_FT_ANIMJOINT);
+            port_swap_ft_model(beam->xC_matanim_joint, PORT_FT_MATANIMJOINT);
+            for (i = 0; i < 4; i++) { /* ThrowF, ThrowB, ThrowHi, ThrowLw */
+                port_swap_ft_model(beam->x4_anim_joints[i], PORT_FT_ANIMJOINT);
+            }
+        }
+    }
+#endif
 }
 
 void ftSs_Init_80128428(HSD_GObj* gobj)

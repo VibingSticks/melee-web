@@ -31,6 +31,12 @@ void port_log(const char* fmt, ...);
  * it_8026B3F8 registers it; `slot` is its kind relative to It_Kind_Kuriboh. */
 void port_swap_ft_article(void* article, int slot);
 
+/* Converts one of the models a fighter's code loads from ftData x48 past
+ * its Articles: kind 0 an HSD_Joint, 1 an HSD_AnimJoint, 2 an
+ * HSD_MatAnimJoint. Safe to call again for the same object. */
+enum { PORT_FT_JOINT, PORT_FT_ANIMJOINT, PORT_FT_MATANIMJOINT };
+void port_swap_ft_model(void* obj, int kind);
+
 /* 1 when `p` lies inside the wasm heap (NULL and wild values are 0). */
 int port_ptr_ok(const void* p);
 

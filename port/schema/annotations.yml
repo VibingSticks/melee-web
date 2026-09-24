@@ -239,7 +239,9 @@ it_804D6D20_t:
     # archives and are converted as it_8026B3F8 registers them
     # (port_swap_ft_article), typed by this list. A kind whose code reads the
     # block as bare words, or through a struct the schema cannot see, takes a
-    # float run to the next object.
+    # float run to the next object. Game & Watch's ten items (71..79, 81) and
+    # Kirby's copies of the chef and pan (112, 113) start with the pointer to
+    # their outline bone lists (port_GwItemDraw).
     elem_types: [
       ~, itLeadeadAttributes, itOctarockAttributes, itOldottoseaAttributes, ~, itUnkAttributes, itDrMarioPillAttributes,
       itKirbyCutterBeamAttributes, port_F32Run, itUnkAttributes, port_F32Run, FoxLaserAttr, FoxLaserAttr,
@@ -254,14 +256,14 @@ it_804D6D20_t:
       itSeakChain_Attrs, port_F32Run, port_F32Run, port_F32Run, port_F32Run, itYoyoAttributes, port_F32Run,
       port_F32Run, itUnkAttributes, itClimbersIceAttributes, itClimbersBlizzardAttributes, port_F32Run,
       port_F32Run, itMDisableAttributes, port_F32Run, itMewtwoShadowball_DatAttrs, itClimbersStringAttributes,
-      port_F32Run, port_F32Run, port_F32Run, port_F32Run, port_F32Run, port_F32Run, port_F32Run, port_F32Run,
-      itGamewatchchefAttributes, port_F32Run, port_F32Run, itMasterHandLaserAttributes, itMasterHandBulletAttributes,
+      port_GwItemAttrs, port_GwItemAttrs, port_GwItemAttrs, port_GwItemAttrs, port_GwItemAttrs, port_GwItemAttrs, port_GwItemAttrs, port_GwItemAttrs,
+      itGamewatchchefAttributes, port_F32Run, port_GwItemAttrs, itMasterHandLaserAttributes, itMasterHandBulletAttributes,
       itMasterHandLaserAttributes, itMasterHandBulletAttributes, itCrazyHandBombAttributes, itUnkAttributes,
       itDrMarioPillAttributes, itUnkAttributes, itClimbersIceAttributes, port_F32Run, port_F32Run,
       FoxLaserAttr, FoxLaserAttr, port_F32Run, port_F32Run, itLinkArrowAttributes, itLinkArrowAttributes,
       port_F32Run, port_F32Run, itMewtwoShadowball_DatAttrs, itFlashAttributes, itFlashExplAttributes,
       itPikachutJoltGroundAttributes, port_F32Run, itPikachutJoltGroundAttributes, port_F32Run, itSamusChargeShot_Attributes,
-      itSeakNeedleThrownAttributes, port_F32Run, port_F32Run, itGamewatchchefAttributes, port_F32Run,
+      itSeakNeedleThrownAttributes, port_F32Run, port_F32Run, itGamewatchchefAttributes, port_GwItemAttrs,
       port_F32Run, it_2E5A_Attrs, itCoinAttributes, ~ ]
   xC:
     ptr_list: Article
@@ -348,7 +350,12 @@ itSamusGrappleAttributes:
   xA8: { ptr_array: "HSD_MatAnimJoint*", len_const: 1 }
   xAC: { ptr_array: "HSD_ShapeAnimJoint*", len_const: 1 }
 itGamewatchchefAttributes:
+  x0: { ptr: port_GwItemDraw }
   entries: { object_run: true }   # one row per pan item, indexed by item var x4; declared [1]
+port_GwItemAttrs:
+  rest: { object_run: true }
+port_GwAttrs:
+  rest: { object_run: true }
 port_KbHatDyn:
   bones: { ptr_array: BoneDynamicsDesc, len_field: num }
 port_F32Run:

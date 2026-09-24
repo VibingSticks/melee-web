@@ -151,7 +151,7 @@
 - { prefix: ftDataEmblem, type: ftData, field_types: { ext_attr: port_F32Run } }
 - { prefix: ftDataGkoopa, type: ftData, field_types: { ext_attr: port_F32Run } }
 - { prefix: ftDataGanon, type: ftData, field_types: { ext_attr: port_F32Run } }
-- { prefix: ftDataGamewatch, type: ftData, field_types: { ext_attr: port_F32Run } }
+- { prefix: ftDataGamewatch, type: ftData, field_types: { ext_attr: port_GwAttrs } }
 - { prefix: ftDataKoopa, type: ftData, field_types: { ext_attr: port_F32Run } }
 - { prefix: ftDataLuigi, type: ftData, field_types: { ext_attr: port_F32Run } }
 - { prefix: ftDataMasterhand, type: ftData, field_types: { ext_attr: port_F32Run } }

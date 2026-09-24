@@ -710,6 +710,31 @@ typedef struct {
     u8 x12C[0x138 - 0x12C];
 } port_YoshiAttrs;
 
+/* Game & Watch's chef, judge and rescue items: attribute word 0 points at
+ * the bone lists it_8026EECC shows and hides around the flat outline pass
+ * (it_266F_ItemVars' first four fields; it_8027CE64 stores the pointer).
+ * Left big-endian, a count of 0x0300 walked the item's bone table past its
+ * end. */
+typedef struct {
+    u16 n0;
+    u8* bones0;
+    u16 n1;
+    u8* bones1;
+} port_GwItemDraw;
+typedef struct {
+    port_GwItemDraw* draw;
+    f32 rest[1];
+} port_GwItemAttrs;
+
+/* PlGw.dat ext_attr (ftGameWatchAttributes): the costume and outline colors
+ * are GXColor bytes, the rest words. A plain float run reversed the colors'
+ * bytes. */
+typedef struct {
+    f32 x0;
+    GXColor x4_colors[5];
+    f32 rest[1];
+} port_GwAttrs;
+
 /* PlKbCpXx.dat, the hat Kirby wears after copying XX; ft_80459B88 slot N is
  * FighterKind N (the header's `hats[k]` is slot k + 1). Most files start with
  * the hat's joint and a one-row parts table (KirbyHatStruct). DK, Jigglypuff,

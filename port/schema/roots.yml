@@ -109,7 +109,9 @@
 - { prefix: ftDataMario, type: ftData, field_types: { ext_attr: ftMario_DatAttrs } }
 - { prefix: ftDataPeach, type: ftData, field_types: { ext_attr: ftPe_DatAttrs } }
 - { prefix: ftDataSamus, type: ftData, field_types: { ext_attr: ftSs_DatAttrs } }
-- { prefix: ftDataYoshi, type: ftData, field_types: { ext_attr: ftYs_DatAttrs } }
+# Not ftYs_DatAttrs: that struct calls 0x28-0xEC padding, and Yoshi's
+# neutral B reads its tongue and swallow values there (see mirrors.h).
+- { prefix: ftDataYoshi, type: ftData, field_types: { ext_attr: port_YoshiAttrs } }
 - { prefix: ftDataZelda, type: ftData, field_types: { ext_attr: ftZelda_DatAttrs } }
 # ftPk_Init_OnLoad indexes the item article list with these attributes' item kinds.
 - { prefix: ftDataPikachu, type: ftData, field_types: { ext_attr: ftPikachuAttributes } }

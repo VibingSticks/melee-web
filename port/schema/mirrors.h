@@ -693,6 +693,23 @@ typedef struct {
 } port_ftCo_AttackEntry;
 typedef struct { port_ftCo_AttackEntry* list; } port_CpuAttackList;
 
+/* ftdynamics.c: ftDynamics::x10 is indexed by an animation's blend slot
+ * (fp->x28[anim][1]), each entry an array of one FigaTree per physics bone
+ * (ftCo_8009E4A8 reads tree[i] for i < dynamics_num). Neither length is in
+ * the archive, so both run to the next object. */
+typedef struct { struct FigaTree* tree; } port_FigaTreeRef;
+typedef struct { port_FigaTreeRef* trees; } port_DynFigaSlot;
+
+/* Yoshi's attribute block (ftData ext_attr, 0x138 bytes). The code reads it
+ * through two structs: ftYoshiAttributes names 0x00-0xE8 and 0x114-0x128,
+ * ftYs_DatAttrs names 0xEC-0x11C (up-B and down-B), and each calls the
+ * other's range padding. Every field is a word except the byte table at 0x12C
+ * (ftCo_CatchPull.c indexes yattrs->x12C[rate]). */
+typedef struct {
+    f32 w[0x12C / 4];
+    u8 x12C[0x138 - 0x12C];
+} port_YoshiAttrs;
+
 /* grfigureget.c grFigureGet_Params (GrNFg.dat, 0x18 bytes). */
 typedef struct {
     s32 x0, x4, x8;

@@ -303,6 +303,16 @@ port_grIceMt_YakumonoParam:
 # ftdynamics.c reads dynamicsNum rows of ftDynamicBones; the header's
 # ArticleDynamicBones declares the maximum (10), and the rows past the count
 # are whatever the archive packed next.
+ftDynamics:
+  # Physics-bone animations: undescribed, Mewtwo's tail animation stayed
+  # big-endian, its root bone was translated to 1e25 when he was hit, and the
+  # collision stepper took billions of steps (the tab froze).
+  x10: { ptr_array: port_DynFigaSlot, object_run: true }
+  # the physics colliders: x4 of them (ftColl copies dyn->x8[i] for i < x4;
+  # Peach's dress has several), not the single entry the pointer type says
+  x8: { ptr_array: ftData_x38, len_field: x4 }
+port_DynFigaSlot:
+  trees: { ptr_array: port_FigaTreeRef, object_run: true }
 ftDynamics__anon0:
   ftDynamicBones: { ptr_array: BoneDynamicsDesc, len_field: dynamicsNum }
 itWstarAttributes:

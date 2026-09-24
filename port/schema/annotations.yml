@@ -300,6 +300,15 @@ DynamicsDesc:
 # count.
 port_grIceMt_YakumonoParam:
   field_ixs: { ptr_array: u16, len_const: 5 }
+FigaTree:
+  # One FigaTrack per animated channel of every joint (the node list's counts
+  # add up to the length), not the single track the pointer type names. With
+  # only the first converted, every other track kept byte-swapped length and
+  # start-frame fields; a track played past its end read on into the next
+  # track's bytes (Mewtwo's hit animation translated his tail root to 1e25
+  # and the collision stepper froze the tab). Each row holds a data pointer,
+  # so the run ends at the first word that is not one.
+  tracks: { ptr_array: FigaTrack, object_run: true }
 # ftdynamics.c reads dynamicsNum rows of ftDynamicBones; the header's
 # ArticleDynamicBones declares the maximum (10), and the rows past the count
 # are whatever the archive packed next.

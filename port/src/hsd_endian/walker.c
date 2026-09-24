@@ -343,7 +343,21 @@ static int object_run_continues(port_walk_ctx* c, const port_type* t, const uint
     if (i != 0 && is_target(c, (uint32_t) (e - c->base))) {
         return 0;
     }
-    return !type_has_pointers(t, 0) || looks_like(c, t, e);
+    if (!type_has_pointers(t, 0)) {
+        /* A run of pointer-free elements (a float run, a table of scalars)
+         * cannot contain a word the relocation table names: that word belongs
+         * to whatever the archive packed next. Without this a float run went
+         * straight on through the next struct -- 1.6 KB past Mewtwo's
+         * attribute block -- swapping its bytes as words. */
+        uint32_t off = (uint32_t) (e - c->base);
+        for (uint32_t k = 0; k + 4 <= t->size; k += 4) {
+            if (in_reloc(c, off + k)) {
+                return 0;
+            }
+        }
+        return 1;
+    }
+    return looks_like(c, t, e);
 }
 
 /* Does `obj` still look like an instance of `t`? Every pointer it holds,

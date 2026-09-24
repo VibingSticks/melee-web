@@ -235,12 +235,34 @@ it_804D6D20_t:
     ptr_list: Article
     len_const: 118
     elem_field: x4_specialAttributes
+    # 5..114 are the fighters' own items: their Articles live in the PlXx.dat
+    # archives and are converted as it_8026B3F8 registers them
+    # (port_swap_ft_article), typed by this list. A kind whose code reads the
+    # block as bare words, or through a struct the schema cannot see, takes a
+    # float run to the next object.
     elem_types: [
-      ~, itLeadeadAttributes, itOctarockAttributes, itOldottoseaAttributes, ~, ~, ~, ~, ~, ~, ~, ~,
-      ~, ~, ~, ~, ~, ~, ~, ~, ~, ~, ~, ~, ~, ~, ~, ~, ~, ~, ~, ~, ~, ~, ~, ~, ~, ~, ~, ~, ~, ~, ~,
-      ~, ~, ~, ~, ~, ~, ~, ~, ~, ~, ~, ~, ~, ~, ~, ~, ~, ~, ~, ~, ~, ~, ~, ~, ~, ~, ~, ~, ~, ~, ~,
-      ~, ~, ~, ~, ~, ~, ~, ~, ~, ~, ~, ~, ~, ~, ~, ~, ~, ~, ~, ~, ~, ~, ~, ~, ~, ~, ~, ~, ~, ~, ~,
-      ~, ~, ~, ~, ~, ~, ~, ~, ~, ~, it_2E5A_Attrs, itCoinAttributes, ~ ]
+      ~, itLeadeadAttributes, itOctarockAttributes, itOldottoseaAttributes, ~, itUnkAttributes, itDrMarioPillAttributes,
+      itKirbyCutterBeamAttributes, port_F32Run, itUnkAttributes, port_F32Run, FoxLaserAttr, FoxLaserAttr,
+      port_F32Run, port_F32Run, port_F32Run, port_F32Run, itLinkBoomerangAttributes, itLinkBoomerangAttributes,
+      itLinkHookshotAttributes, itLinkHookshotAttributes, itLinkArrowAttributes, itLinkArrowAttributes,
+      itNessPKFirepillarAttributes, itNessPKFirepillarAttributes, itFlashAttributes, itPKThunderAttributes,
+      port_F32Run, port_F32Run, port_F32Run, port_F32Run, port_F32Run, port_F32Run, port_F32Run, port_F32Run,
+      itFlashExplAttributes, itSeakNeedleThrownAttributes, port_F32Run, itPikachuthunderAttributes,
+      itPikachuthunderAttributes, port_F32Run, port_F32Run, port_F32Run, itYoshiEggThrowAttributes,
+      port_F32Run, port_F32Run, itPikachutJoltGroundAttributes, port_F32Run, itPikachutJoltGroundAttributes,
+      port_F32Run, itSamusBombAttributes, itSamusChargeShot_Attributes, itSamusMissileAttributes, itSamusGrappleAttributes,
+      itSeakChain_Attrs, port_F32Run, port_F32Run, port_F32Run, port_F32Run, itYoyoAttributes, port_F32Run,
+      port_F32Run, itUnkAttributes, itClimbersIceAttributes, itClimbersBlizzardAttributes, port_F32Run,
+      port_F32Run, itMDisableAttributes, port_F32Run, itMewtwoShadowball_DatAttrs, itClimbersStringAttributes,
+      port_F32Run, port_F32Run, port_F32Run, port_F32Run, port_F32Run, port_F32Run, port_F32Run, port_F32Run,
+      itGamewatchchefAttributes, port_F32Run, port_F32Run, itMasterHandLaserAttributes, itMasterHandBulletAttributes,
+      itMasterHandLaserAttributes, itMasterHandBulletAttributes, itCrazyHandBombAttributes, itUnkAttributes,
+      itDrMarioPillAttributes, itUnkAttributes, itClimbersIceAttributes, port_F32Run, port_F32Run,
+      FoxLaserAttr, FoxLaserAttr, port_F32Run, port_F32Run, itLinkArrowAttributes, itLinkArrowAttributes,
+      port_F32Run, port_F32Run, itMewtwoShadowball_DatAttrs, itFlashAttributes, itFlashExplAttributes,
+      itPikachutJoltGroundAttributes, port_F32Run, itPikachutJoltGroundAttributes, port_F32Run, itSamusChargeShot_Attributes,
+      itSeakNeedleThrownAttributes, port_F32Run, port_F32Run, itGamewatchchefAttributes, port_F32Run,
+      port_F32Run, it_2E5A_Attrs, itCoinAttributes, ~ ]
   xC:
     ptr_list: Article
     len_const: 47
@@ -287,6 +309,27 @@ itWstarAttributes:
   x28_entries: { object_run: true }   # x24_count rows, declared [1]
 port_itFoodsAttrs:
   rows: { object_run: true }
+itSamusGrappleAttributes:
+  # Four animation sets, one per grapple part; itsamusgrapple.c reads the
+  # first entry of each (*attrs->x74 ...). Unfollowed, the grab trapped in
+  # HSD_TObjAddAnimAll on big-endian material animations.
+  x74: { ptr_array: "HSD_AnimJoint*", len_const: 1 }
+  x78: { ptr_array: "HSD_MatAnimJoint*", len_const: 1 }
+  x7C: { ptr_array: "HSD_ShapeAnimJoint*", len_const: 1 }
+  x80: { ptr_array: "HSD_AnimJoint*", len_const: 1 }
+  x84: { ptr_array: "HSD_MatAnimJoint*", len_const: 1 }
+  x88: { ptr_array: "HSD_ShapeAnimJoint*", len_const: 1 }
+  x8C: { ptr_array: "HSD_AnimJoint*", len_const: 1 }
+  x90: { ptr_array: "HSD_MatAnimJoint*", len_const: 1 }
+  x94: { ptr_array: "HSD_ShapeAnimJoint*", len_const: 1 }
+  x98: { ptr_array: "HSD_AnimJoint*", len_const: 1 }
+  x9C: { ptr_array: "HSD_MatAnimJoint*", len_const: 1 }
+  xA0: { ptr_array: "HSD_ShapeAnimJoint*", len_const: 1 }
+  xA4: { ptr_array: "HSD_AnimJoint*", len_const: 1 }
+  xA8: { ptr_array: "HSD_MatAnimJoint*", len_const: 1 }
+  xAC: { ptr_array: "HSD_ShapeAnimJoint*", len_const: 1 }
+itGamewatchchefAttributes:
+  entries: { object_run: true }   # one row per pan item, indexed by item var x4; declared [1]
 port_F32Run:
   v: { object_run: true }
 port_KinokoAttrs:

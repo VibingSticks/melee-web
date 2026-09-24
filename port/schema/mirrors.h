@@ -661,15 +661,19 @@ typedef struct {
     s32 x10, x14, x18, x1C;
 } port_YorsterParams;
 
-/* grzebes.c grZe_YakumonoParam (GrZe.dat, 0x190 bytes). The disc relocates
- * a slot at +0x2C, inside pad_14; nothing decompiled reads it. */
+/* grzebes.c grZe_YakumonoParam (GrZe.dat, 0x190 bytes). The slot at +0x2C,
+ * inside the game's pad_14, is the acid's hit descriptor: grZebes_801DCBFC
+ * reads it as ((HSD_GObj*) yakumono_param)->user_data (offset 0x2C here too).
+ * Undescribed, its damage stayed big-endian: 14 read as 234881024, and the
+ * first touch of the acid trapped in the hit code. */
 typedef struct {
     s16 x0_base, x2_delay_min, x4_delay_max, x6_level;
 } port_grZe_AcidLevelEntry;
 typedef struct {
     f32 x00, x04, x08, x0C;
     s32 x10;
-    u8 pad_14[0x30 - 0x14];
+    u8 pad_14[0x2C - 0x14];
+    port_GrDeviceHit* x2C_acid_hit;
     f32 x30, x34, x38, x3C, x40, x44, x48, x4C, x50, x54, x58, x5C, x60, x64, x68, x6C, x70, x74, x78, x7C, x80,
         x84, x88, x8C, x90, x94, x98, x9C;
     port_grZe_AcidLevelEntry xA0_entries[30];

@@ -90,6 +90,11 @@
 #include <melee/it/kinds/itkinoko.h>
 #include <melee/it/kinds/itlipstickspore.h>
 #include <melee/it/kinds/types.h>
+#include <melee/it/kinds/itkirbycutterbeam.h>
+#include <melee/it/itPKFlash.h>
+#include <melee/it/itPKThunder.h>
+#include <melee/it/kinds/itseakneedlethrown.h>
+#include <melee/it/itYoyo.h>
 #include <melee/lb/types.h>
 #include <melee/mn/types.h>
 #include <melee/mp/types.h>

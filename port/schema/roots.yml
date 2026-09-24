@@ -113,6 +113,33 @@
 - { prefix: ftDataZelda, type: ftData, field_types: { ext_attr: ftZelda_DatAttrs } }
 # ftPk_Init_OnLoad indexes the item article list with these attributes' item kinds.
 - { prefix: ftDataPikachu, type: ftData, field_types: { ext_attr: ftPikachuAttributes } }
+# The other characters' blocks: every field is a word (floats and ints; their
+# structs' only narrower members are padding the code reads under other
+# names), so a word run to the next object converts all of it. Left
+# undescribed they stayed big-endian: Sheik's chain spawned on frame 0
+# with no item, and every special move of these characters ran on garbage.
+- { prefix: ftDataBoy, type: ftData, field_types: { ext_attr: port_F32Run } }
+- { prefix: ftDataGirl, type: ftData, field_types: { ext_attr: port_F32Run } }
+- { prefix: ftDataClink, type: ftData, field_types: { ext_attr: port_F32Run } }
+- { prefix: ftDataDonkey, type: ftData, field_types: { ext_attr: port_F32Run } }
+- { prefix: ftDataDrmario, type: ftData, field_types: { ext_attr: port_F32Run } }
+- { prefix: ftDataFalco, type: ftData, field_types: { ext_attr: port_F32Run } }
+- { prefix: ftDataEmblem, type: ftData, field_types: { ext_attr: port_F32Run } }
+- { prefix: ftDataGkoopa, type: ftData, field_types: { ext_attr: port_F32Run } }
+- { prefix: ftDataGanon, type: ftData, field_types: { ext_attr: port_F32Run } }
+- { prefix: ftDataGamewatch, type: ftData, field_types: { ext_attr: port_F32Run } }
+- { prefix: ftDataKoopa, type: ftData, field_types: { ext_attr: port_F32Run } }
+- { prefix: ftDataLuigi, type: ftData, field_types: { ext_attr: port_F32Run } }
+- { prefix: ftDataMasterhand, type: ftData, field_types: { ext_attr: port_F32Run } }
+- { prefix: ftDataMars, type: ftData, field_types: { ext_attr: port_F32Run } }
+- { prefix: ftDataMewtwo, type: ftData, field_types: { ext_attr: port_F32Run } }
+- { prefix: ftDataNana, type: ftData, field_types: { ext_attr: port_F32Run } }
+- { prefix: ftDataNess, type: ftData, field_types: { ext_attr: port_F32Run } }
+- { prefix: ftDataPichu, type: ftData, field_types: { ext_attr: port_F32Run } }
+- { prefix: ftDataPopo, type: ftData, field_types: { ext_attr: port_F32Run } }
+- { prefix: ftDataPurin, type: ftData, field_types: { ext_attr: port_F32Run } }
+- { prefix: ftDataSandbag, type: ftData, field_types: { ext_attr: port_F32Run } }
+- { prefix: ftDataSeak, type: ftData, field_types: { ext_attr: port_F32Run } }
 - { suffix: _figatree, type: FigaTree }
 - { prefix: lbBgFlashColAnimData, type: opaque }   # {void*, u8, u8} rows; pointers already relocated
 # HUD model lists (ifstock, if_2FD9, iftime, ifmagnify).

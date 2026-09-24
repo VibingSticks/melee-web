@@ -87,6 +87,11 @@ void __assert(const char* file, int line, const char* expr)
     if (++g_assert_count <= 200) {
         port_log("assertion failed: %s (%s:%d)", expr, file, line);
     }
+    /* The first few carry their call stack: a failed assertion is usually the
+     * first sign of bad data, and the crash report shows only the last lines. */
+    if (g_assert_count <= 4) {
+        emscripten_log(EM_LOG_CONSOLE | EM_LOG_WARN | EM_LOG_C_STACK, "assertion %u stack", g_assert_count);
+    }
     if (g_asserts_fatal) {
         emscripten_log(EM_LOG_ERROR | EM_LOG_C_STACK, "assertion stack");
         abort();

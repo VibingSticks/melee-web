@@ -7,6 +7,11 @@ import { DiscSource } from './disc_source.js';
 // page it is absent and each piece is loaded over the network instead.
 const OFFLINE = globalThis.__MELEE_OFFLINE__ ?? null;
 
+// Chrome keeps ten frames of a stack by default. The game's crashes sit deep
+// under the scene loop, so a crash report cut at ten frames names the leaf and
+// never the gameplay code that got there.
+Error.stackTraceLimit = 64;
+
 // Resolves to { loadNaga, installWebGL2Fallback }; only the WebGL2 path needs them.
 function rendererModules() {
   if (OFFLINE) {

@@ -1,4 +1,7 @@
 #include "ftcoll.h"
+#ifdef TARGET_PC
+#include <port_game.h>
+#endif
 
 #include <Runtime/platform.h>
 
@@ -1293,6 +1296,10 @@ bool ftColl_80077C60(Item* item, HitCapsule* hit, Fighter* fp,
 
                 if (!fp->x221C_b4) {
                     if (scaled_dmg > 500.0f) {
+#ifdef TARGET_PC
+                        port_log("attack power over 500 from item kind %d (state %d, hitbox damage %f, owner %p)",
+                                 (int) item->kind, (int) item->msid, (double) hit->damage, (void*) item->owner);
+#endif
                         HSD_ASSERTREPORT(0xB7, 0,
                                          "attack power over 500!! %f\n",
                                          scaled_dmg);

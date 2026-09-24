@@ -149,7 +149,13 @@ void ftCo_Damage_CalcKnockback(Fighter* fp)
 bool ftCo_8008DA4C(Fighter_GObj* gobj, HitElement arg1, enum_t arg2)
 {
     Fighter* fp = gobj->user_data;
+#ifdef TARGET_PC
+    /* With no damage taken the original returns r0, which its prologue's
+     * mflr has just loaded with the (non-zero) return address: true. */
+    bool result = true;
+#else
     bool result;
+#endif
     if (fp->dmg.x1838_percentTemp) {
         switch (arg1) {
         case HitElement_Fire:

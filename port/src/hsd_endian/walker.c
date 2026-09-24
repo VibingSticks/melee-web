@@ -459,6 +459,9 @@ static int walk_field(port_walk_ctx* c, const port_field* f, uint8_t* obj)
             return fail(c, "scalar outside the archive", p);
         }
         if (in_reloc(c, (uint32_t) (p - c->base))) {
+            if (c->fill_gaps) {
+                return 0;
+            }
             return fail(c, "scalar descriptor on a pointer slot", p);
         }
         {

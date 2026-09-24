@@ -527,6 +527,27 @@ port_archive_keep* port_archive_swap_roots(HSD_Archive* ar, uint32_t* reloc_set,
 
 /* --- objects the game registers after the parse --- */
 
+int port_archive_fill_gaps(void* obj, const port_type* run_type, const char* what)
+{
+    for (unsigned i = 0; i < PORT_PARSE_NOTES; i++) {
+        parse_note* m = &g_parse_notes[i];
+        if (m->data != NULL && m->keep != NULL && (const uint8_t*) obj >= m->data &&
+            (const uint8_t*) obj < m->data + m->size)
+        {
+            port_walk_ctx* c = &m->keep->c;
+            c->fill_gaps = 1;
+            c->error = NULL;
+            port_walk(c, run_type, obj);
+            c->fill_gaps = 0;
+            if (c->error != NULL) {
+                port_log("hsd_endian: filling gaps of %s in %s: %s", what, m->keep->name, c->error);
+            }
+            return 0;
+        }
+    }
+    return -1;
+}
+
 int port_archive_swap_object(void* obj, const port_type* type, const char* what)
 {
     static unsigned logged;

@@ -16,6 +16,7 @@
  * their attributes staying big-endian. */
 extern const port_type port_T_Article;
 extern const port_type port_T_it_804D6D20_t;
+extern const port_type port_T_port_F32Run;
 
 void port_swap_ft_article(void* article, int slot)
 {
@@ -32,6 +33,14 @@ void port_swap_ft_article(void* article, int slot)
     }
     if (article != NULL) {
         port_archive_swap_object(article, t, "fighter article");
+        /* The attribute structs mark bytes they do not name as padding, and
+         * the code sometimes reads them under another struct (Sheik's chain
+         * reads a velocity at +0x50 of itSeakChain_Attrs' pad_4C). Sweep the
+         * block for words the typed walk left big-endian. */
+        void* attrs = ((void**) article)[1]; /* Article::x4_specialAttributes */
+        if (attrs != NULL) {
+            port_archive_fill_gaps(attrs, &port_T_port_F32Run, "fighter item attributes");
+        }
     }
 }
 

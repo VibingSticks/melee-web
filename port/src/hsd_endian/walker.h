@@ -36,6 +36,8 @@ typedef struct port_walk_ctx_s {
     const port_type* cur_type;   /* diagnostics: where the walker is */
     const port_field* cur_field;
     unsigned nlogged;            /* violations logged so far (capped) */
+    int fill_gaps;               /* a scalar on a pointer slot is skipped, not a violation: a pass that
+                                    sweeps a block for words no typed walk converted */
 } port_walk_ctx;
 
 int port_walk_ctx_init(port_walk_ctx* ctx, const uint8_t* base, uint32_t size, const uint32_t* reloc_set,

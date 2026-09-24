@@ -48,6 +48,12 @@ port_archive_keep* port_archive_swap_roots(HSD_Archive* archive, uint32_t* reloc
  * -1 when the object is in no archive with a kept context (nothing done). */
 int port_archive_swap_object(void* obj, const port_type* type, const char* what);
 
+/* After a typed conversion of a block, swap as 32-bit words whatever the
+ * types left alone inside it (padding the code still reads, rows past a
+ * declared [1]) up to the next object; pointer slots and bytes already
+ * converted are skipped. */
+int port_archive_fill_gaps(void* obj, const port_type* run_type, const char* what);
+
 /* The root rule for public symbol `sym` in the archive named `archive` (a
  * file name such as "GrCs.dat", or NULL when unknown): the longest
  * prefix+suffix match, an archive-scoped rule beating any unscoped one. NULL

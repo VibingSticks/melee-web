@@ -84,8 +84,7 @@ static void HSD_DevComARAMCallback(ARQRequest* request)
     }
 
     if (aramDC->callback != NULL) {
-        aramDC->callback(aramDC->dcReq, (int) aramDC->args, buf,
-                         aramDC->cancelflag);
+        aramDC->callback(aramDC->dcReq, aramDC->args, buf, aramDC->cancelflag);
     }
 
     HSD_DevComUnlink(aramDC);
@@ -122,8 +121,7 @@ void HSD_DevComARAMWakeUp(void)
     if (devComStatus[3] != NULL) {
         if (aramDC->cancelflag) {
             if (aramDC->callback != NULL) {
-                aramDC->callback(aramDC->dcReq, (s32) aramDC->args, NULL,
-                                 true);
+                aramDC->callback(aramDC->dcReq, aramDC->args, NULL, true);
             }
             HSD_DevComUnlink(aramDC);
             OSRestoreInterrupts(enabled);
@@ -229,9 +227,9 @@ static void HSD_DevComDVDARAMEndCallback(ARQRequest* request)
     }
 
     if (HSD_DevCom_804D77FC[i]->callback != NULL && HSD_DevCom_804D7804 == 0) {
-        HSD_DevCom_804D77FC[i]->callback(
-            HSD_DevCom_804D77FC[i]->dcReq, (int) HSD_DevCom_804D77FC[i]->args,
-            NULL, HSD_DevCom_804D77FC[i]->cancelflag);
+        HSD_DevCom_804D77FC[i]->callback(HSD_DevCom_804D77FC[i]->dcReq,
+                                         HSD_DevCom_804D77FC[i]->args, NULL,
+                                         HSD_DevCom_804D77FC[i]->cancelflag);
     }
     HSD_DevComARAMCallback_inline(HSD_DevCom_804D77FC[i]);
     HSD_DevCom_804D77FC[i] = NULL;
@@ -254,8 +252,7 @@ static void HSD_DevComDVDMemCallback(s32 result, DVDFileInfo* unused)
         return;
     }
     if (dvdDC->callback != NULL && HSD_DevCom_804D7804 == 0) {
-        dvdDC->callback(dvdDC->dcReq, (int) dvdDC->args, NULL,
-                        dvdDC->cancelflag);
+        dvdDC->callback(dvdDC->dcReq, dvdDC->args, NULL, dvdDC->cancelflag);
     }
     HSD_DevComUnlink(dvdDC);
     dc = dvdDC;
@@ -283,7 +280,7 @@ static void HSD_DevComDVDCallback(s32 result, DVDFileInfo* unused)
         HSD_ASSERT(0x18C, dvdDC->size <= DEVCOM_BUF_SIZE);
         HSD_ASSERT(0x18D, dvdDC->callback);
         if (HSD_DevCom_804D7804 == 0) {
-            dvdDC->callback(dvdDC->dcReq, (s32) dvdDC->args,
+            dvdDC->callback(dvdDC->dcReq, dvdDC->args,
                             HSD_DevCom_804C6330_bufs[HSD_DevCom_804D77F6],
                             dvdDC->cancelflag);
         }
@@ -336,8 +333,7 @@ void HSD_DevComDVDWakeUp(void)
         if ((dvdDC = devComStatus[i])) {
             if (dvdDC->cancelflag) {
                 if (dvdDC->callback != NULL) {
-                    dvdDC->callback(dvdDC->dcReq, (s32) dvdDC->args, NULL,
-                                    true);
+                    dvdDC->callback(dvdDC->dcReq, dvdDC->args, NULL, true);
                 }
                 HSD_DevComUnlink(dvdDC);
                 OSRestoreInterrupts(enabled);
@@ -385,7 +381,7 @@ static inline void DevComLinkNext(HSD_DevCom* dc)
 }
 
 int HSD_DevComRequest(int file, uintptr_t src, uintptr_t dest, size_t size,
-                      int type, int pri, HSD_DevComCallback cb, void* args)
+                      int type, int pri, HSD_DevComCallback cb, uintptr_t args)
 {
     bool enabled;
     HSD_DevCom* dc;
@@ -462,7 +458,8 @@ static inline HSD_DevCom* HSD_DevComCancelEx_inline(int dcReq)
     return NULL;
 }
 
-int HSD_DevComCancelEx(int dcReq, u32 flags, HSD_DevComCallback cb, void* args)
+int HSD_DevComCancelEx(int dcReq, u32 flags, HSD_DevComCallback cb,
+                       uintptr_t args)
 {
     HSD_DevCom* dc;
     bool enabled = OSDisableInterrupts();
@@ -479,7 +476,7 @@ int HSD_DevComCancelEx(int dcReq, u32 flags, HSD_DevComCallback cb, void* args)
             dc->cancelflag = true;
         } else {
             if (dc->callback != NULL) {
-                dc->callback(dc->dcReq, (int) dc->args, NULL, true);
+                dc->callback(dc->dcReq, dc->args, NULL, true);
             }
             HSD_DevComUnlink(dc);
         }

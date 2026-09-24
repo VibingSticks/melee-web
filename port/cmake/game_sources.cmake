@@ -15,7 +15,7 @@ file(GLOB_RECURSE GAME_SOURCES CONFIGURE_DEPENDS
 # paired-single quantisation registers, and even those carry meaning (GQR6
 # encodes the IDCT's level-shift and clamp). Movies are skipped in lbmthp.c
 # until those routines are written in C.
-list(APPEND GAME_SOURCES ${GAME_ROOT}/extern/dolphin/src/dolphin/thp/THPDec.c)
+list(APPEND GAME_SOURCES ${GAME_ROOT}/libs/dolphin/src/dolphin/thp/THPDec.c)
 
 set(GAME_EXCLUDE
     dberror.c debug.c debugconsole_main.c   # PPC register dumps / debug console thread (never)
@@ -43,7 +43,7 @@ target_include_directories(melee_game PRIVATE
     ${PORT_SRC_DIR}           # <hsd_port/...>
     # Last: this tree carries a whole SDK dolphin/ that would otherwise shadow
     # Aurora's headers. Only the THP decoder's own header is wanted from it.
-    ${GAME_ROOT}/extern/dolphin/include)
+    ${GAME_ROOT}/libs/dolphin/include)
 target_compile_definitions(melee_game PRIVATE
     TARGET_PC LINT VERSION_GALE01 BUILD_VERSION=0)   # bool is int via compat/stdbool.h
 target_compile_options(melee_game PRIVATE

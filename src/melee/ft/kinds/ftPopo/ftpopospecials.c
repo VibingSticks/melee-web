@@ -8,6 +8,7 @@
 #include <melee/ft/ft_0892.h>
 #include <melee/ft/ftcommon.h>
 #include <melee/ft/ftparts.h>
+#include <melee/ft/inlines.h>
 #include <melee/ft/kinds/ftCommon/ftCo_Fall.h>
 #include <melee/ft/kinds/ftCommon/ftCo_FallSpecial.h>
 #include <melee/ft/kinds/ftCommon/inlines.h>
@@ -122,7 +123,7 @@ static inline void inlineA2(Fighter_GObj* gobj)
 {
     Fighter* fp = GET_FIGHTER(gobj);
     ftIceClimberAttributes* da = fp->dat_attrs;
-    fp->cmd_vars[0] = fp->cmd_vars[1] = fp->cmd_vars[2] = fp->cmd_vars[3] = 0;
+    Fighter_ClearCmdVars(fp);
     fp->mv.pp.specials.x0 = 0;
     fp->mv.pp.specials.x4 = 10;
     fp->mv.pp.specials.xC = 0;
@@ -131,7 +132,7 @@ static inline void inlineA2(Fighter_GObj* gobj)
     fp->mv.pp.specials.x14 = da->x68;
     fp->mv.pp.specials.x18 = 0;
     fp->mv.pp.specials.x1C = 0;
-    if (ftNn_Init_80123954(Player_GetEntityAtIndex(fp->player_id, 1),
+    if (ftNn_Init_80123954(Player_GetEntityAtIndex(fp->player_idx, 1),
                            fp->ground_or_air) == GA_Air)
     {
         Fighter_ChangeMotionState(gobj, ftPp_MS_SpecialS1, Ft_MF_None, 0, 1, 0,
@@ -140,7 +141,7 @@ static inline void inlineA2(Fighter_GObj* gobj)
     } else {
         Fighter_ChangeMotionState(gobj, ftPp_MS_SpecialS2, Ft_MF_None, 0, 1, 0,
                                   NULL);
-        fp->x1A5C = Player_GetEntityAtIndex(fp->player_id, 1);
+        fp->x1A5C = Player_GetEntityAtIndex(fp->player_idx, 1);
     }
     fp->self_vel.y = 0;
     {
@@ -152,7 +153,7 @@ static inline void inlineA2(Fighter_GObj* gobj)
 
 void ftPp_SpecialS_Enter(Fighter_GObj* gobj)
 {
-    PAD_STACK(4 * 4);
+    PAD_STACK(4 * 2);
     inlineA2(gobj);
     inlineA0(gobj);
     ftAnim_8006EBA4(gobj);
@@ -165,7 +166,7 @@ static inline void inlineB0(Fighter_GObj* gobj)
 {
     Fighter* fp = GET_FIGHTER(gobj);
     ftIceClimberAttributes* da = fp->dat_attrs;
-    fp->cmd_vars[0] = fp->cmd_vars[1] = fp->cmd_vars[2] = fp->cmd_vars[3] = 0;
+    Fighter_ClearCmdVars(fp);
     fp->mv.pp.specials.x0 = 0;
     fp->mv.pp.specials.x4 = 10;
     fp->mv.pp.specials.xC = 0;
@@ -174,7 +175,7 @@ static inline void inlineB0(Fighter_GObj* gobj)
     fp->mv.pp.specials.x14 = da->x68;
     fp->mv.pp.specials.x18 = 0;
     fp->mv.pp.specials.x1C = 0;
-    if (ftNn_Init_80123954(Player_GetEntityAtIndex(fp->player_id, 1),
+    if (ftNn_Init_80123954(Player_GetEntityAtIndex(fp->player_idx, 1),
                            fp->ground_or_air) == GA_Air)
     {
         Fighter_ChangeMotionState(gobj, ftPp_MS_SpecialAirS1, 0, 0, 1, 0,
@@ -184,7 +185,7 @@ static inline void inlineB0(Fighter_GObj* gobj)
     } else {
         Fighter_ChangeMotionState(gobj, ftPp_MS_SpecialAirS2, 0, 0, 1, 0,
                                   NULL);
-        fp->x1A5C = Player_GetEntityAtIndex(fp->player_id, 1);
+        fp->x1A5C = Player_GetEntityAtIndex(fp->player_idx, 1);
         fp->self_vel.y = da->x24;
     }
     fp->self_vel.x = da->x2C * fp->facing_dir;
@@ -192,7 +193,7 @@ static inline void inlineB0(Fighter_GObj* gobj)
 
 void ftPp_SpecialAirS_Enter(Fighter_GObj* gobj)
 {
-    PAD_STACK(4 * 4);
+    PAD_STACK(4 * 2);
     inlineB0(gobj);
     inlineA0(gobj);
     ftAnim_8006EBA4(gobj);
@@ -242,7 +243,7 @@ static inline void inlineC1(Fighter_GObj* gobj)
 void ftPp_SpecialS2_Anim(Fighter_GObj* gobj)
 {
     Fighter* fp = GET_FIGHTER(gobj);
-    Fighter_GObj* nn_gobj = Player_GetEntityAtIndex(fp->player_id, 1);
+    Fighter_GObj* nn_gobj = Player_GetEntityAtIndex(fp->player_idx, 1);
     PAD_STACK(4 * 2);
     if (!ftAnim_IsFramesRemaining(gobj) || ftNn_Init_80123B10(nn_gobj)) {
         inlineC1(gobj);
@@ -286,7 +287,7 @@ void ftPp_SpecialAirS2_Anim(Fighter_GObj* gobj)
 {
     Fighter* fp = GET_FIGHTER(gobj);
     ftIceClimberAttributes* da = fp->dat_attrs;
-    Fighter_GObj* temp_r30 = Player_GetEntityAtIndex(fp->player_id, 1);
+    Fighter_GObj* temp_r30 = Player_GetEntityAtIndex(fp->player_idx, 1);
     PAD_STACK(8);
     if (!ftAnim_IsFramesRemaining(gobj) || ftNn_Init_80123B10(temp_r30)) {
         inline1(gobj);

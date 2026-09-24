@@ -11,7 +11,7 @@
 
 #include <string.h> /* the decoder calls memset without declaring it */
 
-#include "../../../../../extern/dolphin/include/dolphin/thp/thp.h"
+#include "../../../../../libs/dolphin/include/dolphin/thp/thp.h"
 
 #ifdef TARGET_PC
 #define PORT_DCBZ_BLOCK 32

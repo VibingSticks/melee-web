@@ -33,10 +33,8 @@
 #include <sysdolphin/baselib/hsd_393C.h>
 #include <sysdolphin/baselib/hsd_397E.h>
 #include <sysdolphin/baselib/hsd_3982.h>
-#include <sysdolphin/baselib/hsd_3A94.h>
-#include <sysdolphin/baselib/hsd_3B27.h>
-#include <sysdolphin/baselib/hsd_3B2B.h>
-#include <sysdolphin/baselib/hsd_3B2E.h>
+#include <sysdolphin/baselib/card.h>
+#include <sysdolphin/baselib/crypt.h>
 #include <sysdolphin/baselib/hsd_3B33.h>
 #include <sysdolphin/baselib/hsd_3B34.h>
 #include <sysdolphin/baselib/id.h>

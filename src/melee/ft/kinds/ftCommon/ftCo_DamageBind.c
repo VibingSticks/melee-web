@@ -4,8 +4,7 @@
 
 #include "forward.h"
 #include "ftCo_DamageFall.h"
-#include "ftCo_Lift.h"
-#include "ftCo_Throw.h"
+#include "inlines.h"
 #include <melee/ft/fighter.h>
 #include <melee/ft/ft_081B.h>
 #include <melee/ft/ft_084E.h>
@@ -38,19 +37,17 @@ static void commonCall(Fighter* fp)
         fp, 0,
         (fp->dmg.x1830_percent * p_ftCommonData->released_inputs) +
             (p_ftCommonData->x65C *
-                 (p_ftCommonData->x660 - Player_GetHandicap(fp->player_id)) +
+                 (p_ftCommonData->x660 - Player_GetHandicap(fp->player_idx)) +
              p_ftCommonData->x658 +
              p_ftCommonData->x664 * (p_ftCommonData->pressed_inputs -
-                                     (Player_80033BB8(fp->player_id) + 1))));
+                                     (Player_80033BB8(fp->player_idx) + 1))));
 }
 
 void ftCo_800C4550(Fighter_GObj* gobj)
 {
     Fighter* fp = GET_FIGHTER(gobj);
 
-    ftCommon_8007DB58(gobj);
-    ftCo_8009750C(gobj);
-    ftCo_800DD168(gobj);
+    ftCo_ReleaseItemAndVictim(gobj);
     if (fp->ground_or_air == GA_Air) {
         ftCo_80090780(gobj);
     } else {

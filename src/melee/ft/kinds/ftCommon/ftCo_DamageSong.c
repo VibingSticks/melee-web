@@ -3,8 +3,7 @@
 #include <melee/ft/forward.h>
 
 #include "ftCo_0C35.h"
-#include "ftCo_Lift.h"
-#include "ftCo_Throw.h"
+#include "inlines.h"
 #include <melee/ft/fighter.h>
 #include <melee/ft/ft_081B.h>
 #include <melee/ft/ft_084E.h>
@@ -22,10 +21,10 @@ static float inlineA0(Fighter* fp, bool arg1)
     float result =
         (fp->dmg.x1830_percent * p_ftCommonData->x638) +
         ((p_ftCommonData->x628 *
-          (p_ftCommonData->x62C - Player_GetHandicap(fp->player_id))) +
+          (p_ftCommonData->x62C - Player_GetHandicap(fp->player_idx))) +
          p_ftCommonData->x624 +
          p_ftCommonData->x630 *
-             (p_ftCommonData->x634 - ((Player_80033BB8(fp->player_id)) + 1)));
+             (p_ftCommonData->x634 - ((Player_80033BB8(fp->player_idx)) + 1)));
     if (arg1) {
         result *= p_ftCommonData->x644;
     }
@@ -35,9 +34,7 @@ static float inlineA0(Fighter* fp, bool arg1)
 void ftCo_800C318C(Fighter_GObj* gobj, bool arg1)
 {
     Fighter* fp = GET_FIGHTER(gobj);
-    ftCommon_8007DB58(gobj);
-    ftCo_8009750C(gobj);
-    ftCo_800DD168(gobj);
+    ftCo_ReleaseItemAndVictim(gobj);
     Fighter_ChangeMotionState(gobj, ftCo_MS_DamageSong, Ft_MF_None, 0, 1, 0,
                               NULL);
     ftCommon_InitGrab(fp, 0, inlineA0(fp, arg1));

@@ -1,6 +1,5 @@
 #ifndef MELEE_GR_TYPES_H
 #define MELEE_GR_TYPES_H
-
 #include <Runtime/platform.h>
 
 #include <melee/cm/forward.h>
@@ -547,7 +546,8 @@ struct grVenom_Platform_GroundVars {
 struct grVenom_GroundVars {
     /* +00 gp+C4 */ union {
         u32 xC4; ///< @todo Not a #u32, either
-                 /// #grSmashTaunt_GroundVars or #HSD_GObj
+
+        /// #grSmashTaunt_GroundVars or #HSD_GObj
         struct {
             u8 b0 : 1;
         } xC4_flags;
@@ -1011,10 +1011,9 @@ struct grYorster_GroundVars {
 
 struct grZebes_GroundVars {
     /*  +0 gp+C4:0 */ u8 x0_b0 : 1;
-    /*  +4 gp+C8 */ u32 x4;
+    /*  +4 gp+C8 */ HSD_JObj* stored_jobj;
     /*  +8 gp+CC */ s16 x8;
     /*  +A gp+CE */ s16 xA;
-    /*  +C gp+D0 */ Vec3 xC;
 };
 
 struct grZebes_GroundVars2 {
@@ -1205,7 +1204,7 @@ struct grGreens_BlockVars {
     Item_GObj* x10;
     HSD_JObj* x14;
     int x18;
-    int x1C;
+    HSD_GObj* x1C;
 };
 ASSERT_SIZE(struct grGreens_BlockVars, 0x20);
 
@@ -1554,7 +1553,7 @@ struct grBigBlueRoute_Track {
 };
 
 struct grBigBlueRoute_GroundVars2 {
-    /* +00 gp+C4 */ u8 pad_C4[0xC8 - 0xC4];
+    /* +00 gp+C4 */ HSD_GObj* xC4;
     /* +04 gp+C8 */ s16 xC8;
     /* +06 gp+CA */ u8 pad_CA[0xCC - 0xCA];
     /* +08 gp+CC */ Vec3 xCC;
@@ -1569,24 +1568,17 @@ struct grCastle_GroundVars {
 };
 
 struct grCastle_GroundVars3 {
-    /* +00 gp+C4 */ u8 pad_0[0x1C];
-    /* +1C gp+E0 */ DynamicsDesc x1C[12];
-};
-
-struct grCastle_GroundVars4 {
-    /* +00 gp+C4 */ u8 pad_0[0x12];
+    /* +00 gp+C4 */ HSD_GObj* xC4[3];
+    /* +0C gp+D0 */ s16 xD0;
+    /* +0E gp+D2 */ s16 xD2;
+    /* +10 gp+D4 */ s16 xD4;
     /* +12 gp+D6 */ s16 xD6;
     /* +14 gp+D8 */ s16 xD8;
     /* +16 gp+DA */ s16 xDA;
     /* +18 gp+DC */ s16 xDC;
-};
-
-struct grCastle_GroundVars2 {
-    /*  +0 gp+C4 */ HSD_GObj* xC4;
-    /*  +0 gp+C8 */ HSD_GObj* xC8;
-    /*  +0 gp+CC */ HSD_GObj* xCC;
-    /*  +0 gp+D0 */ s16 xD0;
-    /*  +0 gp+D2 */ s16 xD2;
+    /* +1A:0 gp+DE:0 */ u8 xDE_b0 : 1;
+    /* +1B gp+DF */ u8 pad_xDF[1];
+    /* +1C gp+E0 */ DynamicsDesc dynamics[12];
 };
 
 struct grCastle_GroundVars5 {
@@ -1624,21 +1616,6 @@ struct grCastle_GroundVars8 {
     /* +00 gp+C4 */ struct grCastle_Platform plat[2];
 };
 
-struct grCastle_GroundVars9 {
-    /* +00   gp+C4 */ u32 xC4;
-    /* +04   gp+C8 */ u32 xC8;
-    /* +08   gp+CC */ u32 xCC;
-    /* +0C   gp+D0 */ u8 pad_xD0[4];
-    /* +10   gp+D4 */ s16 xD4;
-    /* +12   gp+D6 */ s16 xD6;
-    /* +14   gp+D8 */ s16 xD8;
-    /* +16   gp+DA */ s16 xDA;
-    /* +18   gp+DC */ s16 xDC;
-    /* +1A:0 gp+DE:0 */ u8 xDE_b0 : 1;
-    /* +1B   gp+DF */ u8 pad_xDF[1];
-    /* +1C   gp+E0 */ DynamicsDesc dynamics[12];
-};
-
 struct grCastle_GroundVars10 {
     /* +00 gp+C4 */ s16 xC4;
     /* +02 gp+C6 */ u8 pad_C6[2];
@@ -1673,12 +1650,6 @@ struct grCastle_GroundVars11 {
     /* +0C gp+D0 */ u32 xD0;
     /* +10 gp+D4 */ u32 xD4;
     /* +14 gp+D8 */ u32 xD8;
-};
-
-struct grCastle_GroundVars12 {
-    /* +00 gp+C4 */ u32 xC4[3];
-    /* +0C gp+D0 */ s16 xD0;
-    /* +0E gp+D2 */ s16 xD2;
 };
 
 struct grPura_GroundVars {
@@ -1923,17 +1894,13 @@ struct Ground {
         struct grBigBlue_GroundVars bigblue;
         struct grBigBlueRoute_GroundVars2 bigblueroute2;
         struct grCastle_GroundVars castle;
-        struct grCastle_GroundVars2 castle2;
         struct grCastle_GroundVars3 castle3;
-        struct grCastle_GroundVars4 castle4;
         struct grCastle_GroundVars5 castle5;
         struct grCastle_GroundVars6 castle6;
         struct grCastle_GroundVars7 castle7;
         struct grCastle_GroundVars8 castle8;
-        struct grCastle_GroundVars9 castle9;
         struct grCastle_GroundVars10 castle10;
         struct grCastle_GroundVars11 castle11;
-        struct grCastle_GroundVars12 castle12;
         struct grCorneria_GroundVars corneria;
         struct grCorneria_GroundVars2 corneria2;
         struct grGreatBay_GroundVars greatbay;
@@ -1963,7 +1930,14 @@ struct Ground {
         struct grInishie2_GroundVars inishie2;
         struct grInishie2_GroundVars2 inishie22;
         struct grInishie2_GroundVars3 inishie23;
+
+        /**
+         * Japanese for "barrel," from #grKongo_801D828C and
+         * #grOldKongo_802105C8 asserts.
+         * @alias{oldkongo}
+         */
         struct grOldKongo_GroundVars taru;
+
         struct grOldPupupu_GroundVars oldpupupu;
         struct grOldPupupu_GroundVars2 oldpupupu2;
         struct grOldYoshi_Cloud_GroundVars oldyoshicloud;

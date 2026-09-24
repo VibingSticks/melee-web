@@ -16,7 +16,8 @@
 
 static bool cancel;
 
-static void lbFile_8001615C(int dcreq, int args, void* buf, bool cancelflag)
+static void lbFile_8001615C(int dcreq, uintptr_t args, void* buf,
+                            bool cancelflag)
 {
     HSD_ASSERT(71, !cancelflag);
     cancel = true;
@@ -122,10 +123,8 @@ size_t lbFileGetSize(const char* basename)
     return lbFile_8001634C(entry_num);
 }
 
-#define ROUND_UP_32(x) (((x) + 31) & ~31)
-
 void lbFile_800164A4(int file, uintptr_t dst, size_t* size, int pri,
-                     HSD_DevComCallback callback, void* args)
+                     HSD_DevComCallback callback, uintptr_t args)
 {
     int type;
     *size = lbFile_8001634C(file);
@@ -134,12 +133,12 @@ void lbFile_800164A4(int file, uintptr_t dst, size_t* size, int pri,
 #else
     type = (dst >= 0x80000000) ? 0x21 : 0x23;
 #endif
-    HSD_DevComRequest(file, 0, dst, ROUND_UP_32(*size), type, pri, callback,
+    HSD_DevComRequest(file, 0, dst, OSRoundUp32B(*size), type, pri, callback,
                       args);
 }
 
 void lbFile_80016580(const char* basename, void* dst, size_t* size,
-                     HSD_DevComCallback callback, void* args)
+                     HSD_DevComCallback callback, uintptr_t args)
 {
     char* filename = lbFileGetFullName(basename);
     int entry_num = DVDConvertPathToEntrynum(filename);
@@ -173,18 +172,18 @@ void lbFile_8001668C(const char* basename, void* dst, size_t* size)
 {
     LOAD_TIMER_BEGIN();
     cancel = false;
-    lbFile_80016580(basename, dst, size, lbFile_8001615C, NULL);
+    lbFile_80016580(basename, dst, size, lbFile_8001615C, 0);
     waitForDisc();
     LOAD_TIMER_END(basename, *size);
 }
 
-static void lbFile_80016760_inline(int heap_id, const char* basename,
-                                   void** dst, size_t* size)
+static void loadFile(int heap_id, const char* basename, void** dst,
+                     size_t* size)
 {
     LOAD_TIMER_BEGIN();
     *size = lbFileGetSize(basename);
-    *dst = lbHeap_80015BD0(heap_id, ROUND_UP_32(*size));
-    lbFile_80016580(basename, *dst, size, lbFile_8001615C, NULL);
+    *dst = lbHeap_80015BD0(heap_id, OSRoundUp32B(*size));
+    lbFile_80016580(basename, *dst, size, lbFile_8001615C, 0);
     waitForDisc();
     LOAD_TIMER_END(basename, *size);
 }
@@ -192,7 +191,7 @@ static void lbFile_80016760_inline(int heap_id, const char* basename,
 void lbFile_80016760(const char* basename, void** dst, size_t* size)
 {
     cancel = false;
-    lbFile_80016760_inline(0, basename, dst, size);
+    loadFile(0, basename, dst, size);
 }
 
 bool lbFile_800168A0(int heap_id, const char* basename, void** dst,
@@ -203,7 +202,7 @@ bool lbFile_800168A0(int heap_id, const char* basename, void** dst,
         return true;
     } else {
         cancel = false;
-        lbFile_80016760_inline(heap_id, basename, dst, size);
+        loadFile(heap_id, basename, dst, size);
         return false;
     }
 }

@@ -8,21 +8,18 @@
 #include "types.h"
 #include "vi.h"
 #include <dolphin/gx.h>
-#include <melee/cm/camera.h>
 #include <melee/ef/efasync.h>
 #include <melee/ef/eflib.h>
 #include <melee/ft/ftdemo.h>
 #include <melee/gm/gm_unsplit.h>
-#include <melee/gr/ground.h>
+#include <melee/gr/inlines.h>
 #include <melee/gr/stage.h>
 #include <melee/it/item.h>
-#include <melee/lb/lb_00F9.h>
 #include <melee/lb/lb_013B.h>
 #include <melee/lb/lbarchive.h>
 #include <melee/lb/lbaudio_ax.h>
 #include <melee/lb/lbshadow.h>
 #include <melee/lb/lbspdisplay.h>
-#include <melee/mp/mpcoll.h>
 #include <melee/pl/player.h>
 #include <melee/sc/types.h>
 #include <sysdolphin/baselib/aobj.h>
@@ -42,11 +39,7 @@ static Vec3 initial_pos = { 0, 0, 0 };
 
 void vi0102_8031CB00(int mario_costume, int luigi_costume)
 {
-    Camera_Init(6);
-    lb_8000FCDC();
-    mpColl_80041C78();
-    Ground_801C0378(0x40);
-    Stage_802251E8(St_Kind_Castle, 0);
+    Stage_InitScene(St_Kind_Castle, 0);
     Item_80266FA8();
     Item_80266FCC();
     Stage_8022524C();
@@ -59,7 +52,7 @@ void vi0102_8031CB00(int mario_costume, int luigi_costume)
     Player_80036E20(CKind_Mario, un_804D6F38, 4);
     Player_SetPlayerCharacter(0, CKind_Mario);
     Player_SetCostumeId(0, mario_costume);
-    Player_SetPlayerId(0, 0);
+    Player_SetPadPort(0, 0);
     Player_SetSlottype(0, Gm_PKind_Demo);
     Player_SetFacingDirection(0, 1.0f);
     Player_80032768(0, &initial_pos);
@@ -69,7 +62,7 @@ void vi0102_8031CB00(int mario_costume, int luigi_costume)
     Player_80036E20(CKind_Luigi, un_804D6F38, 4);
     Player_SetPlayerCharacter(1, CKind_Luigi);
     Player_SetCostumeId(1, luigi_costume);
-    Player_SetPlayerId(1, 0);
+    Player_SetPadPort(1, 0);
     Player_SetSlottype(1, Gm_PKind_Demo);
     Player_SetFacingDirection(1, 1.0f);
     Player_80032768(1, &initial_pos);
@@ -133,7 +126,7 @@ void vi0102_Scene_OnEnter(void* arg)
     HSD_LObj* lobj;
     HSD_GObj* light_gobj;
 
-    ViCharaDesc* desc = (ViCharaDesc*) arg;
+    ViCharaDesc* desc = arg;
 
     lbAudioAx_800236DC();
     efLib_Init();
@@ -144,8 +137,7 @@ void vi0102_Scene_OnEnter(void* arg)
                                         "visual0102Scene", 0);
 
     cam_gobj = GObj_Create(0x13, 0x14, 0);
-    cobj =
-        lb_80013B14((HSD_CameraDescPerspective*) un_804D6F30->cameras[0].desc);
+    cobj = lb_80013B14(&un_804D6F30->cameras[0].desc->perspective);
     HSD_GObjObject_80390A70(cam_gobj, HSD_GObj_CameraKind, cobj);
     GObj_SetupGXLinkMax(cam_gobj, vi0102_CameraCallback, 0x8);
     HSD_CObjAddAnim(cobj, un_804D6F30->cameras[0].anims[0]);

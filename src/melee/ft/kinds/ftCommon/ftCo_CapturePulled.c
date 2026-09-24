@@ -1,6 +1,4 @@
 #include "ftCo_Attack100.h"
-#include "ftCo_Lift.h"
-#include "ftCo_Throw.h"
 #include "inlines.h"
 #include <melee/ft/fighter.h>
 #include <melee/ft/ft_081B.h>
@@ -22,11 +20,11 @@ float ftCo_800DA824(Fighter* fp)
     f32 temp;
     f32 value;
 
-    slot = Player_80033BB8(fp->player_id) + 1;
+    slot = Player_80033BB8(fp->player_idx) + 1;
     temp = (f32) slot;
     value = co->x364 - temp;
     value = co->x360 * value;
-    handicap = Player_GetHandicap(fp->player_id);
+    handicap = Player_GetHandicap(fp->player_idx);
     temp = (f32) handicap;
     temp = co->x35C - temp;
     temp = co->x358 * temp + co->x354;
@@ -42,9 +40,7 @@ void fn_800DA8E4(Fighter_GObj* gobj, Fighter_GObj* victim_gobj, s32 arg2)
     f32 v;
     float* cd2;
 
-    ftCommon_8007DB58(gobj);
-    ftCo_8009750C(gobj);
-    ftCo_800DD168(gobj);
+    ftCo_ReleaseItemAndVictim(gobj);
     fp->x1A5C = victim_gobj;
     fp->victim_gobj = victim_gobj;
     fp->x221B_b5 = 0;
@@ -52,9 +48,9 @@ void fn_800DA8E4(Fighter_GObj* gobj, Fighter_GObj* victim_gobj, s32 arg2)
     fp->facing_dir = -victim->facing_dir;
     cd = p_ftCommonData;
     cd2 = &cd->x360;
-    v = (*cd2) * (cd->x364 - ((f32) (Player_80033BB8(fp->player_id) + 1)));
+    v = (*cd2) * (cd->x364 - ((f32) (Player_80033BB8(fp->player_idx) + 1)));
     {
-        f32 s3 = (cd->x35C - (f32) Player_GetHandicap(fp->player_id));
+        f32 s3 = (cd->x35C - (f32) Player_GetHandicap(fp->player_idx));
         s3 = cd->x358 * s3 + cd->x354;
         s3 = s3 + v;
         ftCommon_InitGrab(fp, 0, (fp->dmg.x1830_percent * cd->x368) + s3);

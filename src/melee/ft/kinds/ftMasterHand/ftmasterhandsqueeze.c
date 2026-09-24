@@ -5,10 +5,10 @@
 #include "ftmasterhandcapturemasterhand.h"
 #include "ftmasterhandsqueezing.h"
 #include "ftmasterhandthrow.h"
+#include "inlines.h"
 #include "types.h"
 #include <dolphin/mtx.h>
 #include <melee/ft/fighter.h>
-#include <melee/ft/ft_084E.h>
 #include <melee/ft/ftanim.h>
 #include <melee/ft/ftbosslib.h>
 #include <melee/ft/ftcommon.h>
@@ -53,7 +53,7 @@ void ftMh_Squeeze_Anim(HSD_GObj* gobj)
 void ftMh_Squeeze_IASA(HSD_GObj* gobj)
 {
     Fighter* fp = GET_FIGHTER(gobj);
-    if (Player_GetPlayerSlotType(fp->player_id) == 0) {
+    if (Player_GetPlayerSlotType(fp->player_idx) == 0) {
         ftBossLib_8015BD20(gobj);
     }
 }
@@ -62,9 +62,7 @@ void ftMh_Squeeze_Phys(HSD_GObj* gobj)
 {
     Fighter* fp = GET_FIGHTER(gobj);
     ftMasterHand_SpecialAttrs* da = fp->ft_data->ext_attr;
-    ft_80085134(gobj);
-    ftBossLib_8015BE40(gobj, &fp->mv.mh.unk0.xC, &fp->mv.mh.unk0.x18, da->x2C,
-                       da->x28);
+    ftMh_UpdateBossMotion(gobj, fp, da);
 }
 
 void ftMh_Squeeze_Coll(HSD_GObj* gobj)

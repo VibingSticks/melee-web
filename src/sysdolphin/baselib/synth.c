@@ -73,8 +73,8 @@ static inline s32 SfxLoadStreamDataSize(s32 size)
     return size + 8;
 }
 
-static void HSD_SynthSFXSampleLoadCallback(int result, int length, void* addr,
-                                           bool cancelflag)
+static void HSD_SynthSFXSampleLoadCallback(int result, uintptr_t args,
+                                           void* addr, bool cancelflag)
 {
     BOOL intr;
     s32 i;
@@ -153,7 +153,7 @@ static void HSD_SynthSFXSampleLoadCallback(int result, int length, void* addr,
             id = base + i;
             HSD_Synth_804D7730->x4 = id;
             id &= 0x1F;
-            bucket = &HSD_Synth_804C29E0[id];
+            bucket = &hsd_SynthSFXDataHash[id];
             HSD_Synth_804D7730->x0 = (struct SfxLoadStreamNode*) *bucket;
             *bucket = HSD_Synth_804D7730;
             HSD_Synth_804D7734 += (u32) nbytes >> 2;
@@ -181,8 +181,8 @@ static void HSD_SynthSFXSampleLoadCallback(int result, int length, void* addr,
     OSRestoreInterrupts(intr);
 }
 
-static void HSD_SynthSFXHeaderLoadCallback(int result, int length, void* addr,
-                                           bool cancelflag)
+static void HSD_SynthSFXHeaderLoadCallback(int result, uintptr_t args,
+                                           void* addr, bool cancelflag)
 {
     s32 header_size;
     size_t alloc_size;
@@ -209,12 +209,12 @@ static void HSD_SynthSFXHeaderLoadCallback(int result, int length, void* addr,
             HSD_AudioMalloc(OSRoundUp32B(alloc_size + header_size));
         HSD_Synth_804D6028[1] = HSD_DevComRequest(
             HSD_Synth_804C2A60[0].entrynum, 0x20, (u32) HSD_Synth_804D7730,
-            OSRoundUp32B(header_size - 0x10), 0x21, 1, NULL, NULL);
+            OSRoundUp32B(header_size - 0x10), 0x21, 1, NULL, 0);
         HSD_Synth_804D6028[0] = HSD_DevComRequest(
             HSD_Synth_804C2A60[0].entrynum, OSRoundUp32B(header_size + 0x10),
             hsd_SynthSFXBank[HSD_Synth_804C2A60[0].bankID],
             hsd_SynthSFXLoadBuf[1], 0x23, 1, HSD_SynthSFXSampleLoadCallback,
-            NULL);
+            0);
         return;
     }
     HSD_Synth_804D7730 = NULL;
@@ -227,7 +227,7 @@ void HSD_SynthSFXLoadNewProc(void)
         bool enabled = OSDisableInterrupts();
         HSD_Synth_804D6028[0] = HSD_DevComRequest(
             HSD_Synth_804C2A60[0].entrynum, 0, (size_t) hsd_SynthSFXLoadBuf,
-            0x20, 0x21, 1, HSD_SynthSFXHeaderLoadCallback, NULL);
+            0x20, 0x21, 1, HSD_SynthSFXHeaderLoadCallback, 0);
         OSRestoreInterrupts(enabled);
     }
 }
@@ -343,11 +343,11 @@ static void order_data_0(void)
 }
 #endif
 
-static inline void HSD_SynthSFXUnloadBank_inline(AXVPB* vpb)
+static void HSD_SynthSFXGroupDataUnlink(AXVPB* vpb)
 {
     int i;
     for (i = 0; i < vpb->priority; i++) {
-        HSD_Synth_80388DC8((int) vpb->next1 + i);
+        HSD_SynthSFXDataUnlink((int) vpb->next1 + i);
     }
 }
 
@@ -358,7 +358,7 @@ void HSD_SynthSFXUnloadBank(int bank_id)
     head = &HSD_Synth_804C2AE0[bank_id];
     while (*head != NULL) {
         AXVPB* cur;
-        HSD_SynthSFXUnloadBank_inline(*head);
+        HSD_SynthSFXGroupDataUnlink(*head);
         cur = *head;
         *head = (*head)->next;
         HSD_AudioFree(cur);
@@ -366,10 +366,10 @@ void HSD_SynthSFXUnloadBank(int bank_id)
     hsd_SynthSFXBank[bank_id] = hsd_SynthSFXBankHead[bank_id];
 }
 
-void HSD_Synth_80388DC8(int sfx_id)
+void HSD_SynthSFXDataUnlink(int sfx_id)
 {
     void* cur;
-    void** pcur = &HSD_Synth_804C29E0[sfx_id & 0x1F];
+    void** pcur = &hsd_SynthSFXDataHash[sfx_id & 0x1F];
 
     while ((cur = *pcur) != NULL) {
         if (((int*) cur)[1] == sfx_id) {
@@ -380,7 +380,7 @@ void HSD_Synth_80388DC8(int sfx_id)
     }
 }
 
-void HSD_Synth_80388E08(int sfx_id)
+void HSD_SynthSFXGroupDataRemove(int sfx_id)
 {
     AXVPB* cur;
     AXVPB** pcur;
@@ -392,7 +392,7 @@ void HSD_Synth_80388E08(int sfx_id)
             cur = *pcur;
             /// @todo AXVPB prev must be a signed int type, not a pointer
             if ((int) cur->prev == sfx_id) {
-                HSD_SynthSFXUnloadBank_inline(cur);
+                HSD_SynthSFXGroupDataUnlink(cur);
                 *pcur = cur->next;
                 HSD_AudioFree(cur);
                 return;
@@ -402,8 +402,8 @@ void HSD_Synth_80388E08(int sfx_id)
     }
 }
 
-static void HSD_SynthSFXGroupDataReaddressCallback(void* result, int length,
-                                                   void* addr, int cancelflag)
+static void HSD_SynthSFXGroupDataReaddressCallback(int result, uintptr_t args,
+                                                   void* addr, bool cancelflag)
 {
     HSD_ASSERT(0x182, sfxGroupDataReaddressCounter > 0);
     sfxGroupDataReaddressCounter--;
@@ -429,11 +429,9 @@ void HSD_SynthSFXGroupDataReaddress(AXVPB* arg0, void* callback)
 
     p = (u8*) arg0 + 0x18;
     sfxGroupDataReaddressCounter += 1;
-    HSD_DevComRequest(
-        0, (uintptr_t) arg0->callback, (uintptr_t) callback, arg0->userContext,
-        0x1B, 0,
-        (HSD_DevComCallback) (Event) HSD_SynthSFXGroupDataReaddressCallback,
-        NULL);
+    HSD_DevComRequest(0, (uintptr_t) arg0->callback, (uintptr_t) callback,
+                      arg0->userContext, 0x1B, 0,
+                      HSD_SynthSFXGroupDataReaddressCallback, 0);
     i = 0;
     delta = ((u8*) callback - (u8*) arg0->callback) * 2;
     while (i < arg0->priority) {
@@ -539,10 +537,10 @@ void dropcallback(void* dropped)
 
     node = &hsd_SynthSFXNodes[voice->index];
 
-    /// Search HSD_Synth_804C28E0 queue for this voice and remove it
+    /// Search voicelist queue for this voice and remove it
     for (i = 0; i < HSD_Synth_804D7720; i++) {
-        if (HSD_Synth_804C28E0[i] == voice) {
-            HSD_Synth_804C28E0[i] = NULL;
+        if (voicelist[i] == voice) {
+            voicelist[i] = NULL;
             break;
         }
     }
@@ -566,7 +564,7 @@ void dropcallback(void* dropped)
     for (i = 0; i < node->voice_count; i++) {
         AXVPB* v = node->voice[i];
         if (v != voice) {
-            HSD_Synth_804C28E0[HSD_Synth_804D7720++] = v;
+            voicelist[HSD_Synth_804D7720++] = v;
         }
         hsd_SynthSFXNodes[node->voice[i]->index].x0 = 0;
     }
@@ -611,7 +609,7 @@ int HSD_Synth_80389334(int sfx_id, u8 vol, u8 vol2, u8 pan, int priority,
     PAD_STACK(0x14);
 
     saved_interrupts = OSDisableInterrupts();
-    sfx_entry = HSD_Synth_804C29E0[sfx_id & 0x1F];
+    sfx_entry = hsd_SynthSFXDataHash[sfx_id & 0x1F];
 
     while (sfx_entry != NULL) {
         if (sfx_entry->unk4 == sfx_id) {
@@ -666,10 +664,10 @@ int HSD_Synth_80389334(int sfx_id, u8 vol, u8 vol2, u8 pan, int priority,
             HSD_SynthSFXUpdateVolume(sfx_node);
             HSD_SynthSFXUpdateMix(sfx_node, 0);
             ve.currentVolume =
-                (32767.0F * (sfx_node->user_vol[0].x8_float *
-                             (sfx_node->unk28 *
-                              (HSD_Synth_804D6030 *
-                               HSD_Synth_804C28E0_1784[sfx_node->xB].x1784))));
+                (32767.0F *
+                 (sfx_node->user_vol[0].x8_float *
+                  (sfx_node->unk28 * (HSD_Synth_804D6030 *
+                                      voicelist_1784[sfx_node->xB].x1784))));
             ve.currentDelta = 0;
             sfx_node->x24 = ve.currentVolume;
 
@@ -728,21 +726,21 @@ bool HSD_SynthSFXPlayWithGroup(int sfx_id, u8 vol, u8 vol2, u8 pan,
                      "sfx group ID %d out of range.", group);
 
     if (group != 0) {
-        nodeID = HSD_Synth_804C28E0_1844[group];
+        nodeID = voicelist_1844[group];
         if (nodeID > 0) {
             node = getNode(nodeID);
             if (node != NULL && node->flags != 1) {
                 if (node->x27 == 1 && driverInactivatedCallback != NULL) {
                     driverInactivatedCallback(node->x0);
                 }
-                HSD_SynthSFXKeyOff(HSD_Synth_804C28E0_1844[group]);
+                HSD_SynthSFXKeyOff(voicelist_1844[group]);
             }
         }
     }
 
     result = HSD_Synth_80389334(sfx_id, vol, vol2, pan, priority, itd_flag,
                                 pitch1, pitch2, mix_main, mix_auxA, mix_auxB);
-    HSD_Synth_804C28E0_1844[group] = result;
+    voicelist_1844[group] = result;
     return result;
 }
 
@@ -859,7 +857,7 @@ void HSD_SynthSFXSetVolumeFade(int sfx_id, u8 vol, int flag)
     }
 }
 
-void HSD_SynthSFXSetUserVol(int sfx_id, u8 vol)
+void HSD_SynthSFXSetPan(int sfx_id, u8 vol)
 {
     struct HSD_SynthSFXNode* node;
 
@@ -935,7 +933,7 @@ static inline int user_vol_src_offset(int k)
     return k * 3;
 }
 
-s32 HSD_Synth_8038A000(void)
+s32 HSD_SynthSFXVolumeEnvelope(void)
 {
     struct HSD_SynthSFXNode* node;
     BOOL intr;
@@ -948,17 +946,16 @@ s32 HSD_Synth_8038A000(void)
         int ch;
         for (ch = 0; ch < 16; ch++) {
             if (HSD_Synth_804D7758 & (1 << ch)) {
-                int cnt = HSD_Synth_804C28E0_1784[ch].x178C;
+                int cnt = voicelist_1784[ch].x178C;
                 if (cnt != 0) {
-                    f32 cur = HSD_Synth_804C28E0_1784[ch].x1784;
-                    HSD_Synth_804C28E0_1784[ch].x1784 =
+                    f32 cur = voicelist_1784[ch].x1784;
+                    voicelist_1784[ch].x1784 =
                         (cur * ((f32) cnt - 1.0f)) / (f32) cnt +
-                        HSD_Synth_804C28E0_1784[ch].x1788 / (f32) cnt;
-                    HSD_Synth_804C28E0_1784[ch].x178C -= 1;
+                        voicelist_1784[ch].x1788 / (f32) cnt;
+                    voicelist_1784[ch].x178C -= 1;
                 }
-                if (HSD_Synth_804C28E0_1784[ch].x178C == 0) {
-                    HSD_Synth_804C28E0_1784[ch].x1784 =
-                        HSD_Synth_804C28E0_1784[ch].x1788;
+                if (voicelist_1784[ch].x178C == 0) {
+                    voicelist_1784[ch].x1784 = voicelist_1784[ch].x1788;
                     HSD_Synth_804D7758 &= ~(1 << ch);
                 }
             }
@@ -996,14 +993,14 @@ s32 HSD_Synth_8038A000(void)
                 }
             }
         }
-        if (HSD_Synth_804C28E0_1784[node->xB].x178C != 0) {
+        if (voicelist_1784[node->xB].x178C != 0) {
             active = 1;
         }
         if (!(node->flags & 3)) {
             vol = 32767.0f *
                   (node->user_vol[0].x8_float *
-                   (node->unk28 * (HSD_Synth_804D6030 *
-                                   HSD_Synth_804C28E0_1784[node->xB].x1784)));
+                   (node->unk28 *
+                    (HSD_Synth_804D6030 * voicelist_1784[node->xB].x1784)));
         } else {
             vol = 0;
             active = 0;
@@ -1181,11 +1178,9 @@ static inline void updateAllVolume(u32 mask)
 
 void HSD_SynthSFXUpdateAllVolume(int vol, u16 fade_frames, int channel)
 {
-    HSD_Synth_804C28E0_1784[channel].x1788 = 1 / 255.0F * vol;
-    if (HSD_Synth_804C28E0_1784[channel].x1784 !=
-        HSD_Synth_804C28E0_1784[channel].x1788)
-    {
-        HSD_Synth_804C28E0_1784[channel].x178C = fade_frames;
+    voicelist_1784[channel].x1788 = 1 / 255.0F * vol;
+    if (voicelist_1784[channel].x1784 != voicelist_1784[channel].x1788) {
+        voicelist_1784[channel].x178C = fade_frames;
         updateAllVolume(1 << channel);
     }
 }
@@ -1218,8 +1213,8 @@ void HSD_SynthCallback(void)
     enabled = OSDisableInterrupts();
 
     while (HSD_Synth_804D7720-- > 0) {
-        if (HSD_Synth_804C28E0[HSD_Synth_804D7720] != 0) {
-            AXFreeVoice(HSD_Synth_804C28E0[HSD_Synth_804D7720]);
+        if (voicelist[HSD_Synth_804D7720] != 0) {
+            AXFreeVoice(voicelist[HSD_Synth_804D7720]);
         }
     }
     HSD_Synth_804D7720 = 0;
@@ -1235,55 +1230,39 @@ void HSD_SynthCallback(void)
         }
     }
 
-    HSD_Synth_8038A000();
+    HSD_SynthSFXVolumeEnvelope();
 
     if (driverMasterClockCallback != NULL) {
         driverMasterClockCallback(HSD_Synth_804D775C);
     }
 
-    HSD_Synth_8038ADD0();
+    HSD_SynthPStreamMasterClockCallback();
     HSD_Synth_804D775C++;
     OSRestoreInterrupts(enabled);
 }
 
-void HSD_SynthResetStreamCounters(int result, int length, void* buf, bool b)
+void HSD_SynthResetStreamCounters(int result, uintptr_t args, void* buf,
+                                  bool b)
 {
     HSD_Synth_804D776C = HSD_Synth_804D7768;
     HSD_Synth_804D7778 = 0;
 }
 
 
-#ifdef TARGET_PC
-#define DEVCOM_CB_8038AD74 HSD_Synth_8038AD74_devcom
-#define DEVCOM_CB_8038B120 HSD_Synth_8038B120_devcom
-#define DEVCOM_CB_FIRSTHAKO HSD_SynthPStreamFirstHakoHeaderCallback_devcom
-#else
-#define DEVCOM_CB_8038AD74 ((HSD_DevComCallback) (Event) HSD_Synth_8038AD74)
-#define DEVCOM_CB_8038B120 ((HSD_DevComCallback) HSD_Synth_8038B120)
-#define DEVCOM_CB_FIRSTHAKO ((HSD_DevComCallback) HSD_SynthPStreamFirstHakoHeaderCallback)
-#endif
-void HSD_Synth_8038AD74(u32 offset, uintptr_t src)
+void HSD_SynthPStreamHakoHeaderCallback(int dcReq, uintptr_t src, void* buf,
+                                        bool cancelflag)
 {
+#ifdef TARGET_PC
+    /* the block header that was just DVD-read raw into pstHakoHeader */
+    port_swap_hps_block_header((u32*) &pstHakoHeader[HSD_Synth_804D7768]);
+#endif
     HSD_DevComRequest(HSD_Synth_804D7764, src,
                       HSD_Synth_804D7780 + (HSD_Synth_804D7768 << 16),
-                      lbl_804C4540[HSD_Synth_804D7768].x0, 0x23, 0,
+                      pstHakoHeader[HSD_Synth_804D7768].x0, 0x23, 0,
                       HSD_SynthResetStreamCounters, 0);
 }
 
-#ifdef TARGET_PC
-/* DevCom calls back with four arguments; wasm rejects the game's casts of
- * narrower functions at the indirect call, so give each its own adapter. */
-static void HSD_Synth_8038AD74_devcom(int dcreq, int args, void* buf, bool cancelflag)
-{
-    (void) buf;
-    (void) cancelflag;
-    /* the block header that was just DVD-read raw into lbl_804C4540 */
-    port_swap_hps_block_header((u32*) &lbl_804C4540[HSD_Synth_804D7768]);
-    HSD_Synth_8038AD74((u32) dcreq, (uintptr_t) args);
-}
-#endif
-
-static inline void HSD_Synth_8038ADD0_inline(u32 pos)
+static inline void HSD_SynthPStreamMasterClockCallback_inline(u32 pos)
 {
     BOOL intr;
     s32 src;
@@ -1297,7 +1276,7 @@ static inline void HSD_Synth_8038ADD0_inline(u32 pos)
             return;
         }
         if (getNode(HSD_Synth_804D7760) != NULL) {
-            src = lbl_804C4540[HSD_Synth_804D776C].x8;
+            src = pstHakoHeader[HSD_Synth_804D776C].x8;
             if (src == -1) {
                 HSD_Synth_804D776C = (HSD_Synth_804D776C + 1) % 3;
             } else {
@@ -1305,16 +1284,15 @@ static inline void HSD_Synth_8038ADD0_inline(u32 pos)
                 HSD_Synth_804D7778 = 1;
                 HSD_DevComRequest(
                     HSD_Synth_804D7764, src,
-                    (uintptr_t) &lbl_804C4540[HSD_Synth_804D7768], 0x20, 0x21,
-                    0, DEVCOM_CB_8038AD74,
-                    (struct HSD_SynthStreamHeader*) (src + 0x20));
+                    (uintptr_t) &pstHakoHeader[HSD_Synth_804D7768], 0x20, 0x21,
+                    0, HSD_SynthPStreamHakoHeaderCallback, src + 0x20);
             }
         }
         OSRestoreInterrupts(intr);
     }
 }
 
-void HSD_Synth_8038ADD0(void)
+void HSD_SynthPStreamMasterClockCallback(void)
 {
     struct HSD_SynthSFXNode* node = getNode(HSD_Synth_804D7760);
     u32 pos;
@@ -1334,12 +1312,12 @@ void HSD_Synth_8038ADD0(void)
             AXSetVoiceEndAddr(
                 node->voice[i],
                 (HSD_Synth_804D7780 + (HSD_Synth_804D7774 << 0x10)) * 2 +
-                    i * lbl_804C4540[HSD_Synth_804D7774].x0 +
-                    lbl_804C4540[HSD_Synth_804D7774].x4);
+                    i * pstHakoHeader[HSD_Synth_804D7774].x0 +
+                    pstHakoHeader[HSD_Synth_804D7774].x4);
         }
     }
     if (pos == HSD_Synth_804D7770 && pos != HSD_Synth_804D776C) {
-        if ((u32) lbl_804C4540[HSD_Synth_804D7770].x8 == -1U) {
+        if ((u32) pstHakoHeader[HSD_Synth_804D7770].x8 == -1U) {
             HSD_Synth_804D7770 = (HSD_Synth_804D7770 + 1) % 3;
             for (i = 0; i < node->voice_count; i++) {
                 AXSetVoiceLoop(node->voice[i], 0);
@@ -1351,19 +1329,19 @@ void HSD_Synth_8038ADD0(void)
                 AXSetVoiceLoopAddr(
                     node->voice[i],
                     (HSD_Synth_804D7780 + (HSD_Synth_804D7770 << 0x10)) * 2 +
-                        i * lbl_804C4540[HSD_Synth_804D7770].x0 + 2);
+                        i * pstHakoHeader[HSD_Synth_804D7770].x0 + 2);
                 AXSetVoiceAdpcmLoop(
                     node->voice[i],
-                    (AXPBADPCMLOOP*) ((u32*) &lbl_804C4540
+                    (AXPBADPCMLOOP*) ((u32*) &pstHakoHeader
                                           [HSD_Synth_804D7770] +
                                       (i * 2 + 3)));
             }
         }
     }
-    HSD_Synth_8038ADD0_inline(pos);
+    HSD_SynthPStreamMasterClockCallback_inline(pos);
 }
 
-void HSD_Synth_8038B120(void)
+void HSD_SynthPStreamFirstHakoDataCallback(void)
 {
     AXPBVE ve;
     int i;
@@ -1378,8 +1356,8 @@ void HSD_Synth_8038B120(void)
             ve.currentVolume =
                 (32767.0F *
                  (node->user_vol[0].x8_float *
-                  (node->unk28 * (HSD_Synth_804D6030 *
-                                  HSD_Synth_804C28E0_1784[node->xB].x1784))));
+                  (node->unk28 *
+                   (HSD_Synth_804D6030 * voicelist_1784[node->xB].x1784))));
         } else {
             ve.currentVolume = 0;
         }
@@ -1398,16 +1376,16 @@ void HSD_Synth_8038B120(void)
             AXSetVoiceCurrentAddr(
                 node->voice[i],
                 (HSD_Synth_804D7780 + (HSD_Synth_804D7768 << 16)) * 2 +
-                    i * lbl_804C4540[HSD_Synth_804D7768].x0 + 2);
+                    i * pstHakoHeader[HSD_Synth_804D7768].x0 + 2);
             AXSetVoiceEndAddr(
                 node->voice[i],
                 (HSD_Synth_804D7780 + (HSD_Synth_804D7768 << 16)) * 2 +
-                    i * lbl_804C4540[HSD_Synth_804D7768].x0 +
-                    lbl_804C4540[HSD_Synth_804D7768].x4);
+                    i * pstHakoHeader[HSD_Synth_804D7768].x0 +
+                    pstHakoHeader[HSD_Synth_804D7768].x4);
             AXSetVoiceLoopAddr(
                 node->voice[i],
                 (HSD_Synth_804D7780 + (HSD_Synth_804D7768 << 16)) * 2 +
-                    i * lbl_804C4540[HSD_Synth_804D7768].x0 + 2);
+                    i * pstHakoHeader[HSD_Synth_804D7768].x0 + 2);
             AXSetVoiceState(node->voice[i], 1);
         }
         node->flags &= ~8;
@@ -1426,37 +1404,33 @@ void HSD_Synth_8038B120(void)
 }
 
 #ifdef TARGET_PC
-static void HSD_Synth_8038B120_devcom(int dcreq, int args, void* buf, bool cancelflag)
+/* DevCom calls back with four arguments; wasm rejects the game's cast of a
+ * narrower function at the indirect call, so give it an adapter. */
+static void HSD_SynthPStreamFirstHakoDataCallback_devcom(int dcreq, uintptr_t args, void* buf, bool cancelflag)
 {
     (void) dcreq;
     (void) args;
     (void) buf;
     (void) cancelflag;
-    HSD_Synth_8038B120();
+    HSD_SynthPStreamFirstHakoDataCallback();
 }
 #endif
 
-void HSD_SynthPStreamFirstHakoHeaderCallback(void)
+void HSD_SynthPStreamFirstHakoHeaderCallback(int dcReq, uintptr_t args,
+                                             void* buf, bool cancelflag)
 {
-    HSD_DevComRequest(HSD_Synth_804D7764, 0xA0,
-                      HSD_Synth_804D7780 + (HSD_Synth_804D7768 << 16),
-                      lbl_804C4540[HSD_Synth_804D7768].x0, 0x23, 0,
-                      DEVCOM_CB_8038B120, 0);
-}
-
 #ifdef TARGET_PC
-static void HSD_SynthPStreamFirstHakoHeaderCallback_devcom(int dcreq, int args, void* buf, bool cancelflag)
-{
-    (void) dcreq;
-    (void) args;
-    (void) buf;
-    (void) cancelflag;
-    port_swap_hps_block_header((u32*) &lbl_804C4540[HSD_Synth_804D7768]);
-    HSD_SynthPStreamFirstHakoHeaderCallback();
-}
+    port_swap_hps_block_header((u32*) &pstHakoHeader[HSD_Synth_804D7768]);
 #endif
+    HSD_DevComRequest(
+        HSD_Synth_804D7764, 0xA0,
+        HSD_Synth_804D7780 + (HSD_Synth_804D7768 << 16),
+        pstHakoHeader[HSD_Synth_804D7768].x0, 0x23, 0,
+        PORT_FNCAST(HSD_SynthPStreamFirstHakoDataCallback_devcom,
+                    (HSD_DevComCallback) HSD_SynthPStreamFirstHakoDataCallback), 0);
+}
 
-void HSD_SynthPStreamHeaderCallback(int arg0, int arg1, void* arg2,
+void HSD_SynthPStreamHeaderCallback(int arg0, uintptr_t arg1, void* arg2,
                                     bool cancelflag)
 {
     u32* entry = arg2;
@@ -1483,17 +1457,15 @@ void HSD_SynthPStreamHeaderCallback(int arg0, int arg1, void* arg2,
         HSD_Synth_804D7774 = (HSD_Synth_804D7774 + 2) % 3;
         HSD_Synth_804D776C = HSD_Synth_804D7770 = HSD_Synth_804D7768 =
             HSD_Synth_804D7774;
-        HSD_DevComRequest(
-            HSD_Synth_804D7764, 0x80,
-            (uintptr_t) &lbl_804C4540[HSD_Synth_804D7768], 0x20, 0x21, 0,
-            DEVCOM_CB_FIRSTHAKO,
-            NULL);
+        HSD_DevComRequest(HSD_Synth_804D7764, 0x80,
+                          (uintptr_t) &pstHakoHeader[HSD_Synth_804D7768], 0x20,
+                          0x21, 0, HSD_SynthPStreamFirstHakoHeaderCallback, 0);
     } else {
         HSD_Synth_804D7778 = 0;
     }
 }
 
-static inline void HSD_Synth_8038B5AC_inline(void)
+static inline void HSD_SynthPStreamStart_inline(void)
 {
     struct HSD_SynthSFXNode* node = getNode(HSD_Synth_804D7760);
     int i;
@@ -1520,7 +1492,7 @@ static inline void HSD_Synth_8038B5AC_inline(void)
     }
 }
 
-int HSD_Synth_8038B5AC(int entrynum, u8 vol, u8 vol2, int channel)
+int HSD_SynthPStreamStart(int entrynum, u8 vol, u8 vol2, int channel)
 {
     bool enabled;
 
@@ -1537,7 +1509,7 @@ int HSD_Synth_8038B5AC(int entrynum, u8 vol, u8 vol2, int channel)
     enabled = OSDisableInterrupts();
 
     if (getNode(HSD_Synth_804D7760) != NULL) {
-        HSD_Synth_8038B5AC_inline();
+        HSD_SynthPStreamStart_inline();
     }
     HSD_Synth_804D7764 = entrynum;
     voice = AXAcquireVoice(0x1D, dropcallback, 0);
@@ -1567,7 +1539,7 @@ int HSD_Synth_8038B5AC(int entrynum, u8 vol, u8 vol2, int channel)
     voice_node->x48 = 0.0F;
     voice_node->x4C = 0.0F;
     HSD_DevComRequest(entrynum, 0, 0, 0x80, 0x22, 1,
-                      HSD_SynthPStreamHeaderCallback, NULL);
+                      HSD_SynthPStreamHeaderCallback, 0);
     OSRestoreInterrupts(enabled);
     return HSD_Synth_804D7760;
 }
@@ -1594,54 +1566,54 @@ void HSD_SynthInit(int dsp_size, int voices, int stream_size, int bank_size)
     AISetStreamVolRight(HSD_Synth_804D6030 * (f32) HSD_Synth_804D777C);
     /// Loop unrolled to match original binary (loop version adds 8 bytes
     /// to stack frame due to compiler allocating space for the counter)
-    HSD_Synth_804C28E0_1784[0].x1784 = 1.0F;
-    HSD_Synth_804C28E0_1784[0].x1788 = 1.0F;
-    HSD_Synth_804C28E0_1784[0].x178C = 0;
-    HSD_Synth_804C28E0_1784[1].x1784 = 1.0F;
-    HSD_Synth_804C28E0_1784[1].x1788 = 1.0F;
-    HSD_Synth_804C28E0_1784[1].x178C = 0;
-    HSD_Synth_804C28E0_1784[2].x1784 = 1.0F;
-    HSD_Synth_804C28E0_1784[2].x1788 = 1.0F;
-    HSD_Synth_804C28E0_1784[2].x178C = 0;
-    HSD_Synth_804C28E0_1784[3].x1784 = 1.0F;
-    HSD_Synth_804C28E0_1784[3].x1788 = 1.0F;
-    HSD_Synth_804C28E0_1784[3].x178C = 0;
-    HSD_Synth_804C28E0_1784[4].x1784 = 1.0F;
-    HSD_Synth_804C28E0_1784[4].x1788 = 1.0F;
-    HSD_Synth_804C28E0_1784[4].x178C = 0;
-    HSD_Synth_804C28E0_1784[5].x1784 = 1.0F;
-    HSD_Synth_804C28E0_1784[5].x1788 = 1.0F;
-    HSD_Synth_804C28E0_1784[5].x178C = 0;
-    HSD_Synth_804C28E0_1784[6].x1784 = 1.0F;
-    HSD_Synth_804C28E0_1784[6].x1788 = 1.0F;
-    HSD_Synth_804C28E0_1784[6].x178C = 0;
-    HSD_Synth_804C28E0_1784[7].x1784 = 1.0F;
-    HSD_Synth_804C28E0_1784[7].x1788 = 1.0F;
-    HSD_Synth_804C28E0_1784[7].x178C = 0;
-    HSD_Synth_804C28E0_1784[8].x1784 = 1.0F;
-    HSD_Synth_804C28E0_1784[8].x1788 = 1.0F;
-    HSD_Synth_804C28E0_1784[8].x178C = 0;
-    HSD_Synth_804C28E0_1784[9].x1784 = 1.0F;
-    HSD_Synth_804C28E0_1784[9].x1788 = 1.0F;
-    HSD_Synth_804C28E0_1784[9].x178C = 0;
-    HSD_Synth_804C28E0_1784[10].x1784 = 1.0F;
-    HSD_Synth_804C28E0_1784[10].x1788 = 1.0F;
-    HSD_Synth_804C28E0_1784[10].x178C = 0;
-    HSD_Synth_804C28E0_1784[11].x1784 = 1.0F;
-    HSD_Synth_804C28E0_1784[11].x1788 = 1.0F;
-    HSD_Synth_804C28E0_1784[11].x178C = 0;
-    HSD_Synth_804C28E0_1784[12].x1784 = 1.0F;
-    HSD_Synth_804C28E0_1784[12].x1788 = 1.0F;
-    HSD_Synth_804C28E0_1784[12].x178C = 0;
-    HSD_Synth_804C28E0_1784[13].x1784 = 1.0F;
-    HSD_Synth_804C28E0_1784[13].x1788 = 1.0F;
-    HSD_Synth_804C28E0_1784[13].x178C = 0;
-    HSD_Synth_804C28E0_1784[14].x1784 = 1.0F;
-    HSD_Synth_804C28E0_1784[14].x1788 = 1.0F;
-    HSD_Synth_804C28E0_1784[14].x178C = 0;
-    HSD_Synth_804C28E0_1784[15].x1784 = 1.0F;
-    HSD_Synth_804C28E0_1784[15].x1788 = 1.0F;
-    HSD_Synth_804C28E0_1784[15].x178C = 0;
+    voicelist_1784[0].x1784 = 1.0F;
+    voicelist_1784[0].x1788 = 1.0F;
+    voicelist_1784[0].x178C = 0;
+    voicelist_1784[1].x1784 = 1.0F;
+    voicelist_1784[1].x1788 = 1.0F;
+    voicelist_1784[1].x178C = 0;
+    voicelist_1784[2].x1784 = 1.0F;
+    voicelist_1784[2].x1788 = 1.0F;
+    voicelist_1784[2].x178C = 0;
+    voicelist_1784[3].x1784 = 1.0F;
+    voicelist_1784[3].x1788 = 1.0F;
+    voicelist_1784[3].x178C = 0;
+    voicelist_1784[4].x1784 = 1.0F;
+    voicelist_1784[4].x1788 = 1.0F;
+    voicelist_1784[4].x178C = 0;
+    voicelist_1784[5].x1784 = 1.0F;
+    voicelist_1784[5].x1788 = 1.0F;
+    voicelist_1784[5].x178C = 0;
+    voicelist_1784[6].x1784 = 1.0F;
+    voicelist_1784[6].x1788 = 1.0F;
+    voicelist_1784[6].x178C = 0;
+    voicelist_1784[7].x1784 = 1.0F;
+    voicelist_1784[7].x1788 = 1.0F;
+    voicelist_1784[7].x178C = 0;
+    voicelist_1784[8].x1784 = 1.0F;
+    voicelist_1784[8].x1788 = 1.0F;
+    voicelist_1784[8].x178C = 0;
+    voicelist_1784[9].x1784 = 1.0F;
+    voicelist_1784[9].x1788 = 1.0F;
+    voicelist_1784[9].x178C = 0;
+    voicelist_1784[10].x1784 = 1.0F;
+    voicelist_1784[10].x1788 = 1.0F;
+    voicelist_1784[10].x178C = 0;
+    voicelist_1784[11].x1784 = 1.0F;
+    voicelist_1784[11].x1788 = 1.0F;
+    voicelist_1784[11].x178C = 0;
+    voicelist_1784[12].x1784 = 1.0F;
+    voicelist_1784[12].x1788 = 1.0F;
+    voicelist_1784[12].x178C = 0;
+    voicelist_1784[13].x1784 = 1.0F;
+    voicelist_1784[13].x1788 = 1.0F;
+    voicelist_1784[13].x178C = 0;
+    voicelist_1784[14].x1784 = 1.0F;
+    voicelist_1784[14].x1788 = 1.0F;
+    voicelist_1784[14].x178C = 0;
+    voicelist_1784[15].x1784 = 1.0F;
+    voicelist_1784[15].x1788 = 1.0F;
+    voicelist_1784[15].x178C = 0;
     hsd_SynthSFXBankAREnd = hsd_SynthSFXBankHead[0] + bank_size;
     HSD_Synth_804D7780 = ARAlloc(0x30000);
     HSD_Synth_804D7754 = OSGetSoundMode();

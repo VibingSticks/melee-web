@@ -14,6 +14,7 @@
 #include <melee/cm/camera.h>
 #include <melee/ft/ftlib.h>
 #include <melee/gm/gmvs.h>
+#include <melee/gm/types.h>
 #include <melee/if/ifhazard.h>
 #include <melee/lb/lb_00B0.h>
 #include <melee/lb/lb_00F9.h>
@@ -308,7 +309,7 @@ void grBigBlueRoute_8020BC30(Ground_GObj* arg) {}
 void grBigBlueRoute_8020BC34(Ground_GObj* gobj)
 {
     Ground* gp = GET_GROUND(gobj);
-    gp->u.car.xC4 = grBigBlueRoute_8020B9D4(4);
+    gp->u.bigblueroute2.xC4 = grBigBlueRoute_8020B9D4(4);
 }
 
 void grBigBlueRoute_8020BC68(Ground_GObj* gobj)

@@ -582,7 +582,7 @@ void gm_80182174(void)
         break;
     }
 
-    lbl_80473594.x10 = Player_GetPlayerId(0);
+    lbl_80473594.x10 = Player_GetPadPort(0);
     lbl_80473594.x11 = Player_GetNametagSlotID(0);
     HSD_GObj_SetupProc(GObj_Create(0xFU, 0x11U, 0U),
                        PORT_FNCAST(fn_80181E18__as_hsd_gobjevent, (HSD_GObjEvent) fn_80181E18), 0x15U);
@@ -680,8 +680,8 @@ static inline int gm_80182578_GetIndexFromPointer(const int* idx_ptr)
     return *idx_ptr;
 }
 
-inline void gm_80182578_SetTime(RecordBlock* blocks, int idx, int mode,
-                                u16 value)
+static inline void gm_80182578_SetTime(RecordBlock* blocks, int idx, int mode,
+                                       u16 value)
 {
     switch (mode) {
     case 33:

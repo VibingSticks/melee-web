@@ -6,6 +6,7 @@
 
 #include "ftmasterhandthrownmasterhand.h"
 #include "ftmasterhandwait12.h"
+#include "inlines.h"
 #include "types.h"
 #include <dolphin/mtx.h>
 #include <melee/ft/fighter.h>
@@ -33,7 +34,7 @@ void ftMh_TagRockPaper_Anim(HSD_GObj* gobj)
 void ftMh_TagRockPaper_IASA(HSD_GObj* gobj)
 {
     Fighter* fp = GET_FIGHTER(gobj);
-    if (Player_GetPlayerSlotType(fp->player_id) == 0) {
+    if (Player_GetPlayerSlotType(fp->player_idx) == 0) {
         ftBossLib_8015BD20(gobj);
     }
 }
@@ -62,7 +63,7 @@ void ftMh_TagGrab_Anim(HSD_GObj* gobj)
 void ftMh_TagGrab_IASA(HSD_GObj* gobj)
 {
     Fighter* fp = GET_FIGHTER(gobj);
-    if (Player_GetPlayerSlotType(fp->player_id) == 0) {
+    if (Player_GetPlayerSlotType(fp->player_idx) == 0) {
         ftBossLib_8015BD20(gobj);
     }
 }
@@ -108,7 +109,7 @@ void ftMh_TagSqueeze_Anim(HSD_GObj* gobj)
 void ftMh_TagSqueeze_IASA(HSD_GObj* gobj)
 {
     Fighter* fp = GET_FIGHTER(gobj);
-    if (Player_GetPlayerSlotType(fp->player_id) == 0) {
+    if (Player_GetPlayerSlotType(fp->player_idx) == 0) {
         ftBossLib_8015BD20(gobj);
     }
 }
@@ -136,7 +137,7 @@ void ftMh_TagFail_Anim(HSD_GObj* gobj)
 void ftMh_TagFail_IASA(HSD_GObj* gobj)
 {
     Fighter* fp = GET_FIGHTER(gobj);
-    if (Player_GetPlayerSlotType(fp->player_id) == 0) {
+    if (Player_GetPlayerSlotType(fp->player_idx) == 0) {
         ftBossLib_8015BD20(gobj);
     }
 }
@@ -163,7 +164,7 @@ void ftMh_TagCancel_Anim(HSD_GObj* gobj)
 void ftMh_TagCancel_IASA(HSD_GObj* gobj)
 {
     Fighter* fp = GET_FIGHTER(gobj);
-    if (Player_GetPlayerSlotType(fp->player_id) == 0) {
+    if (Player_GetPlayerSlotType(fp->player_idx) == 0) {
         ftBossLib_8015BD20(gobj);
     }
 }
@@ -172,9 +173,7 @@ void ftMh_TagCancel_Phys(HSD_GObj* gobj)
 {
     Fighter* fp = GET_FIGHTER(gobj);
     ftMasterHand_SpecialAttrs* da = fp->ft_data->ext_attr;
-    ft_80085134(gobj);
-    ftBossLib_8015BE40(gobj, &fp->mv.mh.unk0.xC, &fp->mv.mh.unk0.x18, da->x2C,
-                       da->x28);
+    ftMh_UpdateBossMotion(gobj, fp, da);
 }
 
 void ftMh_TagCancel_Coll(HSD_GObj* gobj)

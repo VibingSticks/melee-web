@@ -162,13 +162,30 @@ void HSD_Rumble_80378524(int a)
     OSRestoreInterrupts(intrEnabled);
 }
 
+#ifdef TARGET_PC
+/* Rumble scripts (lbRumbleData, LbRb.dat) are big-endian u16 words the
+ * archive walk leaves alone, and the RumbleCommand bitfields are packed the
+ * PowerPC way: the opcode in the top three bits of the word. Read them as
+ * CodeWarrior laid them out; the PowerPC expansion is the field itself. */
+static inline u16 port_rumble_word(const HSD_Rumble* r)
+{
+    const u8* b = (const u8*) r;
+    return (u16) ((b[0] << 8) | b[1]);
+}
+#define RUMBLE_OP(r) ((port_rumble_word(r) >> 13) & 7)
+#define RUMBLE_FRAME(r) (port_rumble_word(r) & 0x1FFF)
+#else
+#define RUMBLE_OP(r) ((r)->command.op)
+#define RUMBLE_FRAME(r) ((r)->command.frame)
+#endif
+
 int HSD_PadRumbleInterpret1(HSD_PadRumbleListData* a, u8* b)
 {
     if (a->pause == 1) {
         return 0;
     }
     while (a->wait == 0) {
-        switch ((*(u8*) a->listp >> 5) & 7) {
+        switch (RUMBLE_OP(a->listp)) {
         case 0:
             if (a->frame == -2) {
                 return 1;
@@ -177,21 +194,21 @@ int HSD_PadRumbleInterpret1(HSD_PadRumbleListData* a, u8* b)
             break;
         case 1:
             a->status = 2;
-            a->wait = *a->listp & 0x1FFF;
+            a->wait = RUMBLE_FRAME(a->listp);
             a->listp++;
             break;
         case 2:
             a->status = 1;
-            a->wait = *a->listp & 0x1FFF;
+            a->wait = RUMBLE_FRAME(a->listp);
             a->listp++;
             break;
         case 3:
             a->status = 0;
-            a->wait = *a->listp & 0x1FFF;
+            a->wait = RUMBLE_FRAME(a->listp);
             a->listp++;
             break;
         case 4:
-            a->loop_count = *a->listp & 0x1FFF;
+            a->loop_count = RUMBLE_FRAME(a->listp);
             a->listp++;
             a->stack = a->listp;
             break;
@@ -230,7 +247,7 @@ void HSD_PadRumbleInterpret(void)
             while (r29 != NULL) {
                 r28 = r29->next;
 
-                if (HSD_PadRumbleInterpret1((void*) r29, &r30->status) != 0) {
+                if (HSD_PadRumbleInterpret1(r29, &r30->status) != 0) {
                     HSD_PadRumbleFree(r30, r29);
                 }
                 r29 = r28;

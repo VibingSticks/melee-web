@@ -1639,7 +1639,7 @@ bool Ground_801C2D24(enum_t arg0, Vec3* arg1)
     return false;
 }
 
-bool Ground_801C2ED0(HSD_JObj* jobj, s32 arg1)
+bool Ground_InitMapColl(HSD_JObj* jobj, s32 arg1)
 {
     u8 _[4];
     bool result = false;
@@ -1673,7 +1673,7 @@ bool Ground_801C2ED0(HSD_JObj* jobj, s32 arg1)
 
 static s16 Ground_804D6954;
 
-bool Ground_801C2FE0(Ground_GObj* arg0)
+bool Ground_UpdateMapColl(Ground_GObj* arg0)
 {
     StageData* stagedata;
     UnkArchiveStruct* archive;
@@ -2013,20 +2013,18 @@ void Ground_801C36F4(int map_id, HSD_JObj* root, UNK_T joint)
     }
     i = 0;
     entry = stage_dat->unk0;
-entry_loop:
-    if (i < entry_count) {
-        if (entry->joint == joint) {
-            goto entry_found;
+    while (true) {
+        if (i < entry_count) {
+            if (entry->joint == joint) {
+                break;
+            }
+        } else {
+            return;
         }
-        goto entry_next;
+        entry++;
+        i++;
     }
-    return;
-entry_next:
-    entry++;
-    i++;
-    goto entry_loop;
 
-entry_found:
     for (i = 0; i < 0x57 * 3; i++) {
         jobj = stage_info.x280[i];
         (void) jobj;
@@ -3227,30 +3225,24 @@ s32 Ground_801C5840(void)
     return stage_info.x6E4[i];
 }
 
-#ifdef MUST_MATCH
-#pragma push
-/// With propagation on, the single-use @c &stage_info is rematerialized at the
-/// store instead of being computed at the start of the branch and held in
-/// r31 across the two calls
-#pragma opt_propagation off
-#endif
+static inline void initSinglePlayerDisplay(StageInfo* stageinfo)
+{
+    int display_id = tyDisplay_8031C2EC();
+    tyDisplay_8031C454(display_id);
+    stageinfo->x6E4[0] = display_id;
+}
+
 void Ground_801C5878(void)
 {
     PAD_STACK(8);
     tyDisplay_8031C2CC();
     if (gm_IsCurrently1PMode() != 0) {
-        StageInfo* stageinfo = &stage_info;
-        int display_id;
-        display_id = tyDisplay_8031C2EC();
-        tyDisplay_8031C454(display_id);
-        stageinfo->x6E4[0] = display_id;
+        StageInfo* stageinfo;
+        initSinglePlayerDisplay(stageinfo = &stage_info);
     } else {
         stage_info.x6E4[0] = -1;
     }
 }
-#ifdef MUST_MATCH
-#pragma pop
-#endif
 
 Item_GObj* Ground_801C58E0(s32 arg0, s32 arg1)
 {
@@ -3261,14 +3253,6 @@ Item_GObj* Ground_801C58E0(s32 arg0, s32 arg1)
     result = it_802F2094(0, &sp10, tmp, 0);
     Toy_80304A58(tmp);
     return result;
-}
-
-static inline s32 randi(s32 max)
-{
-    if (max != 0) {
-        return HSD_Randi(max);
-    }
-    return 0;
 }
 
 int Ground_801C5940(void)

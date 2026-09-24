@@ -269,7 +269,7 @@ void mnNameNew_8023B224(u8 arg0)
     data = mnNameNew_804D6C08->user_data;
     name_index = data->name_index;
     if (arg0 != 0) {
-        lbCardGame_UpdatePowerTime();
+        lbCardGame_SaveChanges();
     }
     if (gm_GetCurrentGameMode() == GM_TOURNAMENT) {
         HSD_SisLib_803A5E70();
@@ -562,7 +562,7 @@ s32 mnNameNew_8023BAA8(NameNewEntry* arg0, s32 arg1, u8 arg2)
     return (s32) arg2;
 }
 
-inline u8 GetAutoNameCharacter(u8** names, s32 char_idx)
+static inline u8 GetAutoNameCharacter(u8** names, s32 char_idx)
 {
     return (*names)[char_idx];
 }
@@ -1624,10 +1624,6 @@ void fn_8023DAEC(HSD_GObj* arg0)
     }
 }
 
-#ifdef MUST_MATCH
-#pragma push
-#pragma dont_inline on
-#endif
 void fn_8023DBE8(HSD_GObj* arg0)
 {
     MenuFlow* flow;
@@ -1739,9 +1735,6 @@ void fn_8023DBE8(HSD_GObj* arg0)
         HSD_JObjAnimAll(jobj);
     }
 }
-#ifdef MUST_MATCH
-#pragma pop
-#endif
 
 void mnNameNew_8023E0D8(NameNewEntry* arg0)
 {

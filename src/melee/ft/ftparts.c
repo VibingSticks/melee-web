@@ -366,7 +366,7 @@ void ftParts_80074194(Fighter* fighter, FighterBone* bone, HSD_JObj* jobj,
         if (*dobj_index >= 124) {
             HSD_ASSERTREPORT(466, 0,
                              "fighter parts model dobj num over! player %d\n",
-                             fighter->player_id);
+                             fighter->player_idx);
         }
         fighter->dobj_list.data[*dobj_index] = dobj;
         mobj = dobj != NULL ? dobj->mobj : NULL;
@@ -379,7 +379,7 @@ void ftParts_80074194(Fighter* fighter, FighterBone* bone, HSD_JObj* jobj,
     }
     if (dobj_count >= 128) {
         HSD_ASSERTREPORT(480, 0, "fighter dobj num over! player %d\n",
-                         fighter->player_id);
+                         fighter->player_idx);
     }
     if (*dobj_index != 0) {
         bone->xD = *dobj_index - 1;
@@ -399,7 +399,7 @@ void ftParts_SetupParts(Fighter_GObj* fighter_obj)
 
     if (ftPartsTable[fp->kind]->parts_num > MAX_FT_PARTS) {
         HSD_ASSERTREPORT(503, 0, "fighter parts num over! player %d\n",
-                         fp->player_id);
+                         fp->player_idx);
     }
 
     while (jobj != NULL) {
@@ -450,7 +450,7 @@ void ftParts_SetupParts(Fighter_GObj* fighter_obj)
 
     if (part != ftPartsTable[fp->kind]->parts_num) {
         HSD_ASSERTREPORT(546, 0, "fighter parts num not match! player %d\n",
-                         fp->player_id);
+                         fp->player_idx);
     }
 }
 
@@ -493,7 +493,7 @@ void ftParts_8007462C(Fighter_GObj* gobj)
     }
     if (i != ftPartsTable[fp->kind]->parts_num) {
         HSD_ASSERTREPORT(593, 0, "fighter parts num not match! player %d\n",
-                         fp->player_id);
+                         fp->player_idx);
     }
 }
 
@@ -544,7 +544,7 @@ void ftParts_800749CC(Fighter_GObj* gobj)
     Fighter* fp = GET_FIGHTER(gobj);
     int i;
 
-    ftParts_8007487C(&fp->ft_data->x8->x0, &fp->x5AC, fp->x619_costume_id,
+    ftParts_8007487C(&fp->ft_data->x8->x0, &fp->x5AC, fp->costume_id,
                      &fp->dobj_list, &fp->x203C);
     for (i = 0; i < fp->x5AC.model_num; i++) {
         fp->x5F4_arr[i].prev = -1;
@@ -711,9 +711,9 @@ int ftPartsRemap(size_t to_table_idx, size_t from_table_idx, size_t joint_idx)
 
 u32 ftParts_8007506C(enum FighterKind ftkind, int part)
 {
-    struct Fighter_804D6540_x0_t* var_r3;
+    Fighter_804D6540_x0_t* var_r3;
     int i;
-    struct Fighter_804D6540_t* temp_r3;
+    Fighter_804D6540_t* temp_r3;
 
     temp_r3 = Fighter_804D6540[ftkind];
     if (temp_r3 != NULL && temp_r3->x4 != 0) {

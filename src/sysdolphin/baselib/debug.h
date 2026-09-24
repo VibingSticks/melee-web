@@ -11,13 +11,13 @@ typedef void (*PanicCallback)(OSContext*, ...);
 #ifdef TARGET_PC
 /* The port reports a failed assertion and carries on (see port/src/os_shim),
  * so it must not be declared as never returning. */
-void __assert(char*, u32, char*);
+void __assert(const char*, u32, const char*);
 #else
-ATTRIBUTE_NORETURN void __assert(char*, u32, char*);
+ATTRIBUTE_NORETURN void __assert(const char*, u32, const char*);
 #endif
 
 void HSD_LogInit(void);
-ATTRIBUTE_NORETURN void HSD_Panic(char*, u32, char*);
+ATTRIBUTE_NORETURN void HSD_Panic(const char*, u32, const char*);
 
 /// @todo Take @c file as another arg, ignore it if not `MUST_MATCH`.
 #ifdef MUST_MATCH

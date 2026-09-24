@@ -4,13 +4,17 @@
 #include <Runtime/platform.h>
 
 #include <melee/ft/forward.h>
+#include <melee/gm/forward.h>
 #include <melee/pl/forward.h>
 #include <sysdolphin/baselib/forward.h>
 
 #include <dolphin/mtx.h>
+#include <dolphin/pad.h>
 #include <melee/pl/types.h>
 #include <sysdolphin/baselib/gobj.h>
 #include <sysdolphin/baselib/jobj.h>
+
+#define PL_MAX_SUB_FIGHTERS 2
 
 typedef struct _StaticPlayer {
     /// @todo 0x02 In-Game (includes dead). 0x00 Otherwise.
@@ -20,8 +24,9 @@ typedef struct _StaticPlayer {
 
     Gm_PKind pkind;
 
-    /*0x0C*/ u8 transformed[2]; // 0x0001 for normal, 0x0100 for transformed
-                                // (Probably Zelda/Sheik only)
+    /// ::bool for each index indicating whether each fighter is active
+    /*0x0C*/ u8 transformed[PL_MAX_SUB_FIGHTERS];
+
     /*0x0E*/ s16 unk0E;
 
     union {
@@ -33,7 +38,7 @@ typedef struct _StaticPlayer {
             /*0x34-0x3f*/ Vec3 some_other_player_pos;
         } byVecName;
 
-        Vec3 byIndex[4];
+        Vec3 byIndex[PAD_MAX_CONTROLLERS];
     } player_poses;
 
     /*0x40*/ f32 facing_direction;
@@ -42,12 +47,13 @@ typedef struct _StaticPlayer {
                             ///< ::CostumeListsForeachCharacter and
                             ///< ::gm_GetNumCostumesForCKind
     /*0x45*/ u8 unk45;
-    /*0x46*/ s8 controller_index; ///< Physical controller port up to
-                                  ///< ::PAD_MAX_CONTROLLERS
-    /*0x47*/ u8 team;             ///< ::TeamColor
-    /*0x48*/ u8 player_id;        ///< Player "slot" up to ::GM_MAX_PLAYERS
-    /*0x49*/ u8 cpu_level;        ///< 1 to 9
-    /*0x4A*/ u8 cpu_type;         ///< ::CpuKind
+    /*0x46*/ s8 sub_color; ///< Tint index, 0 to 4; see
+                           ///< #gm_SetupSubColors
+    /*0x47*/ u8 team;      ///< ::TeamColor
+    /*0x48*/ u8 pad_port;  ///< Physical controller port up to
+                           ///< ::PAD_MAX_CONTROLLERS
+    /*0x49*/ u8 cpu_level; ///< 1 to 9
+    /*0x4A*/ u8 cpu_type;  ///< ::CpuKind
     /*0x4B*/ u8 handicap;
 
     /*0x4C*/ s8 unk4C;
@@ -69,14 +75,13 @@ typedef struct _StaticPlayer {
             /*0x64*/ s16 stamina;
             /*0x66*/ s16 unk66;
         } byName;
-        s16 byIndex[4];
+        s16 byIndex[PAD_MAX_CONTROLLERS];
     } staminas;
 
-    /*0x68 - 0x6C*/ s32 falls[2]; /// other index for nana falls
+    /*0x68 - 0x6C*/ s32 falls[PL_MAX_SUB_FIGHTERS];
 
-    /*0x70-0x84*/ u32 kos_by_player[6];
+    /*0x70-0x84*/ u32 kos_by_player[GM_MAX_PLAYERS];
 
-    /// @at{88} @sz{4}
     /// @remarks If -1 in zz_0035184, then it's set to MatchInfo->frame_count
     u32 match_frame_count;
 
@@ -91,10 +96,11 @@ typedef struct _StaticPlayer {
     /*0x98*/ s32 unk98;
     /*0x9C*/ s32 unk9C;
 
-    /*0xA0-A4*/ s32
-        joystick_direction_input_count[2]; // Incremented every time you move
-                                           // the joystick a different
-                                           // direction from neutral.
+    /**
+     * Incremented every time you move the joystick a different direction from
+     * neutral.
+     */
+    /*0xA0-A4*/ s32 joystick_direction_input_count[PL_MAX_SUB_FIGHTERS];
 
     /*0xA8*/ int nametag_slot_id;
 
@@ -132,7 +138,7 @@ typedef struct _StaticPlayer {
 
     /*0xAF*/ s8 unkAF;
 
-    /*0xB0*/ HSD_GObj* player_entity[2];
+    /*0xB0*/ HSD_GObj* player_entity[PL_MAX_SUB_FIGHTERS];
     /*0xB4*/ /*void* sub_character_entity;*/ // Used for followers, such as
                                              // Nana
 
@@ -186,12 +192,12 @@ void Player_SetFacingDirection(s32 slot, f32 direction);
 void Player_SetFacingDirectionConditional(s32 slot, bool b, f32 direction);
 u32 Player_GetCostumeId(int slot);
 void Player_SetCostumeId(int slot, int costume_id);
-u8 Player_GetControllerIndex(int slot);
-void Player_SetControllerIndex(int slot, s8 controller_index);
+u8 Player_GetSubColor(int slot);
+void Player_SetSubColor(int slot, s8 sub_color);
 int Player_GetTeam(int slot);
 void Player_SetTeam(int slot, s8 unk_color);
-int Player_GetPlayerId(int slot);
-void Player_SetPlayerId(int slot, int player_id);
+int Player_GetPadPort(int slot);
+void Player_SetPadPort(int slot, int controller_index);
 int Player_GetCpuLevel(int slot);
 void Player_SetPlayerAndEntityCpuLevel(int slot, int cpu_level);
 int Player_GetCpuType(int slot);

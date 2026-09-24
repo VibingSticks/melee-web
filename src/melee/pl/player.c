@@ -9,7 +9,6 @@
 #include "types.h"
 #include <dolphin/mtx.h>
 #ifdef TARGET_PC
-#include <stddef.h> /* offsetof, for PL_MAPPING_OVERLAY */
 #endif
 #include <melee/ft/fighter.h>
 #include <melee/ft/ft_0877.h>
@@ -31,32 +30,6 @@ typedef struct _ftMapping {
     s8 extra_internal_id;
     s8 has_transformation;
 } ftMapping;
-
-/// @todo delete after fixing functions that use this
-struct Unk_Struct_w_Array {
-    char some_str[8 + 4]; //"PdPm.dat"
-    char another_str[16 + 4];
-    S8Vec3 vec_arr[30]; /// ftMapping_list
-};
-
-/* This overlay reaches ftMapping_list by counting 32 bytes forward from the
- * address of an eight-byte string -- it only ever worked because MWERKS laid
- * "PdPm.dat", "plLoadCommonData" and ftMapping_list out back to back in .data.
- * wasm-ld pads them apart and puts ftMapping_list at +56, so the overlay read
- * 24 bytes early: Mario's entry came back as Captain's, and Fox's landed in
- * the middle of "plLoadCommonData" and drove a write off the end of
- * ftData_UnkIntPairs. Aim the overlay at the table itself instead; on the
- * GameCube the two addresses are the same one, so the expansion is unchanged.
- */
-#ifdef TARGET_PC
-#define PL_MAPPING_OVERLAY()                                                  \
-    ((struct Unk_Struct_w_Array*) ((char*) ftMapping_list -                   \
-                                   offsetof(struct Unk_Struct_w_Array,        \
-                                            vec_arr)))
-#else
-#define PL_MAPPING_OVERLAY()                                                  \
-    ((struct Unk_Struct_w_Array*) &str_PdPmdat_start_of_data)
-#endif
 
 //// .data
 char str_PdPmdat_start_of_data[] = "PdPm.dat";
@@ -140,7 +113,8 @@ void Player_80031790(int slot)
             /// (transformed) checks to see if the player is in a transformed
             /// state, and calls the function only once depending on the state
             if ((player->player_entity[player->transformed[i]])) {
-                ftLib_800867E8(player->player_entity[player->transformed[i]]);
+                ftLib_DisableInput(
+                    player->player_entity[player->transformed[i]]);
             }
         }
     }
@@ -160,7 +134,8 @@ void Player_80031848(int slot)
             /// (transformed) checks to see if the player is in a transformed
             /// state, and calls the function only once depending on the state
             if ((player->player_entity[player->transformed[i]])) {
-                ftLib_8008688C(player->player_entity[player->transformed[i]]);
+                ftLib_EnableInput(
+                    player->player_entity[player->transformed[i]]);
             }
         }
     }
@@ -172,7 +147,8 @@ static void func_8008688C_wrapper(StaticPlayer* player)
         s32 i;
         for (i = 0; i < 2; i++) {
             if ((player->player_entity[player->transformed[i]])) {
-                ftLib_8008688C(player->player_entity[player->transformed[i]]);
+                ftLib_EnableInput(
+                    player->player_entity[player->transformed[i]]);
             }
         }
     }
@@ -365,15 +341,14 @@ void Player_80031FB0(int slot, s32 entity_index)
 void Player_80032070(int slot, bool bool_arg)
 {
     StaticPlayer* player;
-    struct Unk_Struct_w_Array* unkStruct =
-        PL_MAPPING_OVERLAY();
     Player_CheckSlot(slot);
     player = &player_slots[slot];
 
     if (bool_arg == 0) {
         ftCo_800D4FF4(player->player_entity[player->transformed[0]]);
 
-        if (player->flags.b2 && unkStruct->vec_arr[player->ckind].z == 0 &&
+        if (player->flags.b2 &&
+            !ftMapping_list[player->ckind].has_transformation &&
             ftLib_8008701C(player->player_entity[player->transformed[1]]))
         {
             ftCo_800D4FF4(player->player_entity[player->transformed[1]]);
@@ -453,8 +428,6 @@ Gm_PKind Player_GetPlayerSlotType(s32 slot)
 Gm_PKind Player_8003248C(s32 slot, bool arg1)
 {
     Gm_PKind slot_type;
-    struct Unk_Struct_w_Array* unk_struct =
-        PL_MAPPING_OVERLAY();
     StaticPlayer* player;
 
     Player_CheckSlot(slot);
@@ -462,7 +435,7 @@ Gm_PKind Player_8003248C(s32 slot, bool arg1)
     player = &player_slots[slot];
 
     if (arg1 == 1) {
-        if (unk_struct->vec_arr[player->ckind].z == 0) {
+        if (!ftMapping_list[player->ckind].has_transformation) {
             if (player->pkind == Gm_PKind_Human ||
                 player->pkind == Gm_PKind_Cpu)
             {
@@ -497,8 +470,6 @@ s8 Player_800325C8(CharacterKind kind, bool b)
 s8 Player_80032610(s32 slot, bool arg1)
 { //// decomp.me/scratch/pHTx2
 
-    struct Unk_Struct_w_Array* some_struct =
-        PL_MAPPING_OVERLAY();
     StaticPlayer* player;
     s32 error_value = -1;
 
@@ -506,10 +477,10 @@ s8 Player_80032610(s32 slot, bool arg1)
     player = &player_slots[slot];
 
     if (arg1 == 0) {
-        return some_struct->vec_arr[player->ckind].x;
+        return ftMapping_list[player->ckind].internal_id;
     }
     if (arg1 == 1) {
-        return some_struct->vec_arr[player->ckind].y;
+        return ftMapping_list[player->ckind].extra_internal_id;
     }
 
     return error_value;
@@ -754,22 +725,22 @@ void Player_SetCostumeId(int slot, int costume_id)
     player->costume_id = costume_id;
 }
 
-u8 Player_GetControllerIndex(int slot)
+u8 Player_GetSubColor(int slot)
 {
-    s8 controller_index;
+    s8 sub_color;
     StaticPlayer* player;
     Player_CheckSlot(slot);
     player = &player_slots[slot];
-    controller_index = player->controller_index;
-    return controller_index;
+    sub_color = player->sub_color;
+    return sub_color;
 }
 
-void Player_SetControllerIndex(int slot, s8 controller_index)
+void Player_SetSubColor(int slot, s8 sub_color)
 {
     StaticPlayer* player;
     Player_CheckSlot(slot);
     player = &player_slots[slot];
-    player->controller_index = controller_index;
+    player->sub_color = sub_color;
 }
 
 int Player_GetTeam(int slot)
@@ -790,22 +761,22 @@ void Player_SetTeam(int slot, s8 team)
     player->team = team;
 }
 
-int Player_GetPlayerId(int slot)
+int Player_GetPadPort(int slot)
 {
-    u8 player_id;
+    u8 controller_index;
     StaticPlayer* player;
     Player_CheckSlot(slot);
     player = &player_slots[slot];
-    player_id = player->player_id;
-    return player_id;
+    controller_index = player->pad_port;
+    return controller_index;
 }
 
-void Player_SetPlayerId(int slot, int player_id)
+void Player_SetPadPort(int slot, int controller_index)
 {
     StaticPlayer* player;
     Player_CheckSlot(slot);
     player = &player_slots[slot];
-    player->player_id = player_id;
+    player->pad_port = controller_index;
 }
 
 int Player_GetCpuLevel(int slot)
@@ -1303,13 +1274,11 @@ s32 Player_GetRemainingHPByIndex(s32 slot, s32 index)
 s32 Player_GetFalls(s32 slot)
 { /// decomp.me/scratch/8ijor
     StaticPlayer* player;
-    struct Unk_Struct_w_Array* unkStruct =
-        PL_MAPPING_OVERLAY();
     Player_CheckSlot(slot);
     player = &player_slots[slot];
 
-    if (unkStruct->vec_arr[player->ckind].y != -1 &&
-        unkStruct->vec_arr[player->ckind].z != 0)
+    if (ftMapping_list[player->ckind].extra_internal_id != -1 &&
+        ftMapping_list[player->ckind].has_transformation)
     {
         return player->falls[player->transformed[0]] +
                player->falls[player->transformed[1]];
@@ -1947,9 +1916,9 @@ void Player_InitOrResetPlayer(s32 slot)
     player->transformed[1] = 1;
 
     player->unk45 = 0;
-    player->controller_index = 0;
+    player->sub_color = 0;
     player->team = 0;
-    player->player_id = 0;
+    player->pad_port = 0;
     player->cpu_level = 0;
 
     player->cpu_type = 4;
@@ -2060,13 +2029,12 @@ void Player_80036DD8(void)
 
 void Player_80036E20(CharacterKind ckind, HSD_Archive* archive, s32 arg2)
 {
-    struct Unk_Struct_w_Array* unkStruct =
-        PL_MAPPING_OVERLAY();
-    ftDemo_SetArchiveData(unkStruct->vec_arr[ckind].x, archive, arg2);
-    if ((unkStruct->vec_arr[ckind].y != -1) &&
-        (unkStruct->vec_arr[ckind].z == 0))
+    ftDemo_SetArchiveData(ftMapping_list[ckind].internal_id, archive, arg2);
+    if (ftMapping_list[ckind].extra_internal_id != -1 &&
+        !ftMapping_list[ckind].has_transformation)
     {
-        ftDemo_SetArchiveData(unkStruct->vec_arr[ckind].y, archive, arg2);
+        ftDemo_SetArchiveData(ftMapping_list[ckind].extra_internal_id, archive,
+                              arg2);
     }
 }
 

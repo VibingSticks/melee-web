@@ -15,6 +15,7 @@
 
 #include "forward.h"
 #include "ftpickupitem.h"
+#include "inlines.h"
 #include <dolphin/mtx.h>
 #include <melee/cm/camera.h>
 #include <melee/ft/fighter.h>
@@ -130,13 +131,13 @@
 /* 0A8EB0 */ static void ftCo_800A8EB0(Fighter*);
 /* 0A92CC */ static void ftCo_800A92CC(Fighter* fp);
 /* 0A96B8 */ static void ftCo_800A96B8(Fighter*);
-/* 0A9904 */ static UNK_RET ftCo_800A9904(Fighter*);
+/* 0A9904 */ static void ftCo_800A9904(Fighter*);
 /* 0A9CB4 */ static void ftCo_800A9CB4(Fighter* fp);
 /* 0AA320 */ static void ftCo_800AA320(Fighter* fp, int*, int*);
-/* 0AA42C */ static UNK_RET ftCo_800AA42C(Fighter* fp);
-/* 0AA844 */ static UNK_RET ftCo_800AA844(Fighter* fp);
+/* 0AA42C */ static void ftCo_800AA42C(Fighter* fp);
+/* 0AA844 */ static void ftCo_800AA844(Fighter* fp);
 /* 0AABC8 */ static void ftCo_800AABC8(Fighter* fp);
-/* 0AACD0 */ static UNK_RET ftCo_800AACD0(Fighter* fp);
+/* 0AACD0 */ static void ftCo_800AACD0(Fighter* fp);
 /* 0AAF48 */ static bool ftCo_800AAF48(Fighter* fp);
 /* 0AB224 */ static void ftCo_800AB224(Fighter* fp);
 /* 0ABA34 */ static void ftCo_800ABA34(Fighter* fp);
@@ -241,12 +242,6 @@ int ftCo_803C5A68[] = {
 };
 
 /* 0A2638 */ static void ftCo_800B1DA0(Fighter* fp);
-
-static inline void ftCo_CpuSetNeutralStick(Fighter* fp)
-{
-    ftCo_800B46B8(fp, CpuCmd_SetLstickX, 0);
-    ftCo_800B46B8(fp, CpuCmd_SetLstickY, 0);
-}
 
 static inline void ftCo_CpuFinishWithNeutralY(Fighter* fp)
 {
@@ -934,7 +929,7 @@ bool ftCo_800A1C44(Fighter* fp)
     if (fp->x2168 != 0 && fp->x2338.x == 0) {
         return true;
     }
-    if (fp->x221F_b3) {
+    if (fp->is_sleeping) {
         return true;
     }
     return false;
@@ -1079,7 +1074,7 @@ bool ftCo_800A1F98(int x, float y)
 
 bool ftCo_IsCpuControlled(Fighter* fp)
 {
-    if (Player_8003248C(fp->player_id, fp->is_sub_fighter) != Gm_PKind_Cpu) {
+    if (Player_8003248C(fp->player_idx, fp->is_sub_fighter) != Gm_PKind_Cpu) {
         return false;
     }
     if (fp->cpu.kind == 5) {
@@ -1927,7 +1922,7 @@ bool ftCo_IsAlly(Fighter* fp0, Fighter* fp1)
     if (fp1 == NULL) {
         return false;
     }
-    if (fp0->player_id == fp1->player_id) {
+    if (fp0->player_idx == fp1->player_idx) {
         return true;
     }
     if (gm_8016B168()) {
@@ -1981,9 +1976,9 @@ static inline bool ftCo_800A3908_inline0(Fighter* fp, struct CpuFighter* data,
     return false;
 }
 
-inline s32 ftCo_800A3908_inline1(float x, float y, Vec3* out_pos,
-                                 Vec3* out_normal, int* out_line,
-                                 u32* out_flags)
+static inline s32 ftCo_800A3908_inline1(float x, float y, Vec3* out_pos,
+                                        Vec3* out_normal, int* out_line,
+                                        u32* out_flags)
 {
     s32 result;
     s32 valid;
@@ -2417,7 +2412,7 @@ static inline bool inlineD0_it(Fighter* fp, Item* it)
 static inline bool inlineD1(Fighter* fp)
 {
     Fighter_GObj* gobj = fp->gobj;
-    if (fp->x221F_b3 || fp->x2224_b2 || ftCo_800A0F00(gobj) ||
+    if (fp->is_sleeping || fp->stamina_dead || ftCo_800A0F00(gobj) ||
         ftLib_8008732C(gobj))
     {
         return true;
@@ -2642,7 +2637,7 @@ Fighter* ftCo_800A5294(Fighter* fp, int player_id)
             if (fp->gobj != cur) {
                 cur_fp = GET_FIGHTER(cur);
                 if (!inlineD0(fp, cur_fp)) {
-                    if (!inlineD1(cur_fp) && cur_fp->player_id == player_id) {
+                    if (!inlineD1(cur_fp) && cur_fp->player_idx == player_id) {
                         return cur_fp;
                     }
                 }
@@ -2777,8 +2772,8 @@ Fighter* ftCo_800A589C(Fighter* fp)
         {
             if (fp->gobj != cur) {
                 Fighter* cur_fp = GET_FIGHTER(cur);
-                if (fp->player_id == cur_fp->player_id) {
-                    if (cur_fp->x221F_b3) {
+                if (fp->player_idx == cur_fp->player_idx) {
+                    if (cur_fp->is_sleeping) {
                         return NULL;
                     }
                     return cur_fp;
@@ -8631,7 +8626,7 @@ bool ftCo_800B395C(Fighter_GObj* gobj, int arg1)
 
     fp = GET_FIGHTER(gobj);
     temp_r30 = &fp->cpu;
-    if (Player_8003248C(fp->player_id, fp->is_sub_fighter) == Gm_PKind_Cpu) {
+    if (Player_8003248C(fp->player_idx, fp->is_sub_fighter) == Gm_PKind_Cpu) {
         switch (temp_r30->x18) {
         case 2:
         case 3:

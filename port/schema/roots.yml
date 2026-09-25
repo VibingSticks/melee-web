@@ -24,7 +24,7 @@
 - { suffix: _tlut, type: HSD_Tlut }
 - { prefix: MnSelectChrDataTable, type: port_MnSelectChrDataTable }
 - { prefix: MnSelectStageDataTable, type: port_MnSelectStageDataTable }
-- { prefix: sqEventInitDataLevelTbl, type: port_EventInitLevel }
+- { prefix: sqEventInitDataLevelTbl, type: port_EventTable }
 # gmtou_0.c / gmtou_1.c: TmBox.dat bracket box tables (see port_BracketSrcEntry).
 - { prefix: tournament_box, type: port_BracketSrcEntry, array: object_run }
 # gm_1879.c: the adventure stage intro (IrNml.dat) names one camera per stage

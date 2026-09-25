@@ -65,8 +65,6 @@ port_EnvelopeList:
   p: { null_term: true }
 
 # --- menus and events -----------------------------------------------------------
-port_EventInitLevel:
-  x4: { ptr_array: port_EventLevelPair, null_term: true }
 
 # --- stages ------------------------------------------------------------------
 GroundParam:
@@ -368,6 +366,8 @@ port_KbHatDyn:
   bones: { ptr_array: BoneDynamicsDesc, len_field: num }
 port_HitShakeRow:
   shifts: { ptr_array: Vec2, len_field: count }
+port_EvWords:
+  w: { object_run: true }
 port_F32Run:
   v: { object_run: true }
 port_KinokoAttrs:

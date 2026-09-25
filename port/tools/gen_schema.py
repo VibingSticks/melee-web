@@ -275,6 +275,16 @@ class Gen:
                        and (kids[i].get_field_offsetof() // 8) // storage * storage == unit):
                     widths.append(kids[i].get_bitfield_width())
                     i += 1
+                # An ordinary member declared inside the unit (gm_evinit's
+                # `u32 x0_0 : 3 ... x1_5 : 3; u8 is_teams;`) ends it: the
+                # bitfields fill the unit's leading bytes on both targets, and
+                # the bytes after them are that member's, not low bits of one
+                # big-endian number (repacking them swapped is_teams and
+                # item_freq).
+                if i < len(kids) and not kids[i].is_bitfield():
+                    nxt = kids[i].get_field_offsetof() // 8
+                    if unit < nxt < unit + storage and (nxt - unit) in (1, 2, 4) and sum(widths) <= (nxt - unit) * 8:
+                        storage = nxt - unit
                 bits_defs.append(f"static const uint8_t bits_{name}_{unit}[] = {{ {', '.join(map(str, widths))} }};")
                 fields.append(named(f"{{F_BITS, {unit}, NULL, 0, 0, {storage}, bits_{name}_{unit}, {len(widths)}}}", f.spelling))
                 continue

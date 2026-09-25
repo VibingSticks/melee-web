@@ -65,16 +65,127 @@ typedef struct {
     port_MnSelectStageModels models;
 } port_MnSelectStageDataTable;
 
-/* gmevent.c: sqEventInitDataLevelTbl (struct gm_804D6900_t). */
-typedef struct { int x0; int x4; } port_EventLevelPair;
+/* gmevent.c: sqEventInitDataLevelTbl is an array of 51 pointers to per-event
+ * records (struct gm_804D6900_t), not one record. Typed as one, only the
+ * first event's fields were touched and every event started from big-endian
+ * data (event 1 asked for stage 0xCA00 and crashed in lbDvd_80018254). The
+ * structs below copy gmevent.c's file-local ones. A record's x4 means
+ * something different per event: most point at words ({30, 60}, one int, a
+ * Vec3, a list of item kinds), events 13, 25 and 46 at byte lists of
+ * character kinds, and event 43 at {count, player record}. */
 typedef struct {
-    unsigned char kind, flags, pad2[2];
-    port_EventLevelPair* x4;
-    void* evinit;
-    void* evbonus;
-    void* evstage_table;
-    void* player_init[5];
-} port_EventInitLevel;
+    u32 x0_0 : 3;
+    u32 x0_3 : 3;
+    u32 x0_6 : 1;
+    u32 x0_7 : 1;
+    u32 x1_0 : 1;
+    u32 x1_1 : 1;
+    u32 x1_2 : 1;
+    u32 x1_3 : 1;
+    u32 x1_4 : 1;
+    u32 x1_5 : 3;
+    u8 is_teams;
+    s8 item_freq;
+    s8 sd_penalty;
+    u8 unk5;
+    u16 stkind;
+    u32 time_limit;
+    u8 padC[4];
+    u64 x10;
+    s32 x18;
+    f32 x1C;
+    f32 game_speed;
+    f32 unk24;
+} port_EvInit;
+typedef struct {
+    s8 c_kind;
+    u8 slot_type, stocks, color, x5, sub_color, team, xB, flags, xE, cpu_level, pad;
+    u16 x12;
+    u16 hp;
+    f32 x18, x1C, x20;
+} port_EvPlayer;
+typedef struct {
+    u8 count;
+    u8 pad1;
+    u16 stage[7];
+    port_EvPlayer* entries[6];
+} port_EvStageTable;
+typedef struct {
+    s8 c_kind;
+    u8 x1, x2, x3, x4, x5, color, pad7;
+    f32 x8, xC, x10;
+    u8 flags, x15, x16, x17;
+} port_EvBonus;
+typedef struct {
+    s32 count;
+    port_EvPlayer* player;
+} port_EvPair;
+typedef struct { u32 w[1]; } port_EvWords; /* words to the next object */
+#define PORT_EV_RECORD(name, x4_type)          \
+    typedef struct {                           \
+        u8 kind, flags, pad2[2];               \
+        x4_type x4;                            \
+        port_EvInit* evinit;                   \
+        port_EvBonus* evbonus;                 \
+        port_EvStageTable* evstage_table;      \
+        port_EvPlayer* player_init[5];         \
+    } name
+PORT_EV_RECORD(port_EvRecW, port_EvWords*);
+PORT_EV_RECORD(port_EvRecB, void*);
+PORT_EV_RECORD(port_EvRecP, port_EvPair*);
+typedef struct {
+    port_EvRecW* e0;
+    port_EvRecW* e1;
+    port_EvRecW* e2;
+    port_EvRecW* e3;
+    port_EvRecW* e4;
+    port_EvRecW* e5;
+    port_EvRecW* e6;
+    port_EvRecW* e7;
+    port_EvRecW* e8;
+    port_EvRecW* e9;
+    port_EvRecW* e10;
+    port_EvRecW* e11;
+    port_EvRecW* e12;
+    port_EvRecB* e13;
+    port_EvRecW* e14;
+    port_EvRecW* e15;
+    port_EvRecW* e16;
+    port_EvRecW* e17;
+    port_EvRecW* e18;
+    port_EvRecW* e19;
+    port_EvRecW* e20;
+    port_EvRecW* e21;
+    port_EvRecW* e22;
+    port_EvRecW* e23;
+    port_EvRecW* e24;
+    port_EvRecB* e25;
+    port_EvRecW* e26;
+    port_EvRecW* e27;
+    port_EvRecW* e28;
+    port_EvRecW* e29;
+    port_EvRecW* e30;
+    port_EvRecW* e31;
+    port_EvRecW* e32;
+    port_EvRecW* e33;
+    port_EvRecW* e34;
+    port_EvRecW* e35;
+    port_EvRecW* e36;
+    port_EvRecW* e37;
+    port_EvRecW* e38;
+    port_EvRecW* e39;
+    port_EvRecW* e40;
+    port_EvRecW* e41;
+    port_EvRecW* e42;
+    port_EvRecP* e43;
+    port_EvRecW* e44;
+    port_EvRecW* e45;
+    port_EvRecB* e46;
+    port_EvRecW* e47;
+    port_EvRecW* e48;
+    port_EvRecW* e49;
+    port_EvRecW* e50;
+} port_EventTable;
 
 /* gmtoulib.c: TmBox.dat's tournament_box{2,3,4}_array roots are arrays of
  * BracketSrcEntry (gmtoulib.static.h, a file-local type): the bracket box

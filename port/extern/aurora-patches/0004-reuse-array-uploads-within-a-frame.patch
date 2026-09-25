@@ -1,0 +1,50 @@
+--- a/lib/gx/gx.hpp
++++ b/lib/gx/gx.hpp
+@@ -375,6 +375,16 @@
+   std::array<IndStage, MaxIndStages> indStages;
+   std::array<IndTexMtxInfo, MaxIndTexMtxs> indTexMtxs;
+   std::array<AttrArray, MaxVtxAttr> arrays;
++  // Arrays already copied into this frame's storage buffer, by base pointer.
++  // A scene that alternates between models re-binds the same arrays many
++  // times a frame; uploading each bind again overran the 8 MiB buffer on
++  // Venom. A bind whose data fits a copy made earlier this frame reuses it.
++  struct ArrayUpload {
++    u32 size;
++    bool le;
++    gfx::Range range;
++  };
++  absl::flat_hash_map<const void*, ArrayUpload> frameArrayUploads;
+   bool depthCompare = true;
+   bool depthUpdate = true;
+   bool colorUpdate = true;
+--- a/lib/gx/command_processor.cpp
++++ b/lib/gx/command_processor.cpp
+@@ -349,7 +349,17 @@
+     }
+     auto& array = state.arrays[i];
+     if (array.cachedRange.size == 0) {
+-      array.cachedRange = gfx::push_storage(static_cast<const uint8_t*>(array.data), array.size);
++      // Only big-endian arrays are shared: those are file data that nothing
++      // rewrites during a frame, unlike a buffer the CPU refills per draw.
++      auto it = array.le ? state.frameArrayUploads.end() : state.frameArrayUploads.find(array.data);
++      if (it != state.frameArrayUploads.end() && it->second.le == array.le && it->second.size >= array.size) {
++        array.cachedRange = it->second.range;
++      } else {
++        array.cachedRange = gfx::push_storage(static_cast<const uint8_t*>(array.data), array.size);
++        if (!array.le) {
++          state.frameArrayUploads[array.data] = {array.size, array.le, array.cachedRange};
++        }
++      }
+     }
+     immediates.arrayStart[i - GX_VA_POS] = array.cachedRange.offset;
+   }
+--- a/lib/gfx/recording.cpp
++++ b/lib/gfx/recording.cpp
+@@ -451,6 +451,7 @@
+   for (auto& array : gx::g_gxState.arrays) {
+     array.cachedRange = {};
+   }
++  gx::g_gxState.frameArrayUploads.clear();
+ #if defined(AURORA_GFX_DEBUG_GROUPS)
+   if (!g_recorder.debugGroupStack.empty()) {
+     for (auto& item : std::ranges::reverse_view(g_recorder.debugGroupStack)) {

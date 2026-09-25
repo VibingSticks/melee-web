@@ -10,6 +10,8 @@
  */
 #include <stdbool.h>
 #include <aurora/gfx.h>
+#include <SDL3/SDL_video.h>
+#include <SDL3/SDL_stdinc.h>
 #include <aurora/aurora.h>
 #include <aurora/event.h>
 #include <aurora/main.h>
@@ -523,6 +525,20 @@ int main(int argc, char** argv)
      * aspect and letterbox in the present pass instead, which holds at any
      * canvas size. */
     AuroraSetViewportPolicy(AURORA_VIEWPORT_FIT);
+    /* Keep the render size. SDL's window is resizable, and on every resize
+     * its handler set the canvas drawing buffer -- and so the frame the GPU
+     * renders -- to the page's CSS size: 1280x960, or the 640x480 a small
+     * machine asks for, lasted only until the window or fullscreen state
+     * changed. A fixed buffer is scaled by the page instead (#canvas uses
+     * object-fit: contain), so the cost stays what the render size says. */
+    {
+        int count = 0;
+        SDL_Window** windows = SDL_GetWindows(&count);
+        for (int i = 0; windows != NULL && i < count; i++) {
+            SDL_SetWindowResizable(windows[i], false);
+        }
+        SDL_free(windows);
+    }
     port_font_load_from_dol();
     port_log("Aurora initialized; starting the game");
     begin_frame_blocking();

@@ -282,8 +282,15 @@ async function startGame(disc, fst) {
   // 640x480; anything above that is supersampling, and the cost is fill-rate
   // bound, so dropping to 640x480 is the first thing to try on a slow machine.
   const resFlag = /^(\d{2,4})x(\d{2,4})$/.exec(params.get('res') ?? '');
-  const renderWidth = resFlag ? +resFlag[1] : 0;
-  const renderHeight = resFlag ? +resFlag[2] : 0;
+  // Without ?res the engine renders at 1280x960. A small machine (two cores or
+  // 4 GB, a typical Chromebook) gets the game's own 640x480 instead: a quarter
+  // of the pixels to shade, copy and scale every frame.
+  const smallMachine = (navigator.hardwareConcurrency ?? 8) <= 2 || (navigator.deviceMemory ?? 8) <= 4;
+  const renderWidth = resFlag ? +resFlag[1] : smallMachine ? 640 : 0;
+  const renderHeight = resFlag ? +resFlag[2] : smallMachine ? 480 : 0;
+  if (!resFlag && smallMachine) {
+    console.log('[boot] small machine: rendering at 640x480 (add ?res=1280x960 for the sharper default)');
+  }
   // ?yield=timer puts the game's busy-wait yields back on setTimeout(0), for
   // A/B-ing the menu pauses (see port_yield_browser in imports.js).
   const yieldTimer = params.get('yield') === 'timer';

@@ -225,7 +225,14 @@ class Gen:
 
     def union_desc(self, name, off, disc, size, be, mask, cases):
         vals = ", ".join(f"{int(v)}u" for v in cases)
-        tys = ", ".join(self.need_name(t) if t else "NULL" for t in cases.values())
+        def case_type(t):
+            if not t:
+                return "NULL"
+            if isinstance(t, dict):  # { variant: Base, fields: { field: Type } } -> pointer to that variant
+                key = self.variant(t["variant"], t["fields"])[len("&port_T_"):]
+                return self.ptr_elem_helper(key)
+            return self.need_name(t)
+        tys = ", ".join(case_type(t) for t in cases.values())
         self.out.append(f"static const uint32_t disc_{name}_{off}[] = {{ {vals} }};")
         self.out.append(f"static const port_type* const disc_t_{name}_{off}[] = {{ {tys} }};")
         return (f"{{F_UNION, {off}, NULL, 0, 0, 0, NULL, 0, {disc}, disc_{name}_{off}, disc_t_{name}_{off}, {len(cases)}, "

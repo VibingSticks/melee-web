@@ -102,9 +102,32 @@ MapCollData:
 port_GroundItemData:
   # ground.c registers each entry's one Article under its item kind
   # (it_8026B40C(article, kind)); the state rows carry the item scripts,
-  # converted after the walk. x4_specialAttributes stays an unfollowed
-  # pointer: its type is per stage.
-  article: { ptr: Article }
+  # converted after the walk. The Article is typed by the entry's item kind
+  # (It_Kind_*): the kinds any GrXx.dat
+  # itemdata holds. Most attribute blocks start with a header pointer
+  # (port_StageItemAttrs); Flat Zone's tools and the Great Fox laser are
+  # plain words; Tingle (221) has his own struct.
+  article:
+    union_on: kind
+    cases: {
+      209: { variant: Article, fields: { x4_specialAttributes: port_StageItemAttrs } },
+      210: { variant: Article, fields: { x4_specialAttributes: port_StageItemAttrs } },
+      211: { variant: Article, fields: { x4_specialAttributes: port_StageItemAttrs } },
+      212: { variant: Article, fields: { x4_specialAttributes: port_StageItemAttrs } },
+      213: { variant: Article, fields: { x4_specialAttributes: port_StageItemAttrs } },
+      217: { variant: Article, fields: { x4_specialAttributes: port_StageItemAttrs } },
+      218: { variant: Article, fields: { x4_specialAttributes: port_StageItemAttrs } },
+      219: { variant: Article, fields: { x4_specialAttributes: port_StageItemAttrs } },
+      220: { variant: Article, fields: { x4_specialAttributes: port_StageItemAttrs } },
+      221: "port_GbArticle*",
+      225: { variant: Article, fields: { x4_specialAttributes: port_StageItemAttrs } },
+      226: { variant: Article, fields: { x4_specialAttributes: port_StageItemAttrs } },
+      230: { variant: Article, fields: { x4_specialAttributes: port_F32Run } },
+      233: { variant: Article, fields: { x4_specialAttributes: port_StageItemAttrs } },
+      234: { variant: Article, fields: { x4_specialAttributes: port_StageItemAttrs } },
+      235: { variant: Article, fields: { x4_specialAttributes: port_F32Run } },
+      236: { variant: Article, fields: { x4_specialAttributes: port_StageItemAttrs } }
+    }
 # Great Bay's entry (see mirrors.h): as Article, with Tingle's attributes typed.
 port_GbArticle:
   xC_itemStates: { ptr_array: ItemStateDesc, object_run: true }
@@ -374,6 +397,8 @@ port_KbHatDyn:
   bones: { ptr_array: BoneDynamicsDesc, len_field: num }
 port_HitShakeRow:
   shifts: { ptr_array: Vec2, len_field: count }
+port_StageItemAttrs:
+  rest: { object_run: true }
 port_EvWords:
   w: { object_run: true }
 port_F32Run:

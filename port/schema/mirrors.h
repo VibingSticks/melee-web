@@ -213,6 +213,23 @@ typedef struct {
     Article* article;
 } port_GroundItemData;
 
+/* A stage item's attribute block (the Articles in a stage's itemdata):
+ * word 0 points at a small header -- an int (Shy Guy reads it as hit points
+ * through `s32** attr`), three floats, an int and a pointer back to the
+ * block -- and plain words follow. The decomp's structs declare word 0 as a
+ * float, so a float run stopped at it and every stage item's block stayed
+ * big-endian. */
+typedef struct {
+    s32 x0;
+    f32 x4, x8, xC;
+    s32 x10;
+    void* back;
+} port_StageItemHead;
+typedef struct {
+    port_StageItemHead* head;
+    f32 rest[1];
+} port_StageItemAttrs;
+
 /* Great Bay's itemdata (GrGb.dat): its one entry is Tingle on his balloon
  * (It_Kind_Tincle), whose Article::x4_specialAttributes is ittincle.c's
  * itTincleAttributes. The generic itemdata rule leaves that block alone, so

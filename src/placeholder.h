@@ -10,7 +10,15 @@ typedef void (*jmp_t)(void);
 typedef jmp_t jtbl_t[];
 
 #ifndef MWERKS_GEKKO
+#ifdef TARGET_PC
+/* frsqrte is the reciprocal square root estimate. The game refines it with
+ * Newton steps (guess * (3 - guess^2 * x) / 2), which only converge from a
+ * guess near 1/sqrt(x); started from sqrt(x) they diverge for any x far from
+ * 1 (a bounced fireball left at 5e16 units a frame). */
+#define __frsqrte(x) (1.0 / sqrt(x))
+#else
 #define __frsqrte(x) sqrt(x)
+#endif
 #define sqrtf__Ff(x) sqrtf(x)
 #define sqrtf_accurate(x) sqrtf(x)
 #define __fabs(f) fabsf(f)

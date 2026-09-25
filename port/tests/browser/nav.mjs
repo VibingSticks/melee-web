@@ -49,7 +49,7 @@ function decode(name) {
 export const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
 /** Serve the build, open it, feed it the disc, and wait until the game runs. */
-export async function launchGame({ buildDir, disc, port = 8795, query = 'renderer=webgl2&res=640x480', headed = false }) {
+export async function launchGame({ buildDir, disc, port = 8795, query = 'renderer=webgl2&res=640x480', headed = false, init = null }) {
   const server = spawn('python3', ['-m', 'http.server', '-d', path.resolve(buildDir), String(port)], { stdio: 'ignore' });
   await sleep(800);
   const browser = await chromium.launch({
@@ -58,6 +58,9 @@ export async function launchGame({ buildDir, disc, port = 8795, query = 'rendere
     args: ['--enable-unsafe-webgpu', '--ignore-gpu-blocklist', '--no-sandbox', '--enable-unsafe-swiftshader'],
   });
   const context = await browser.newContext();
+  // A script to run in the page before its own (e.g. to slow the file backend
+  // down to what a Chromebook reading from Downloads sees).
+  if (init) await context.addInitScript(init);
   const page = await context.newPage();
   const logs = [];
   const faults = [];

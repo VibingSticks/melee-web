@@ -159,10 +159,17 @@ double emscripten_get_now(void);
     double port_t0 = emscripten_get_now();                                    \
     unsigned port_y0 = port_yield_count();                                    \
     double port_ym0 = port_yield_ms()
+/* Only loads that cost something are logged: small ones come every few
+ * frames in a match, and each log line costs time on a slow machine. */
 #define LOAD_TIMER_END(name, size)                                            \
-    port_log("lbfile: %s %u KB in %.1f ms (%u yields, %.1f ms in yield)",     \
-             (name), (unsigned) (size) >> 10, emscripten_get_now() - port_t0, \
-             port_yield_count() - port_y0, port_yield_ms() - port_ym0)
+    do {                                                                      \
+        double port_ms = emscripten_get_now() - port_t0;                      \
+        if (port_ms >= 5.0 || (unsigned) (size) >= 256u * 1024u) {            \
+            port_log("lbfile: %s %u KB in %.1f ms (%u yields, %.1f ms in yield)", \
+                     (name), (unsigned) (size) >> 10, port_ms,                \
+                     port_yield_count() - port_y0, port_yield_ms() - port_ym0); \
+        }                                                                     \
+    } while (0)
 #else
 #define LOAD_TIMER_BEGIN() ((void) 0)
 #define LOAD_TIMER_END(name, size) ((void) 0)

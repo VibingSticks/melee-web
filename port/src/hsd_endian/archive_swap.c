@@ -552,9 +552,17 @@ port_archive_keep* port_archive_swap_roots(HSD_Archive* ar, uint32_t* reloc_set,
         free(reloc_set);
     }
     /* This runs synchronously inside whatever frame asked for the archive, so
-     * a large one is a visible pause rather than a slow average. */
-    port_log("hsd_endian: converted %s (%u roots, %u bytes) in %.1f ms", name, (unsigned) ar->header.nb_public,
-             (unsigned) ar->header.data_size, PORT_NOW_MS() - t0);
+     * a large one is a visible pause rather than a slow average. Only those
+     * are logged: a match converts a small animation archive every few
+     * frames, and logging each one cost a few percent of a slow machine's CPU
+     * (the page mirrors the console into its crash-report buffer). */
+    {
+        double ms = PORT_NOW_MS() - t0;
+        if (ms >= 1.0 || ar->header.data_size >= 256u * 1024u) {
+            port_log("hsd_endian: converted %s (%u roots, %u bytes) in %.1f ms", name,
+                     (unsigned) ar->header.nb_public, (unsigned) ar->header.data_size, ms);
+        }
+    }
     return keep;
 }
 

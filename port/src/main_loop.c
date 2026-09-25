@@ -8,6 +8,8 @@
  *     fill the pad queue) and starts the next Aurora frame.
  *   - port_yield(): called from other busy-waits (disc loads).
  */
+#include <stdbool.h>
+#include <aurora/gfx.h>
 #include <aurora/aurora.h>
 #include <aurora/event.h>
 #include <aurora/main.h>
@@ -206,6 +208,19 @@ static void prof_report(unsigned frame)
              frame, fps, fps > 0.0 ? 1000.0 / fps : 0.0, g_prof.game / n, g_prof.present / n, g_prof.events / n,
              g_prof.pace / n, g_prof.browser / n, g_prof.dvd / n, g_prof.alarm / n, g_prof.vi / n, g_prof.audio / n,
              g_prof.begin / n, g_prof.worst);
+    {
+        /* What the last frame asked of the GPU: on a slow machine "present"
+         * scales with the draw count (each draw is several WebGPU calls, and
+         * each call crosses from wasm into JavaScript). */
+        const AuroraStats* st = aurora_get_stats();
+        if (st != NULL) {
+            port_log("gpu: %u draws (%u merged), %u KB verts, %u KB indices, %u KB uniforms, %u KB storage, "
+                     "%u KB texture uploads, %u pipelines created",
+                     st->drawCallCount, st->mergedDrawCallCount, st->lastVertSize / 1024, st->lastIndexSize / 1024,
+                     st->lastUniformSize / 1024, st->lastStorageSize / 1024, st->lastTextureUploadSize / 1024,
+                     st->createdPipelines);
+        }
+    }
     memset(&g_prof, 0, sizeof(g_prof));
     g_prof.window_start = now;
 }

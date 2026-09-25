@@ -1299,6 +1299,10 @@ bool ftColl_80077C60(Item* item, HitCapsule* hit, Fighter* fp,
 #ifdef TARGET_PC
                         port_log("attack power over 500 from item kind %d (state %d, hitbox damage %f, owner %p)",
                                  (int) item->kind, (int) item->msid, (double) hit->damage, (void*) item->owner);
+                        port_log("  raw %g thrown=%d vel=(%g,%g,%g) victim kind=%d ms=%d holding=%d ratio=%g",
+                                 (double) raw_dmg, (int) item->xDC8_word.flags.x14, item->x40_vel.x,
+                                 item->x40_vel.y, item->x40_vel.z, (int) fp->kind, (int) fp->motion_id,
+                                 fp->victim_gobj != NULL, (double) fp->dmg.x182c_behavior);
 #endif
                         HSD_ASSERTREPORT(0xB7, 0,
                                          "attack power over 500!! %f\n",

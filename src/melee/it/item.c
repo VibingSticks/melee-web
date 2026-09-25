@@ -1369,17 +1369,47 @@ static bool Item_802696CC(HSD_GObj* gobj)
     return false;
 }
 
+#ifdef TARGET_PC
+#include <math.h>
+static void port_item_finite(Item* ip, const char* where)
+{
+    static int logged;
+    extern void port_log(const char* fmt, ...);
+    /* Thrown-item damage adds the item's speed (it_8026B1D4); a speed past
+     * ~1e19 overflows it to infinity. Flag anything absurd early. */
+    if (logged < 6 &&
+        !(fabsf(ip->x40_vel.x) < 1e5f && fabsf(ip->x40_vel.y) < 1e5f && fabsf(ip->x40_vel.z) < 1e5f &&
+          fabsf(ip->pos.x) < 1e6f && fabsf(ip->pos.y) < 1e6f && fabsf(ip->x70_nudge.x) < 1e5f &&
+          fabsf(ip->x70_nudge.y) < 1e5f))
+    {
+        logged++;
+        port_log("item out of range %s: kind=%d ms=%d air=%d vel=(%g,%g,%g) nudge=(%g,%g) pos=(%g,%g) "
+                 "x58=(%g,%g) x64=(%g,%g) spin=%g reflect=(%p mul %g dmg %g)",
+                 where, (int) ip->kind, (int) ip->msid, (int) ip->ground_or_air, ip->x40_vel.x,
+                 ip->x40_vel.y, ip->x40_vel.z, ip->x70_nudge.x, ip->x70_nudge.y, ip->pos.x,
+                 ip->pos.y, ip->x58_vec_unk.x, ip->x58_vec_unk.y, ip->x64_vec_unk2.x,
+                 ip->x64_vec_unk2.y, ip->xD3C_spinSpeed, (void*) ip->xC64_reflectGObj, ip->xC70, ip->xC6C);
+    }
+}
+#endif
+
 void Item_802697D4(HSD_GObj* gobj)
 {
     Vec3 sp1C;
     u8 _[12];
 
     Item* item_data = GET_ITEM(gobj);
+#ifdef TARGET_PC
+    port_item_finite(item_data, "before phys");
+#endif
     if (item_data->xDC8_word.flags.x9 == 0 &&
         item_data->physics_updated != NULL)
     {
         item_data->physics_updated(gobj);
     }
+#ifdef TARGET_PC
+    port_item_finite(item_data, "after phys");
+#endif
     if (item_data->xDC8_word.flags.x13 == 0) {
         if (item_data->xDC8_word.flags.x9 == 0) {
             PSVECAdd(&item_data->x40_vel, &item_data->x70_nudge, &sp1C);
@@ -1414,6 +1444,9 @@ void Item_802697D4(HSD_GObj* gobj)
         }
     }
     PSVECAdd(&item_data->pos, &item_data->x64_vec_unk2, &item_data->pos);
+#ifdef TARGET_PC
+    port_item_finite(item_data, "after move");
+#endif
     it_8027346C(gobj);
     it_802714C0(gobj);
 }

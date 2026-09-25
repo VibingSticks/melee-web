@@ -347,6 +347,15 @@ void it_802799E4(Item_GObj* item_gobj)
         }
 
         opcode = cmd->u->unk0.opcode;
+#ifdef TARGET_PC
+        if (opcode >= 26) {
+            extern void port_log(const char* fmt, ...);
+            port_log("itscript bad opcode %u kind=%d ms=%d u=%p word=%08x", opcode, (int) item->kind,
+                     (int) item->msid, (void*) cmd->u, *(u32*) cmd->u);
+            cmd->u = NULL;
+            return;
+        }
+#endif
         if (Command_Execute(cmd, opcode) == 0) {
             opcode -= 10;
             it_803F22A8[opcode](item_gobj, cmd);

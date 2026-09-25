@@ -292,6 +292,11 @@ Article:
   xC_itemStates: { ptr_array: ItemStateDesc, object_run: true }
   x14_dynamics:  { ptr: port_ItemDynamics }
 ItemStateDesc:
+  # Venom's Arwing laser rows (GrVe.usd itemdata) hold unrelocated offsets in
+  # x4 and x8 that nothing reads. Declared as pointers, they made the row run
+  # stop at row 0, so the laser's scripts stayed big-endian and the script
+  # interpreter jumped through it_803F22A8 with opcode 44.
+  x4_matanim_joint: { word: { ptr: HSD_MatAnimJoint } }
   # a shape animation for most kinds; the Fire Flower's rows carry an integer
   # (0x3908, then -1) here instead
   x8_parameters: { word: { ptr: HSD_ShapeAnimJoint } }

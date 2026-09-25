@@ -261,7 +261,7 @@ it_804D6D20_t:
       port_itRShell_Attrs, ItLGunAttr, itUnkAttributes, { x4_specialAttributes: port_itFoodsAttrs, x10_modelDesc: port_ItemModelDescJoints }, port_itMsBomb_Attrs,
       itFlipper_DatAttrs, itSScopeAttributes, port_StarRodAttributes, itLipstickAttributes,
       itHarisen_DatAttrs, FFlowerAttr, port_KinokoAttrs, port_KinokoAttrs, port_itHammerData,
-      { x4_specialAttributes: itWstarAttributes, x10_modelDesc: port_ItemModelDescAnims }, ~, ~, ~, ~, itMBallAttributes, ItLGunRayAttr, port_StarRodStarAttrs,
+      { x4_specialAttributes: itWstarAttributes, x10_modelDesc: port_ItemModelDescAnims }, ~, ~, ~, ~, itPokemonSpawn_DatAttrs, ItLGunRayAttr, port_StarRodStarAttrs,
       itLipstickSporeAttributes, ScopeBeamAttrs, ItLGunBeamAttr, itHammerheadAttributes,
       port_F32Run, itEvYoshiEgg_DatAttrs ]
   x8:

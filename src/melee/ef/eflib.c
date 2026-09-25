@@ -1420,12 +1420,24 @@ void efLib_SetTevKonstColor(HSD_JObj* jobj, s32 count, u32 konst, u32 tev0)
 
 /* 458F60 */ EF_ParamEntry efLib_ParamTable[0x8];
 
+// The GameCube reaches efLib_ParamTable as efLib_AnimQueue + 0x10, the array
+// right after it. Nothing places the two together in the web build (there the
+// slot after efLib_AnimQueue is efAsync_AllocData, whose free list those
+// writes broke), so name the table directly.
+#ifdef TARGET_PC
+#define EF_PARAM_BASE efLib_ParamTable
+#define EF_PARAM_ENTRY(idx) efLib_ParamTable[idx]
+#else
+#define EF_PARAM_BASE (efLib_AnimQueue + 0x10)
+#define EF_PARAM_ENTRY(idx) efLib_AnimQueue[(idx) + 0x10]
+#endif
+
 void efLib_SetParamAlpha(HSD_GObj* gobj, u8 alpha)
 {
     s32 idx;
 
     // WHY
-    EF_ParamEntry* base = efLib_AnimQueue + 0x10;
+    EF_ParamEntry* base = EF_PARAM_BASE;
 
     for (idx = 0; idx < 8; idx++) {
         if (base[idx].gobj == gobj) {
@@ -1441,8 +1453,8 @@ void efLib_SetParamAlpha(HSD_GObj* gobj, u8 alpha)
 
 found:
     // WHY
-    efLib_AnimQueue[idx + 0x10].gobj = gobj;
-    efLib_AnimQueue[idx + 0x10].alpha = alpha;
+    EF_PARAM_ENTRY(idx).gobj = gobj;
+    EF_PARAM_ENTRY(idx).alpha = alpha;
 }
 
 void efLib_SetParamGfxId(HSD_GObj* gobj, s32 gfx_id)
@@ -1450,7 +1462,7 @@ void efLib_SetParamGfxId(HSD_GObj* gobj, s32 gfx_id)
     s32 idx;
 
     // WHY
-    EF_ParamEntry* base = efLib_AnimQueue + 0x10;
+    EF_ParamEntry* base = EF_PARAM_BASE;
 
     for (idx = 0; idx < 8; idx++) {
         if (base[idx].gobj == gobj) {
@@ -1466,8 +1478,8 @@ void efLib_SetParamGfxId(HSD_GObj* gobj, s32 gfx_id)
 
 found:
     // WHY
-    efLib_AnimQueue[idx + 0x10].gobj = gobj;
-    efLib_AnimQueue[idx + 0x10].gfx_id = gfx_id;
+    EF_PARAM_ENTRY(idx).gobj = gobj;
+    EF_PARAM_ENTRY(idx).gfx_id = gfx_id;
 }
 
 void efLib_Cb_ApplyStoredAlpha(EF_Effect* effect)

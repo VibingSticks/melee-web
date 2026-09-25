@@ -1030,6 +1030,34 @@ void (*lbl_803BF810[0x03])(HSD_Particle* particle) = { efLib_Cb_ParticleRender,
 // bank 0 refs (0x96, 0x97, 0x98, 0x21B). If matched, attaches an
 // AppSRT transform so the particle inherits transforms from its
 // parent joint.
+#ifdef TARGET_PC
+/* HSD_PSUserFunc's hooks return int; lbl_803BF810 holds efLib_Cb_ParticleRender,
+ * which returns void. The GameCube does not mind; wasm traps an indirect call
+ * whose signature differs ("function signature mismatch" in
+ * psGenerateParticle0, e.g. when a Poke Ball's Pokemon made these particles). */
+static int port_efParticleRenderHook(HSD_Particle* particle)
+{
+    efLib_Cb_ParticleRender(particle);
+    return 0;
+}
+static HSD_PSUserFunc port_efUserFunc = { port_efParticleRenderHook, NULL, NULL };
+
+void efLib_Cb_PtclAppSRTHook(HSD_Generator* gen)
+{
+    if (gen->cmdList == ptclref_804D0E5C[0][0x96]->cmdList) {
+        hsd_8039D1E4(gen, &port_efUserFunc);
+    }
+    if (gen->cmdList == ptclref_804D0E5C[0][0x97]->cmdList) {
+        hsd_8039D1E4(gen, &port_efUserFunc);
+    }
+    if (gen->cmdList == ptclref_804D0E5C[0][0x98]->cmdList) {
+        hsd_8039D1E4(gen, &port_efUserFunc);
+    }
+    if (gen->cmdList == ptclref_804D0E5C[0][0x21B]->cmdList) {
+        hsd_8039D1E4(gen, &port_efUserFunc);
+    }
+}
+#else
 void efLib_Cb_PtclAppSRTHook(HSD_Generator* gen)
 {
     if (gen->cmdList == ptclref_804D0E5C[0][0x96]->cmdList) {
@@ -1045,6 +1073,7 @@ void efLib_Cb_PtclAppSRTHook(HSD_Generator* gen)
         hsd_8039D1E4(gen, lbl_803BF810);
     }
 }
+#endif
 
 void efLib_Cb_SetOffsetY_FromParamY(EF_Effect* effect)
 {

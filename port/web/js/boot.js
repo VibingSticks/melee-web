@@ -24,15 +24,39 @@ function rendererModules() {
 // loadNaga takes either a URL or the bytes themselves.
 const nagaSource = () => (OFFLINE ? OFFLINE.nagaWasm : 'naga/naga.wasm');
 
-// createMelee(config) -> Promise<Module>, from -sMODULARIZE. The offline file
-// has already run the script that defines it.
+// Two builds of the engine differ only in how the game pauses inside its wait
+// loops. JSPI (WebAssembly.Suspending, Chrome 137+) lets the browser suspend
+// wasm itself; the Asyncify build rewrites every function a pause can be
+// reached from, which makes it a third larger and slower. ?engine=asyncify or
+// ?engine=jspi overrides the choice.
+const ENGINE = (() => {
+  const hasJspi = typeof WebAssembly.Suspending === 'function' && typeof WebAssembly.promising === 'function';
+  const want = new URLSearchParams(location.search).get('engine');
+  if (want === 'asyncify') return 'asyncify';
+  return hasJspi ? 'jspi' : 'asyncify';
+})();
+
+// createMelee(config) -> Promise<Module>, from -sMODULARIZE (createMeleeJspi
+// for the JSPI build). The offline file carries both engines as inert text and
+// runs only the one this browser uses.
 function meleeFactory() {
-  if (globalThis.createMelee) return Promise.resolve(globalThis.createMelee);
+  const name = ENGINE === 'jspi' ? 'createMeleeJspi' : 'createMelee';
+  if (globalThis[name]) return Promise.resolve(globalThis[name]);
   return new Promise((resolve, reject) => {
     const script = document.createElement('script');
-    script.src = 'melee.js';
-    script.onload = () => resolve(globalThis.createMelee);
-    script.onerror = () => reject(new Error('melee.js failed to load'));
+    const stashed = document.getElementById(ENGINE === 'jspi' ? 'melee-engine-jspi' : 'melee-engine');
+    if (stashed) {
+      script.textContent = stashed.textContent; // runs synchronously on append
+      stashed.remove();
+      document.body.appendChild(script);
+      if (globalThis[name]) resolve(globalThis[name]);
+      else reject(new Error(`the embedded ${ENGINE} engine did not define ${name}`));
+      return;
+    }
+    const file = ENGINE === 'jspi' ? 'melee-jspi.js' : 'melee.js';
+    script.src = file;
+    script.onload = () => resolve(globalThis[name]);
+    script.onerror = () => reject(new Error(`${file} failed to load`));
     document.body.appendChild(script);
   });
 }
@@ -123,7 +147,7 @@ function crashReport(kind, detail) {
     `when: ${new Date().toISOString()}`,
     `kind: ${kind}`,
     `page: ${location.protocol}//${location.host}${location.pathname}${location.search}`,
-    `renderer: ${$('renderer')?.textContent || '?'}`,
+    `renderer: ${$('renderer')?.textContent || '?'}  engine: ${ENGINE}`,
     `browser: ${navigator.userAgent}`,
     `cores: ${navigator.hardwareConcurrency ?? '?'}  deviceMemoryGB: ${navigator.deviceMemory ?? '?'}  screen: ${screen.width}x${screen.height}`,
     `game: ${stateLine()}`,
@@ -225,6 +249,7 @@ async function selectRenderer() {
 
 const rendererReady = selectRenderer().then((r) => {
   $('renderer').textContent = r === 'webgpu' ? 'Renderer: WebGPU' : 'Renderer: WebGL2 (fallback)';
+  console.log(`[boot] engine: ${ENGINE === 'jspi' ? 'JSPI' : 'Asyncify'}`);
   return r;
 }, (e) => {
   status(String(e.message || e), true);

@@ -62,14 +62,22 @@ if (EMSCRIPTEN)
     target_link_libraries(melee_port PUBLIC aurora::core)
 
     include(cmake/emscripten_link.cmake)
-    add_executable(melee src/main_loop.c)
-    target_include_directories(melee PRIVATE src)
-    target_link_libraries(melee PRIVATE melee_game melee_port
-        aurora::core aurora::os aurora::gx aurora::gd aurora::pad aurora::si aurora::ms
-        aurora::mtx aurora::vi aurora::card aurora::main)
-    target_link_options(melee PRIVATE ${PORT_LINK_FLAGS})
+    # One engine per way of suspending at a yield (see cmake/emscripten_link.cmake).
+    foreach (engine IN ITEMS melee melee_jspi)
+        add_executable(${engine} src/main_loop.c)
+        target_include_directories(${engine} PRIVATE src)
+        target_link_libraries(${engine} PRIVATE melee_game melee_port
+            aurora::core aurora::os aurora::gx aurora::gd aurora::pad aurora::si aurora::ms
+            aurora::mtx aurora::vi aurora::card aurora::main)
+        set_property(TARGET ${engine} APPEND PROPERTY LINK_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/web/js/imports.js)
+    endforeach ()
+    target_link_options(melee PRIVATE ${PORT_LINK_FLAGS} ${PORT_LINK_FLAGS_ASYNCIFY}
+        -Wl,-Map,${CMAKE_BINARY_DIR}/melee.map)
     set_target_properties(melee PROPERTIES OUTPUT_NAME melee SUFFIX ".js")
-    set_property(TARGET melee APPEND PROPERTY LINK_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/web/js/imports.js)
+    target_link_options(melee_jspi PRIVATE ${PORT_LINK_FLAGS} ${PORT_LINK_FLAGS_JSPI}
+        -Wl,-Map,${CMAKE_BINARY_DIR}/melee-jspi.map)
+    set_target_properties(melee_jspi PROPERTIES OUTPUT_NAME melee-jspi SUFFIX ".js")
+    add_dependencies(melee melee_jspi)   # `ninja melee` builds both engines
 
     # Hosted page next to melee.js. index.html carries a build id so a crash
     # report from someone else's machine can be matched to a commit. It is

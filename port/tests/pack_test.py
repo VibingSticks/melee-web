@@ -52,6 +52,7 @@ def make_build(tmp: pathlib.Path, **overrides) -> pathlib.Path:
     files = {
         "index.html": SHELL,
         "melee.js": MELEE_JS,
+        "melee-jspi.js": MELEE_JS.replace("createMelee", "createMeleeJspi"),
         "boot.js": BOOT,
         "disc_source.js": DISC_SOURCE,
         "gpu-gl2.js": GPU_GL2,
@@ -88,11 +89,15 @@ def test_pack():
         assert "__MELEE_OFFLINE__" in html
         assert html.index("__MELEE_OFFLINE__ =") < html.index("// ---- boot.js ----")
         assert "nagaWasm: __b64(" in html
-        # The factory is a classic script, so it runs before the module.
-        assert html.index("var createMelee") < html.index('<script type="module">')
-        # Exactly two closers -- the classic block and the module block -- so the
-        # literal </script> inside the JS was defused rather than ending one early.
-        assert html.count("</script>") == 2, html.count("</script>")
+        # Both engines ride along as inert text ahead of the module; boot.js
+        # runs the one the browser supports.
+        assert html.index('id="melee-engine"') < html.index('<script type="module">')
+        assert html.index('id="melee-engine-jspi"') < html.index('<script type="module">')
+        assert "var createMeleeJspi" in html
+        # Exactly three closers -- the two engine blocks and the module block --
+        # so the literal </script> inside the JS was defused rather than ending
+        # one early.
+        assert html.count("</script>") == 3, html.count("</script>")
         assert "<\\/script" in html
         # The disc is still the player's to supply.
         assert "GALE01" not in html

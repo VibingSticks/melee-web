@@ -148,9 +148,13 @@ CODE_REFS = [
 ]
 
 
-def verify(html: str, runtime_js: str = "") -> list[str]:
+def verify(html: str, runtime_js=()) -> list[str]:
     problems = []
-    ours = html.replace(runtime_js, "\n", 1) if runtime_js else html
+    if isinstance(runtime_js, str):
+        runtime_js = [runtime_js] if runtime_js else []
+    ours = html
+    for js in runtime_js:
+        ours = ours.replace(js, "\n", 1)
     for text, checks in ((html, STRUCTURAL_REFS), (ours, CODE_REFS)):
         for what, pattern in checks:
             for m in pattern.finditer(text):
@@ -161,19 +165,27 @@ def verify(html: str, runtime_js: str = "") -> list[str]:
     return problems
 
 
-def pack(build: pathlib.Path) -> tuple[str, str]:
+def pack(build: pathlib.Path) -> tuple[str, list[str]]:
     """Returns the packed page and the embedded Emscripten runtime text."""
     shell = read(build / "index.html")
     shell = BUILD_META.sub(lambda m: m.group(1) + build_id() + m.group(2), shell, count=1)
-    melee_js = read(build / "melee.js")
-    if "createMelee" not in melee_js:
-        raise PackError("melee.js does not define createMelee: build with -sMODULARIZE")
-    # A runtime that would fetch its wasm names it as a JS string literal
-    # ('melee.wasm', for locateFile). The bare text also appears *inside* the
-    # embedded binary since release builds keep the name section, whose
-    # module-name entry is the file name -- so only the quoted form counts.
-    if re.search(r"""['"]melee\.wasm['"]""", melee_js):
-        raise PackError("melee.js still loads melee.wasm by name: build with -sSINGLE_FILE")
+    # Both engines (see cmake/emscripten_link.cmake); boot.js runs the one the
+    # browser supports.
+    engines = {}
+    for file, factory in (("melee.js", "createMelee"), ("melee-jspi.js", "createMeleeJspi")):
+        js = read(build / file)
+        if factory not in js:
+            raise PackError(f"{file} does not define {factory}: build with -sMODULARIZE")
+        # A runtime that would fetch its wasm names it as a JS string literal
+        # ('melee.wasm', for locateFile). The bare text also appears *inside*
+        # the embedded binary since release builds keep the name section,
+        # whose module-name entry is the file name -- so only the quoted form
+        # counts.
+        wasm = file.replace(".js", ".wasm")
+        if re.search(r"""['"]""" + re.escape(wasm) + r"""['"]""", js):
+            raise PackError(f"{file} still loads {wasm} by name: build with -sSINGLE_FILE")
+        engines[file] = js
+    melee_js = engines["melee.js"]
 
     naga_wasm = build / "naga" / "naga.wasm"
     if not naga_wasm.exists():
@@ -186,9 +198,13 @@ def pack(build: pathlib.Path) -> tuple[str, str]:
     if n != 1:
         raise PackError(f"index.html: expected exactly one boot.js script tag, found {n}")
 
+    # The engines go in as inert text: parsing the unused one's embedded wasm
+    # would cost a slow machine seconds and memory for nothing.
     blocks = (
-        "<script>\n"
-        + close_script_safe(melee_js)
+        "<script type=\"text/plain\" id=\"melee-engine\">\n"
+        + close_script_safe(engines["melee.js"])
+        + "\n</script>\n<script type=\"text/plain\" id=\"melee-engine-jspi\">\n"
+        + close_script_safe(engines["melee-jspi.js"])
         + "\n</script>\n<script type=\"module\">\n"
         + close_script_safe(module)
         + "\n</script>\n"
@@ -196,7 +212,7 @@ def pack(build: pathlib.Path) -> tuple[str, str]:
     marker = "</body>"
     if marker not in shell:
         raise PackError("index.html has no </body> to insert before")
-    return shell.replace(marker, blocks + marker, 1), close_script_safe(melee_js)
+    return shell.replace(marker, blocks + marker, 1), [close_script_safe(js) for js in engines.values()]
 
 
 def main() -> int:

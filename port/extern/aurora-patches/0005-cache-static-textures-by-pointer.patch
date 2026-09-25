@@ -1,0 +1,128 @@
+--- a/lib/gx/texture.cpp
++++ b/lib/gx/texture.cpp
+@@ -138,8 +138,56 @@
+ 
+ constexpr uint32_t div_ceil(uint32_t value, uint32_t divisor) noexcept { return (value + divisor - 1) / divisor; }
+ 
++// Pointer cache. Some games (HAL's HSD, Melee) initialise a fresh GXTexObj for
++// every draw, so every draw gets a new texObjId, the object cache never hits,
++// and the whole texture was hashed again on each draw of each frame. Static
++// textures are keyed here by their data pointer and layout instead; a hit is
++// confirmed with a hash of a few sampled bytes (and the whole palette), which
++// catches memory reused for a different image after a scene change.
++struct PointerKey {
++  const void* data;
++  const void* tlut;
++  u32 width;
++  u32 height;
++  u32 format;
++  u32 mips;
++  u32 tlutFormat;
++  u32 tlutEntries;
++  bool operator==(const PointerKey&) const = default;
++  template <typename H>
++  friend H AbslHashValue(H h, const PointerKey& k) {
++    return H::combine(std::move(h), k.data, k.tlut, k.width, k.height, k.format, k.mips, k.tlutFormat,
++                      k.tlutEntries);
++  }
++};
++struct PointerEntry {
++  gfx::TextureHandle handle;
++  uint64_t sample;
++  uint64_t lastUsedFrame;
++};
++absl::flat_hash_map<PointerKey, PointerEntry> s_pointerCache;
++constexpr uint64_t PointerCacheMaxIdleFrames = 600;
++
++uint64_t sample_texture(const void* data, size_t bytes, const void* tlut, size_t tlutBytes) {
++  const auto* p = static_cast<const u8*>(data);
++  constexpr size_t Chunk = 256;
++  uint64_t h;
++  if (bytes <= 3 * Chunk) {
++    h = XXH3_64bits(p, bytes);
++  } else {
++    h = XXH3_64bits(p, Chunk);
++    h = XXH3_64bits_withSeed(p + (bytes / 2 & ~size_t{31}), Chunk, h);
++    h = XXH3_64bits_withSeed(p + bytes - Chunk, Chunk, h);
++  }
++  if (tlut != nullptr && tlutBytes != 0) {
++    h = XXH3_64bits_withSeed(tlut, tlutBytes, h);
++  }
++  return h;
++}
++
+ void do_clear_static_texture_cache() noexcept {
+   s_textureObjectCaches.clear();
++  s_pointerCache.clear();
+   s_replacementUsers.clear();
+   for (auto& [_, cache] : s_tlutObjectCaches) {
+     cache.staticTextureUsers.clear();
+@@ -606,6 +654,17 @@
+     }
+   }
+ 
++  const PointerKey pointerKey{obj.data, nullptr, obj.width(), obj.height(), static_cast<u32>(obj.format()),
++                              static_cast<u32>(obj.mip_count()), 0, 0};
++  const uint64_t pointerSample = sample_texture(
++      obj.data, texture_source_size(obj.format(), obj.width(), obj.height(), obj.mip_count()), nullptr, 0);
++  if (const auto it = s_pointerCache.find(pointerKey);
++      it != s_pointerCache.end() && it->second.handle && it->second.sample == pointerSample) {
++    it->second.lastUsedFrame = s_frameCount;
++    ++s_stats.objectHits;
++    return it->second.handle;
++  }
++
+   gfx::TextureHandle handle;
+   uint64_t replacementId = 0;
+   std::optional<TextureKeys> keys;
+@@ -638,6 +697,7 @@
+   }
+   if (!obj.no_cache()) {
+     store_cached_texture(obj, handle, 0, 0, replacementId);
++    s_pointerCache[pointerKey] = {handle, pointerSample, s_frameCount};
+   }
+   return handle;
+ }
+@@ -660,6 +720,24 @@
+     }
+   }
+ 
++  const PointerKey pointerKey{obj.data,
++                              tlut.data,
++                              obj.width(),
++                              obj.height(),
++                              static_cast<u32>(obj.format()),
++                              static_cast<u32>(obj.mip_count()),
++                              static_cast<u32>(tlut.format),
++                              static_cast<u32>(tlut.numEntries)};
++  const uint64_t pointerSample =
++      sample_texture(obj.data, texture_source_size(obj.format(), obj.width(), obj.height(), obj.mip_count()),
++                     tlut.data, tlut_source_size(tlut.numEntries));
++  if (const auto it = s_pointerCache.find(pointerKey);
++      it != s_pointerCache.end() && it->second.handle && it->second.sample == pointerSample) {
++    it->second.lastUsedFrame = s_frameCount;
++    ++s_stats.objectHits;
++    return it->second.handle;
++  }
++
+   gfx::TextureHandle handle;
+   uint64_t replacementId = 0;
+   std::optional<TextureKeys> keys;
+@@ -694,11 +772,17 @@
+   }
+   if (!obj.no_cache() && !tlut.no_cache()) {
+     store_cached_texture(obj, handle, tlut.tlutObjId, tlut.tlutDataVersion, replacementId);
++    s_pointerCache[pointerKey] = {handle, pointerSample, s_frameCount};
+   }
+   return handle;
+ }
+ 
+ void end_frame() noexcept {
++  if (s_frameCount % 120 == 0) {
++    absl::erase_if(s_pointerCache, [](const auto& item) {
++      return s_frameCount - item.second.lastUsedFrame > PointerCacheMaxIdleFrames;
++    });
++  }
+   const auto streamingStats = gfx::texture_replacement::process_streaming();
+   s_stats.pendingLoads = streamingStats.pendingLoads;
+   s_stats.publishes = streamingStats.publishes;

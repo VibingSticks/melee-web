@@ -24,6 +24,7 @@ void port_disc_read(uint32_t off, uint32_t len, void* dst, port_disc_read_cb cb,
 }
 
 uint32_t port_disc_size(void) { return sizeof disc; }
+void port_disc_prefetch(uint32_t offset, uint32_t length) { (void) offset; (void) length; }
 
 static void deliver(void)
 {

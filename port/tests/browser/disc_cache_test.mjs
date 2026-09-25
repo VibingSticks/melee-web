@@ -75,6 +75,20 @@ const calls = sliceCalls - before;
 console.log(`64 sequential 16 KB reads over 1 MiB -> ${calls} file call(s)`);
 check(calls <= 2, `expected coalescing, took ${calls} calls`);
 
+// A prefetched file is one slice, and reads of it -- even ones that start
+// while the prefetch is still in flight -- add none.
+{
+  const base = 100 * 1024 * 1024 + 12345; // not read by the checks above
+  const len = 3 * 1024 * 1024;
+  const s0 = sliceCalls;
+  src.prefetch(base, len);
+  await Promise.all([expect(base, 16384, 'during prefetch A'), expect(base + len - 100, 100, 'during prefetch B')]);
+  for (let i = 0; i < 40; i++) await expect(base + i * 65536, 65536, `after prefetch ${i}`);
+  const used = sliceCalls - s0;
+  console.log(`prefetch of 3 MB + 42 reads of it -> ${used} file call(s)`);
+  check(used === 1, `prefetch should cost one slice, took ${used}`);
+}
+
 console.log(`cachedBytes=${(src.cachedBytes / 1048576).toFixed(1)} MiB (cap 64), slices=${sliceCalls}`);
 check(src.cachedBytes <= 64 * 1024 * 1024, `cache exceeded its cap: ${src.cachedBytes}`);
 console.log(fail ? `\n${fail} FAILURES` : '\nall disc cache checks passed');

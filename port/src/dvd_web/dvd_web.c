@@ -154,6 +154,8 @@ s32 DVDConvertPathToEntrynum(const char* path)
     return e;
 }
 
+#define PORT_PREFETCH_MAX (4u << 20)
+
 BOOL DVDFastOpen(s32 entry, DVDFileInfo* fi)
 {
     if (g_fst == NULL || entry < 0 || entry >= port_fst_entry_count(g_fst) || port_fst_is_dir(g_fst, entry)) {
@@ -163,6 +165,15 @@ BOOL DVDFastOpen(s32 entry, DVDFileInfo* fi)
     fi->startAddr = port_fst_file_offset(g_fst, entry);
     fi->length = port_fst_file_length(g_fst, entry);
     fi->cb.state = DVD_STATE_END;
+    /* The game reads a file as a stream of small requests, and on a slow file
+     * backend (a Chromebook reading the image from Downloads or Drive) each
+     * cache miss costs a round trip that can take a second. Opening a file
+     * of a few MB almost always means reading all of it next, so the page is
+     * asked to fetch it in one go, in the background. Big streamed files
+     * (movies, music) are left to be read as they go. */
+    if (fi->length != 0 && fi->length <= PORT_PREFETCH_MAX) {
+        port_disc_prefetch(fi->startAddr, fi->length);
+    }
     return TRUE;
 }
 

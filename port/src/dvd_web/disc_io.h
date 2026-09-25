@@ -13,5 +13,8 @@ typedef void (*port_disc_read_cb)(void* user, int status);
 
 void port_disc_read(uint32_t offset, uint32_t length, void* dst, port_disc_read_cb cb, void* user);
 uint32_t port_disc_size(void);
+/* A hint that [offset, offset + length) will be read soon: the page may fetch
+ * it in the background. Nothing waits on it and nothing is delivered. */
+void port_disc_prefetch(uint32_t offset, uint32_t length);
 
 #endif

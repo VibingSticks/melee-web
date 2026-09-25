@@ -26,11 +26,15 @@ export class DiscSource {
      * order, which is what makes the LRU below a re-insert and a shift. */
     this.blocks = new Map();
     this.cachedBytes = 0;
-    this.stats = { calls: 0, hits: 0, misses: 0, bytesRead: 0 };
+    /** @type {Map<number, Promise<Uint8Array|null>>} blocks being fetched */
+    this.inflight = new Map();
+    this.stats = { calls: 0, hits: 0, misses: 0, bytesRead: 0, prefetches: 0 };
   }
 
   /** Fetch blocks [first, last] that are missing, coalescing a contiguous run
    * of misses into a single slice so a cold sequential read costs one call.
+   * A block another read or a prefetch is already fetching is waited for, not
+   * fetched again.
    *
    * Returns the bytes for every block in the range. The caller must assemble
    * its result from these references and NOT from the cache: `await` gives
@@ -40,31 +44,72 @@ export class DiscSource {
    * references keeps the data alive whatever the cache does with it. */
   async #fill(first, last) {
     const parts = new Map();
-    for (let b = first; b <= last; b++) {
-      if (this.blocks.has(b)) parts.set(b, this.#touch(b));
-    }
+    const waits = [];
     let run = -1;
     for (let b = first; b <= last + 1; b++) {
-      const missing = b <= last && !parts.has(b);
+      let missing = false;
+      if (b <= last) {
+        if (this.blocks.has(b)) {
+          parts.set(b, this.#touch(b));
+        } else if (this.inflight.has(b)) {
+          waits.push(this.inflight.get(b).then((bytes) => { if (bytes) parts.set(b, bytes); }));
+        } else {
+          missing = true;
+        }
+      }
       if (missing && run < 0) {
         run = b;
       } else if (!missing && run >= 0) {
-        const start = run * BLOCK_SIZE;
-        const end = Math.min(b * BLOCK_SIZE, this.size);
-        const buf = new Uint8Array(await this.file.slice(start, end).arrayBuffer());
-        this.stats.misses += b - run;
-        this.stats.bytesRead += buf.length;
-        for (let i = run; i < b; i++) {
-          const off = (i - run) * BLOCK_SIZE;
-          if (off >= buf.length) break;
-          const bytes = buf.subarray(off, Math.min(off + BLOCK_SIZE, buf.length));
-          parts.set(i, bytes);
-          this.#store(i, bytes);
-        }
+        waits.push(this.#fetchRun(run, b - 1, parts));
         run = -1;
       }
     }
+    await Promise.all(waits);
     return parts;
+  }
+
+  /** One slice for blocks [from, to]; each block is registered as in flight
+   * until it lands in the cache. */
+  #fetchRun(from, to, parts) {
+    const start = from * BLOCK_SIZE;
+    const end = Math.min((to + 1) * BLOCK_SIZE, this.size);
+    const whole = this.file.slice(start, end).arrayBuffer().then((ab) => new Uint8Array(ab));
+    const blockOf = (buf, i) => {
+      const off = (i - from) * BLOCK_SIZE;
+      return off < buf.length ? buf.subarray(off, Math.min(off + BLOCK_SIZE, buf.length)) : null;
+    };
+    for (let i = from; i <= to; i++) {
+      this.inflight.set(i, whole.then((buf) => blockOf(buf, i)));
+    }
+    return whole.then(
+      (buf) => {
+        this.stats.misses += to - from + 1;
+        this.stats.bytesRead += buf.length;
+        for (let i = from; i <= to; i++) {
+          this.inflight.delete(i);
+          const bytes = blockOf(buf, i);
+          if (bytes === null) continue;
+          parts.set(i, bytes);
+          this.#store(i, bytes);
+        }
+      },
+      (err) => {
+        for (let i = from; i <= to; i++) this.inflight.delete(i);
+        throw err;
+      });
+  }
+
+  /** Background fetch of a range the game is about to read (a file it just
+   * opened; see port_disc_prefetch). Nothing waits on it: a later read of the
+   * range finds the blocks cached or in flight. */
+  prefetch(offset, length) {
+    if (length <= 0 || offset >= this.size) return;
+    const end = Math.min(offset + length, this.size);
+    const first = offset >>> BLOCK_SHIFT;
+    const last = (end - 1) >>> BLOCK_SHIFT;
+    if ((last - first + 1) * BLOCK_SIZE > CACHE_BYTES / 2) return;
+    this.stats.prefetches++;
+    this.#fill(first, last).catch(() => {}); // a failure is the real read's to report
   }
 
   #store(index, bytes) {

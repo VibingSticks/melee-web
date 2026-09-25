@@ -2,6 +2,13 @@
 // Attached with `--js-library`. Module.discSource is set by boot.js before the
 // runtime starts.
 mergeInto(LibraryManager.library, {
+  port_disc_prefetch__sig: 'vii',
+  port_disc_prefetch: function (offset, length) {
+    // A hint (see disc_io.h); failures are the next real read's to report.
+    if (Module.discSource && Module.discSource.prefetch) {
+      Module.discSource.prefetch(offset >>> 0, length >>> 0);
+    }
+  },
   port_disc_read__sig: 'viiiii',
   port_disc_read: function (offset, length, dst, cb, user) {
     // Every path out of here must call cb exactly once. If it does not, the

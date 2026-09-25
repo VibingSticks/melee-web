@@ -590,6 +590,14 @@ static int walk_field(port_walk_ctx* c, const port_field* f, uint8_t* obj)
     case F_PTR: {
         uint8_t* q;
         if (f->type == NULL) {
+            /* An untyped pointer (void*, UNK_T) on a slot the archive does not
+             * relocate is not a pointer: the headers declare fields nobody has
+             * identified that way. Link's dash-grab frame numbers (ftLk_DatAttrs
+             * x94/x9C/xA0) stayed big-endian as UNK_T, 7 read as 117440512, and
+             * the hookshot was never thrown. Convert the word like any scalar. */
+            if (inside(c, p, 4) && !in_reloc(c, (uint32_t) (p - c->base)) && claim(c, p, 4)) {
+                swap32(p);
+            }
             return 0;
         }
         int r = resolve_ptr(c, p, f->type->size, &q);

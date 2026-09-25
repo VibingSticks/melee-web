@@ -31,7 +31,11 @@ HSD_CameraDescFrustum:
 HSD_CameraDescPerspective:
   up_vector: { ptr_array: Vec3, len_const: 1 }
 HSD_AObjDesc:
-  obj_id: { word: true }     # an object id, or a relocated pointer, depending on the animation
+  # An object id, or a relocated pointer to the joint HSD_AObjLoadDesc loads
+  # (HSD_JObjLoadJoint) when no object has that id. Fountain of Dreams' light
+  # animations point at one; left big-endian, loading the stage crashed in
+  # MObjLoad.
+  obj_id: { word: { ptr: HSD_Joint } }
 HSD_TexAnim:
   imagetbl: { ptr_array: "HSD_ImageDesc*", len_field: n_imagetbl }
   tluttbl: { ptr_array: "HSD_TlutDesc*", len_field: n_tluttbl }

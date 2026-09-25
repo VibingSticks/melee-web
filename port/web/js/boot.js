@@ -67,6 +67,19 @@ const logEl = $('log');
 const picker = $('disc');
 const canvas = $('canvas');
 
+// Tab hides the toolbar and log so the game gets the whole window height;
+// only once the game runs, so the disc picker can't be hidden away first.
+let gameRunning = false;
+function setUiHidden(hidden) {
+  document.body.classList.toggle('ui-hidden', hidden);
+}
+addEventListener('keydown', (e) => {
+  if (e.key !== 'Tab' || !gameRunning || e.ctrlKey || e.altKey || e.metaKey) return;
+  e.preventDefault();
+  e.stopImmediatePropagation();
+  if (!e.repeat) setUiHidden(!document.body.classList.contains('ui-hidden'));
+}, true);
+
 function status(text, isError = false) {
   statusEl.textContent = text;
   statusEl.classList.toggle('error', isError);
@@ -170,6 +183,7 @@ function showCrash(text, headline) {
   try { localStorage.setItem(CRASH_KEY, text); } catch { /* still shown on the page */ }
   const box = $('crash');
   if (box) { box.hidden = false; box.dataset.report = text; }
+  setUiHidden(false);
   status(headline, true);
 }
 
@@ -322,7 +336,8 @@ async function startGame(disc, fst) {
   if (rc !== 0) {
     throw new Error('The disc file table could not be parsed.');
   }
-  status('Running');
+  status('Running - press Tab to hide this bar');
+  gameRunning = true;
   canvas.focus();
   Module.callMain([]);
 }

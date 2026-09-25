@@ -123,6 +123,14 @@ port_FtLoadCommonData:
   # "scalar descriptor on a pointer slot" and which ended in a wasm trap once
   # the game used what had been scribbled on.
   float5_rows:     { ptr_array: port_Float5, len_const: 6 }
+  # ftCo_ItemThrow.c indexes this by motion id - ftCo_MS_LightThrowF: 26 rows,
+  # ending where the next table starts. Never converted before, so every item
+  # throw read its speed as ~2.7e23 (big-endian 2.6); the thrown item crossed
+  # the stage in one frame and a fighter in its path took infinite damage.
+  item_throws:     { ptr_array: port_ItemThrowRow, len_const: 26 }
+  # Also never converted: the hit-shake offsets played during hitlag
+  # (ftCo_80090690; counts read as 0, offsets as denormals or huge numbers).
+  hit_shake:       { ptr_array: port_HitShakeRow, len_const: 3 }
   per_kind_floats: { ptr_array: f32, len_const: 33 }
   parts_tables:    { ptr_array: "FighterPartsTable*", len_const: 33 }
   virtual_parts:   { ptr_array: "Fighter_804D6540_t*", len_const: 33 }
@@ -358,6 +366,8 @@ port_GwAttrs:
   rest: { object_run: true }
 port_KbHatDyn:
   bones: { ptr_array: BoneDynamicsDesc, len_field: num }
+port_HitShakeRow:
+  shifts: { ptr_array: Vec2, len_field: count }
 port_F32Run:
   v: { object_run: true }
 port_KinokoAttrs:

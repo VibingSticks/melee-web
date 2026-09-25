@@ -163,18 +163,26 @@ typedef struct {
  * pointers into PlCo.dat, copied one by one into the globals named beside each
  * field. Tables indexed by fighter kind have Ft_Kind_Max (33) entries. */
 typedef struct { f32 v[5]; } port_Float5;
+/* ftCo_ItemThrow.c's ftCo_ItemThrowAttrs: speed, angle and heavy-item
+ * multiplier, one row per item-throw motion (LightThrowF .. HeavyThrowLw4). */
+typedef struct { f32 speed; f32 angle; f32 heavy_mul; } port_ItemThrowRow;
+/* ft_0D4D.c: the respawn platform's joint and animation. */
+typedef struct { struct HSD_Joint* joint; struct HSD_AnimJoint* anim; } port_RespawnPlatform;
+/* ftCo_DamageFall.c: hit-shake offsets, one row per kind of hit (air,
+ * ground, electric), each a Vec2 list and its count. */
+typedef struct { Vec2* shifts; u32 count; } port_HitShakeRow;
 
 typedef struct {
     struct ftCommonData* common;                     /* p_ftCommonData */
-    void* per_kind_int_lists;                        /* Fighter_804D6550 */
+    port_ItemThrowRow* item_throws;                  /* Fighter_804D6550 */
     port_Float5* float5_rows;                        /* Fighter_804D654C */
     f32* per_kind_floats;                            /* Fighter_804D6548 */
     struct FighterPartsTable** parts_tables;         /* ftPartsTable */
     struct Fighter_804D6540_t** virtual_parts;       /* Fighter_804D6540 */
     struct Fighter_804D653C_t* colanim_a;            /* Fighter_804D653C */
     struct Fighter_804D653C_t* colanim_b;            /* Fighter_804D6538 */
-    void* p8;                                        /* Fighter_804D6534 */
-    void* per_kind_vec2_lists;                       /* Fighter_804D6530 */
+    port_RespawnPlatform* respawn_platform;          /* Fighter_804D6534 */
+    port_HitShakeRow* hit_shake;                     /* Fighter_804D6530 */
     struct Fighter_ShakeTable_t* grab_mash_shake;    /* Fighter_GrabMashShake */
     struct Fighter_ShakeTable_t* smash_charge_shake; /* Fighter_SmashChargeShakeTable */
     struct Fighter_804D6524_t* scale_mods;           /* Fighter_804D6524 */

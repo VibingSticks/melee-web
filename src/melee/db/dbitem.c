@@ -160,6 +160,15 @@ s32 db_GetCurrentlySelectedPokemon(void)
     return db_ItemAndPokemonMenu.CurrentlySelectedPokemon;
 }
 
+#ifdef TARGET_PC
+/* Test hook (port/src/game_hooks/debug_vs.c port_debug_set_pokemon): the
+ * debug menu's Pokemon choice, which the Poke Ball honours in VS. */
+void port_debug_db_set_pokemon(int n)
+{
+    db_ItemAndPokemonMenu.CurrentlySelectedPokemon = n;
+}
+#endif
+
 void db_DisableItemSpawns(void)
 {
     db_ItemAndPokemonMenu.ItemSpawnsEnabled = 0;

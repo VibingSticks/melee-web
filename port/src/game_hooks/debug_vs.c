@@ -69,3 +69,44 @@ EMSCRIPTEN_KEEPALIVE void port_debug_start_vs_cpu(int stkind, int p1, int p2, in
     port_debug_vs_cpu_level = level;
     port_debug_start_vs_match(stkind, p1, p2);
 }
+
+/*   Module._port_debug_spawn_item(kind, x, y);
+ * Drops an item of ItemKind `kind` at stage position (x, y), as the item
+ * spawner does (it_8026D258). For reproducing item bugs without waiting for
+ * the random spawner. Returns 1 if the item limit allowed it. */
+#include <melee/it/itspawn.h>
+EMSCRIPTEN_KEEPALIVE int port_debug_spawn_item(int kind, float x, float y)
+{
+    Vec3 pos = { x, y, 0.0f };
+    port_log("debug: spawning item kind %d at (%.1f, %.1f)", kind, x, y);
+    return it_8026D258(&pos, (ItemKind) kind) ? 1 : 0;
+}
+
+/*   Module._port_debug_spawn_item_at_player(kind, slot);
+ * Same, at the feet of the fighter in player slot `slot`, so a scripted
+ * probe can pick the item up with A and throw it. */
+#include <melee/pl/player.h>
+#include <melee/ft/ftlib.h>
+EMSCRIPTEN_KEEPALIVE int port_debug_spawn_item_at_player(int kind, int slot)
+{
+    HSD_GObj* fighter = Player_GetEntity(slot);
+    Vec3 pos;
+    if (fighter == NULL) {
+        return 0;
+    }
+    ftLib_80086644(fighter, &pos);
+    pos.y += 2.0f;
+    pos.z = 0.0f;
+    port_log("debug: spawning item kind %d at player %d (%.1f, %.1f)", kind, slot, pos.x, pos.y);
+    return it_8026D258(&pos, (ItemKind) kind) ? 1 : 0;
+}
+
+/*   Module._port_debug_set_pokemon(n);
+ * The Pokemon the next Poke Ball releases, through the game's own debug item
+ * menu variable (it_8027AB64 reads db_GetCurrentlySelectedPokemon): n is
+ * 1 + (kind - It_PKind_Start); 0 restores the random choice. */
+void port_debug_db_set_pokemon(int n); /* dbitem.c: the variable is file-local */
+EMSCRIPTEN_KEEPALIVE void port_debug_set_pokemon(int n)
+{
+    port_debug_db_set_pokemon(n);
+}

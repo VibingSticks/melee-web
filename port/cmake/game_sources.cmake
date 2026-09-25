@@ -35,6 +35,30 @@ list(APPEND GAME_SOURCES ${PORT_SRC_DIR}/hsd_port/vtx_arrays.c ${PORT_SRC_DIR}/h
      ${PORT_SRC_DIR}/hsd_endian/archive_swap.c ${PORT_SRC_DIR}/hsd_endian/formats.c
      ${SCHEMA_TABLES})   # generated port_roots[] + port_type tables
 
+# String literals in Shift-JIS, as sjiswrap gives the GameCube compiler (see
+# tools/sjis_literals.py): a converted copy of each file with non-ASCII
+# literals is compiled instead, with the original's directory on the include
+# path so its "" includes still resolve.
+execute_process(
+    COMMAND python3 ${CMAKE_CURRENT_SOURCE_DIR}/tools/sjis_literals.py --list ${GAME_SOURCES}
+    OUTPUT_VARIABLE SJIS_SOURCES
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+    COMMAND_ERROR_IS_FATAL ANY)
+string(REPLACE "\n" ";" SJIS_SOURCES "${SJIS_SOURCES}")
+foreach (src IN LISTS SJIS_SOURCES)
+    file(RELATIVE_PATH rel ${GAME_ROOT} ${src})
+    set(out ${CMAKE_BINARY_DIR}/sjis/${rel})
+    get_filename_component(src_dir ${src} DIRECTORY)
+    add_custom_command(
+        OUTPUT ${out}
+        COMMAND python3 ${CMAKE_CURRENT_SOURCE_DIR}/tools/sjis_literals.py ${src} ${out}
+        DEPENDS ${src} ${CMAKE_CURRENT_SOURCE_DIR}/tools/sjis_literals.py
+        COMMENT "Shift-JIS literals: ${rel}")
+    set_source_files_properties(${out} PROPERTIES INCLUDE_DIRECTORIES ${src_dir})
+    list(REMOVE_ITEM GAME_SOURCES ${src})
+    list(APPEND GAME_SOURCES ${out})
+endforeach ()
+
 add_library(melee_game STATIC ${GAME_SOURCES})
 target_include_directories(melee_game PRIVATE
     ${GAME_ROOT}/src

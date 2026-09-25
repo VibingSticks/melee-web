@@ -38,6 +38,8 @@ typedef struct port_walk_ctx_s {
     unsigned nlogged;            /* violations logged so far (capped) */
     int fill_gaps;               /* a scalar on a pointer slot is skipped, not a violation: a pass that
                                     sweeps a block for words no typed walk converted */
+    uint32_t* externs;           /* sorted offsets of extern reference slots (port_walk_ctx_set_externs) */
+    uint32_t nexterns;
 } port_walk_ctx;
 
 int port_walk_ctx_init(port_walk_ctx* ctx, const uint8_t* base, uint32_t size, const uint32_t* reloc_set,
@@ -50,6 +52,15 @@ void port_walk_ctx_free(port_walk_ctx* ctx);
  * pack map_head right after the table it sizes this way. Copies `offsets`;
  * call before the first walk. Returns -1 when out of memory. */
 int port_walk_ctx_set_object_starts(port_walk_ctx* ctx, const uint32_t* offsets, uint32_t n);
+
+/* Names the archive's extern reference slots: words that hold, big-endian,
+ * the offset of the next slot referring to the same external symbol, until
+ * HSD_ArchiveLocateExtern walks the chain at load and writes the resolved
+ * address (NULL for most) into each. They are pointer slots the relocation
+ * table does not list, and they must stay as the loader expects: the walk
+ * never converts them, and a type whose pointer lands on one still matches.
+ * Copies `offsets`; call before the first walk. Returns -1 when out of memory. */
+int port_walk_ctx_set_externs(port_walk_ctx* ctx, const uint32_t* offsets, uint32_t n);
 
 /* Convert `obj` (of type `type`) and everything reachable from it.
  * Returns 0, or -1 on a strict-mode violation (ctx->error says which). */

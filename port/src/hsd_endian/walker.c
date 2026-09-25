@@ -90,6 +90,9 @@ void port_walk_ctx_free(port_walk_ctx* c)
     free(c->targets);
     c->targets = NULL;
     c->ntargets = 0;
+    free(c->externs);
+    c->externs = NULL;
+    c->nexterns = 0;
     free(c->object_starts);
     c->object_starts = NULL;
     c->n_object_starts = 0;
@@ -179,6 +182,49 @@ static int is_target(port_walk_ctx* c, uint32_t off)
  * converted already: two descriptors can reach the same bytes by different
  * paths (a union case, a shared table), and swapping twice restores the
  * original byte order. */
+static int in_extern(const port_walk_ctx* c, uint32_t off)
+{
+    uint32_t lo = 0, hi = c->nexterns;
+    while (lo < hi) {
+        uint32_t m = lo + (hi - lo) / 2;
+        if (c->externs[m] < off) {
+            lo = m + 1;
+        } else if (c->externs[m] > off) {
+            hi = m;
+        } else {
+            return 1;
+        }
+    }
+    return 0;
+}
+
+int port_walk_ctx_set_externs(port_walk_ctx* c, const uint32_t* offsets, uint32_t n)
+{
+    free(c->externs);
+    c->externs = NULL;
+    c->nexterns = 0;
+    if (n == 0) {
+        return 0;
+    }
+    c->externs = malloc(n * sizeof *c->externs);
+    if (c->externs == NULL) {
+        return -1;
+    }
+    memcpy(c->externs, offsets, n * sizeof *c->externs);
+    qsort(c->externs, n, sizeof *c->externs, cmp_u32);
+    c->nexterns = n;
+    /* Taken already: no scalar, word or gap-fill pass converts them. */
+    for (uint32_t i = 0; i < n; i++) {
+        uint32_t off = c->externs[i];
+        if (off <= c->size - 4) {
+            for (uint32_t k = 0; k < 4; k++) {
+                c->converted[(off + k) >> 3] |= (uint8_t) (1u << ((off + k) & 7));
+            }
+        }
+    }
+    return 0;
+}
+
 static int claim(port_walk_ctx* c, const uint8_t* p, uint32_t n)
 {
     uint32_t off = (uint32_t) (p - c->base);
@@ -391,7 +437,7 @@ static int looks_like_rec(const port_walk_ctx* c, const port_type* t, const uint
                 }
                 memcpy(&v, q, 4);
                 *saw_pointer = 1;
-                if (v != 0 && !in_reloc(c, (uint32_t) (q - c->base))) {
+                if (v != 0 && !in_reloc(c, (uint32_t) (q - c->base)) && !in_extern(c, (uint32_t) (q - c->base))) {
                     return 0;
                 }
             }
@@ -459,6 +505,12 @@ static int walk_field(port_walk_ctx* c, const port_field* f, uint8_t* obj)
 {
     uint8_t* p = obj + f->offset;
     c->cur_field = f;
+    if (c->nexterns != 0 && (f->kind == F_PTR || f->kind == F_PTR_ARRAY || f->kind == F_PTR_LIST ||
+                             f->kind == F_WORD || f->kind == F_U32 || f->kind == F_F32) &&
+        in_extern(c, (uint32_t) (p - c->base)))
+    {
+        return 0; /* an extern reference slot: the loader resolves it (see port_walk_ctx_set_externs) */
+    }
     switch (f->kind) {
     case F_U8:
     case F_OPAQUE:

@@ -474,6 +474,39 @@ port_archive_keep* port_archive_swap_roots(HSD_Archive* ar, uint32_t* reloc_set,
             return NULL;
         }
     }
+    if (ar->header.nb_extern != 0) {
+        /* Extern reference chains: each slot holds, big-endian, the offset of
+         * the next slot that refers to the same symbol (-1 ends the chain).
+         * HSD_ArchiveLocateExtern walks them at load and fills in the
+         * resolved address (NULL for most), so the walk must leave them as
+         * they are. Converted, they broke the chain after its first slot and
+         * left file offsets where the Arwing lasers' animations should be
+         * null; the Fire Flower's "0x3908, then -1" is one such chain. */
+        uint32_t cap = 64, n = 0;
+        uint32_t* offs = malloc(cap * sizeof *offs);
+        for (uint32_t i = 0; offs != NULL && i < ar->header.nb_extern; i++) {
+            uint32_t off = ar->extern_info[i].offset;
+            for (uint32_t guard = 0; ar->header.data_size >= 4 && off != 0xFFFFFFFFu && off <= ar->header.data_size - 4 &&
+                                     guard < ar->header.data_size / 4;
+                 guard++)
+            {
+                if (n == cap) {
+                    uint32_t* grown = realloc(offs, 2 * cap * sizeof *offs);
+                    if (grown == NULL) {
+                        break;
+                    }
+                    offs = grown;
+                    cap *= 2;
+                }
+                offs[n++] = off;
+                off = port_archive_read_be32(ar->data + off);
+            }
+        }
+        if (offs == NULL || port_walk_ctx_set_externs(&c, offs, n) != 0) {
+            port_log("hsd_endian: out of memory noting the extern slots of %s", name);
+        }
+        free(offs);
+    }
     for (uint32_t i = 0; i < ar->header.nb_public; i++) {
         const char* sym = ar->symbols + ar->public_info[i].symbol;
         const port_root* root = port_archive_find_root(sym, file);

@@ -2,6 +2,8 @@
 
 #include <Runtime/platform.h>
 
+#include <string.h>
+
 #include "inlines.h"
 #include "mnmain.h"
 #include "mnmainrule.h"
@@ -86,9 +88,24 @@ u8 mnItemSw_803ED438[32] = {
 static f32 mnItemSw_804D4BA0[2] = { 0.0f, 1.0f };
 
 // Some routines address the adjacent data blocks as one table.
+// The web build does not keep the blocks together, so it reads a copy of them
+// laid out as that table (they are never written).
 static inline struct MnItemSwTable* mnItemSw_GetTable(void)
 {
+#ifdef TARGET_PC
+    static struct MnItemSwTable table;
+    static bool ready;
+    if (!ready) {
+        memcpy(table.x00, mnItemSw_803ED340, sizeof(table.x00));
+        memcpy(table.x30, mnItemSw_AnimTable.x30, sizeof(table.x30));
+        memcpy(table.items, mnItemSw_AnimTable.items, sizeof(table.items));
+        memcpy(table.item_order, mnItemSw_803ED438, sizeof(table.item_order));
+        ready = true;
+    }
+    return &table;
+#else
     return (struct MnItemSwTable*) mnItemSw_803ED340;
+#endif
 }
 
 #ifdef MUST_MATCH

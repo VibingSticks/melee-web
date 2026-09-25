@@ -5,6 +5,7 @@
 #include <math.h>
 #include <placeholder.h>
 #include <stddef.h>
+#include <string.h>
 
 #include "forward.h"
 #include "toy.h"
@@ -2152,6 +2153,28 @@ void _tyDisplay_8031BA78(s32 arg0, s32 arg1, f32 farg0)
     },
 };
 
+// The web build does not keep the three tables together, so the functions
+// that index across them read a copy laid out as one block.
+#ifdef TARGET_PC
+static const TyDspNameTables* tyDisplay_NameTables(void)
+{
+    static TyDspNameTables tables;
+    static bool ready;
+    if (!ready) {
+        memcpy(tables.jobj_names, _tyDisplay_803B8988.entries,
+               sizeof(tables.jobj_names));
+        memcpy(tables.matanim_names, _tyDisplay_803B8A34.entries,
+               sizeof(tables.matanim_names));
+        tables.arch_names = _tyDisplay_803B8AE0;
+        ready = true;
+    }
+    return &tables;
+}
+#define TY_DSP_NAME_TABLES() tyDisplay_NameTables()
+#else
+#define TY_DSP_NAME_TABLES() ((TyDspNameTables const*) &_tyDisplay_803B8988)
+#endif
+
 s32 tyDisplay_8031BB34(s8 idx)
 {
     TyDspArchNames table = _tyDisplay_803B8988;
@@ -2392,7 +2415,7 @@ s32 tyDisplay_8031C454(s32 arg0)
     const TyDspNameTables* tables;
 
     PAD_STACK(0x4);
-    tables = (TyDspNameTables const*) &_tyDisplay_803B8988;
+    tables = TY_DSP_NAME_TABLES();
     result = 0;
     archArr = _tyDisplay_804A2DE8;
 
@@ -2452,8 +2475,7 @@ HSD_JObj* tyDisplay_8031C5E4(s32 arg0)
     HSD_JObj* root;
     HSD_JObj* child;
     u8 cat;
-    const TyDspNameTables* tables =
-        (TyDspNameTables const*) &_tyDisplay_803B8988;
+    const TyDspNameTables* tables = TY_DSP_NAME_TABLES();
 
     HSD_Archive** archives = _tyDisplay_804A2DE8;
     u8 _3[4];

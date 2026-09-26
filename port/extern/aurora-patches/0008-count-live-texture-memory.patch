@@ -1,0 +1,59 @@
+diff --git a/include/aurora/gfx.h b/include/aurora/gfx.h
+index 83da557..69e7f93 100644
+--- a/include/aurora/gfx.h
++++ b/include/aurora/gfx.h
+@@ -32,6 +32,8 @@ typedef struct {
+ } AuroraStats;
+ 
+ const AuroraStats* aurora_get_stats();
++// Bytes of GPU memory held by textures that are still referenced.
++uint64_t aurora_live_texture_bytes();
+ float aurora_get_fps();
+ 
+ void aurora_enable_vsync(bool enabled);
+diff --git a/lib/gfx/frame.cpp b/lib/gfx/frame.cpp
+index 6daccac..a201f79 100644
+--- a/lib/gfx/frame.cpp
++++ b/lib/gfx/frame.cpp
+@@ -860,4 +860,5 @@ float calculate_fps() noexcept {
+ } // namespace aurora::gfx
+ 
+ const AuroraStats* aurora_get_stats() { return &aurora::gfx::detail::resources().stats; }
++uint64_t aurora_live_texture_bytes() { return aurora::gfx::g_liveTextureBytes.load(); }
+ float aurora_get_fps() { return aurora::gfx::calculate_fps(); }
+diff --git a/lib/gfx/texture.hpp b/lib/gfx/texture.hpp
+index 0a5ca83..33f4a28 100644
+--- a/lib/gfx/texture.hpp
++++ b/lib/gfx/texture.hpp
+@@ -1,4 +1,6 @@
+ #pragma once
++
++#include <atomic>
+ #include <dolphin/gx.h>
+ 
+ #include <utility>
+@@ -33,6 +35,8 @@ uint64_t calc_texture_size(wgpu::TextureFormat format, uint32_t width, uint32_t
+ bool is_block_aligned(wgpu::TextureFormat format, uint32_t width, uint32_t height) noexcept;
+ 
+ constexpr u32 InvalidTextureFormat = -1;
++// Bytes held by live TextureRefs, for the port's memory log.
++inline std::atomic<uint64_t> g_liveTextureBytes{0};
+ struct TextureRef {
+   wgpu::Texture texture;
+   wgpu::TextureView sampleTextureView;
+@@ -52,7 +56,14 @@ struct TextureRef {
+   , size(size)
+   , format(format)
+   , mipCount(mipCount)
+-  , gxFormat(gxFormat) {}
++  , gxFormat(gxFormat) {
++    g_liveTextureBytes += calc_texture_size(format, size.width, size.height, mipCount) * size.depthOrArrayLayers;
++  }
++  ~TextureRef() {
++    g_liveTextureBytes -= calc_texture_size(format, size.width, size.height, mipCount) * size.depthOrArrayLayers;
++  }
++  TextureRef(const TextureRef&) = delete;
++  TextureRef& operator=(const TextureRef&) = delete;
+ };
+ 
+ TextureHandle new_static_texture_2d(uint32_t width, uint32_t height, uint32_t mips, u32 gxFormat,

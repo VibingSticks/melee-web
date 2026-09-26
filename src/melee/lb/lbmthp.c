@@ -15,6 +15,7 @@
 #include <sysdolphin/baselib/video.h>
 
 #ifdef TARGET_PC
+#include <dolphin/gx/GXExtra.h>
 #include <hsd_endian/formats.h>
 #include <port_game.h>
 #endif
@@ -640,6 +641,15 @@ void lbMthp_8001F67C(HSD_GObj* gobj, int arg1)
 
     fn_8001EF5C(streamPlayer);
     if (streamPlayer->unk_148 != 0) {
+#ifdef TARGET_PC
+        /* Each GXInitTexObj gets a fresh texture id, and Aurora keeps every
+         * id's GPU texture for 600 frames. A new movie frame per id fills
+         * GPU memory in under a minute on small machines, so let last
+         * frame's objects go before replacing them. */
+        GXDestroyTexObj(&streamPlayer->unk_178);
+        GXDestroyTexObj(&streamPlayer->unk_198);
+        GXDestroyTexObj(&streamPlayer->unk_1B8);
+#endif
         GXInitTexObj(&streamPlayer->unk_178, streamPlayer->unk_50,
                      streamPlayer->width, streamPlayer->height, GX_TF_I8,
                      GX_CLAMP, GX_CLAMP, 0U);

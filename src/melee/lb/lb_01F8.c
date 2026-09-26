@@ -7,6 +7,10 @@
 #include <sysdolphin/baselib/sobjlib.h>
 #include <sysdolphin/baselib/tobj.h>
 
+#ifdef TARGET_PC
+#include <dolphin/gx/GXExtra.h>
+#endif
+
 struct lbl_804335B8_t {
     /* 0x00 */ GXTexObj tex0; /* 0x00-0x20 (size 0x20) */
     /* 0x20 */ void* x20;     /* image ptr for tex0 */
@@ -52,6 +56,13 @@ void lbMthp8001F928(HSD_GObj* gobj, int arg1)
 {
     u16* pWidth = &lbl_804335B8.x6C;
     u16* pHeight = &lbl_804335B8.x6E;
+
+#ifdef TARGET_PC
+    /* Release last frame's texture ids; see lbMthp_8001F67C. */
+    GXDestroyTexObj(&lbl_804335B8.tex0);
+    GXDestroyTexObj(&lbl_804335B8.tex1);
+    GXDestroyTexObj(&lbl_804335B8.tex2);
+#endif
 
     /* First texture - full size */
     GXInitTexObj(&lbl_804335B8.tex0, lbl_804335B8.x20, lbl_804335B8.x6C,

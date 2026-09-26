@@ -217,10 +217,10 @@ static void prof_report(unsigned frame)
         const AuroraStats* st = aurora_get_stats();
         if (st != NULL) {
             port_log("gpu: %u draws (%u merged), %u KB verts, %u KB indices, %u KB uniforms, %u KB storage, "
-                     "%u KB texture uploads, %u pipelines created",
+                     "%u KB texture uploads, %u pipelines created, warm-up left %u",
                      st->drawCallCount, st->mergedDrawCallCount, st->lastVertSize / 1024, st->lastIndexSize / 1024,
                      st->lastUniformSize / 1024, st->lastStorageSize / 1024, st->lastTextureUploadSize / 1024,
-                     st->createdPipelines);
+                     st->createdPipelines, (unsigned) aurora_pipeline_seed_pending());
         }
     }
     memset(&g_prof, 0, sizeof(g_prof));
@@ -435,6 +435,15 @@ void port_vblank(void)
         }
         if (busy > g_prof.worst) {
             g_prof.worst = busy;
+        }
+        /* The background pipeline warm-up competes with the frame for the
+         * browser's GPU process; on a two-core machine it made every match
+         * stall. Hold it for half a second after any frame that ran late, so
+         * it only works while there is time to spare (menus, loading). */
+        {
+            static int s_seed_hold;
+            s_seed_hold = busy > 20.0 ? 30 : (s_seed_hold > 0 ? s_seed_hold - 1 : 0);
+            aurora_pipeline_seed_pause(s_seed_hold > 0);
         }
         /* A frame this long is a visible pause. Say where it went: how much of
          * the game's time was spent parked in port_yield (and in which half),

@@ -126,10 +126,10 @@ index 1abcbd5..f013431 100644
  
  void queue_surface(const u8* dlStart, uint32_t dlSize, bool bigEndian) noexcept;
 diff --git a/lib/gfx/pipeline_cache.cpp b/lib/gfx/pipeline_cache.cpp
-index 5e4e7ff..88a3d91 100644
+index 5e4e7ff..640ccd5 100644
 --- a/lib/gfx/pipeline_cache.cpp
 +++ b/lib/gfx/pipeline_cache.cpp
-@@ -334,6 +334,91 @@ static AtomicStatRef queuedPipelines{detail::resources().stats.queuedPipelines};
+@@ -334,6 +334,92 @@ static AtomicStatRef queuedPipelines{detail::resources().stats.queuedPipelines};
  static AtomicStatRef createdPipelines{detail::resources().stats.createdPipelines};
  #endif
  
@@ -160,7 +160,8 @@ index 5e4e7ff..88a3d91 100644
 +size_t g_seedCompiled = 0;
 +size_t g_seedPresent = 0;
 +size_t g_seedTotal = 0;
-+constexpr size_t SeedMaxInFlight = 4;
++constexpr size_t SeedMaxInFlight = 2;
++bool g_seedPaused = false;
 +constexpr uint32_t SeedMagic = 0x44535041; // "APSD"
 +
 +void record_seen(const PipelineCacheWrite& write) {
@@ -174,7 +175,7 @@ index 5e4e7ff..88a3d91 100644
 +}
 +
 +void pump_seed_queue() {
-+  while (g_seedInFlight < SeedMaxInFlight && !g_seedQueue.empty()) {
++  while (!g_seedPaused && g_seedInFlight < SeedMaxInFlight && !g_seedQueue.empty()) {
 +    SeedEntry entry = std::move(g_seedQueue.front());
 +    g_seedQueue.pop_front();
 +    {
@@ -221,7 +222,7 @@ index 5e4e7ff..88a3d91 100644
  template <typename PipelineConfig>
  static PipelineCacheWrite make_pipeline_cache_write(ShaderType type, PipelineRef hash, const PipelineConfig& config,
                                                      uint32_t firstFrameUsed) {
-@@ -351,6 +436,10 @@ static PipelineCacheWrite make_pipeline_cache_write(ShaderType type, PipelineRef
+@@ -351,6 +437,10 @@ static PipelineCacheWrite make_pipeline_cache_write(ShaderType type, PipelineRef
  }
  
  static void enqueue_pipeline_cache_write(PipelineCacheWrite write) {
@@ -232,7 +233,7 @@ index 5e4e7ff..88a3d91 100644
    if (g_pipelineCacheBroken || g_pipelineCacheDb == nullptr) {
      return;
    }
-@@ -1179,6 +1268,9 @@ void end_pipeline_frame() {
+@@ -1179,6 +1269,9 @@ void end_pipeline_frame() {
    if (!g_hasPipelineThread) {
      pipeline_worker();
    }
@@ -242,7 +243,7 @@ index 5e4e7ff..88a3d91 100644
  }
  
  bool get_pipeline(PipelineRef ref, wgpu::RenderPipeline& pipeline) {
-@@ -1192,3 +1284,84 @@ bool get_pipeline(PipelineRef ref, wgpu::RenderPipeline& pipeline) {
+@@ -1192,3 +1285,90 @@ bool get_pipeline(PipelineRef ref, wgpu::RenderPipeline& pipeline) {
  }
  
  } // namespace aurora::gfx
@@ -276,6 +277,12 @@ index 5e4e7ff..88a3d91 100644
 +  std::memcpy(mem, bytes.data(), bytes.size());
 +  *out = mem;
 +  return bytes.size();
++}
++
++extern "C" void aurora_pipeline_seed_pause(bool paused) { aurora::gfx::g_seedPaused = paused; }
++
++extern "C" size_t aurora_pipeline_seed_pending(void) {
++  return aurora::gfx::g_seedQueue.size() + aurora::gfx::g_seedInFlight;
 +}
 +
 +extern "C" size_t aurora_pipeline_seed_import(const uint8_t* data, size_t size) {
@@ -328,10 +335,10 @@ index 5e4e7ff..88a3d91 100644
 +}
 +#endif
 diff --git a/include/aurora/gfx.h b/include/aurora/gfx.h
-index 94504b1..a6a4858 100644
+index 94504b1..83da557 100644
 --- a/include/aurora/gfx.h
 +++ b/include/aurora/gfx.h
-@@ -2,10 +2,12 @@
+@@ -2,10 +2,13 @@
  #define AURORA_GFX_H
  
  #ifdef __cplusplus
@@ -341,10 +348,11 @@ index 94504b1..a6a4858 100644
  extern "C" {
  #else
 +#include "stddef.h"
++#include "stdbool.h"
  #include "stdint.h"
  #endif
  
-@@ -33,6 +35,13 @@ float aurora_get_fps();
+@@ -33,6 +36,17 @@ float aurora_get_fps();
  
  void aurora_enable_vsync(bool enabled);
  
@@ -354,6 +362,10 @@ index 94504b1..a6a4858 100644
 + * compilation, and returns how many pipelines it queued. */
 +size_t aurora_pipeline_seed_export(uint8_t** out);
 +size_t aurora_pipeline_seed_import(const uint8_t* data, size_t size);
++/* Hold the warm-up (no new compiles start) while the host's frames are late;
++ * aurora_pipeline_seed_pending says how many are left. */
++void aurora_pipeline_seed_pause(bool paused);
++size_t aurora_pipeline_seed_pending(void);
 +
  #ifdef __cplusplus
  }

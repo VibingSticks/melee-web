@@ -1,5 +1,6 @@
 #include "gmevent.h"
 
+#include <Runtime/platform.h>
 #include <melee/ft/forward.h>
 #include <melee/pl/forward.h>
 
@@ -1103,6 +1104,26 @@ static u8 gm_803DF918[] = {
     47, 35, 14, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 34, 48, 49, 50,
 };
 
+#ifdef TARGET_PC
+/* gm_16A2.c calls the respawn callback (x4) with two arguments, the slot and
+ * the enemies left (GmEventPlayerInitCallback), after the table's int cast
+ * round-trips it through gm_8016A404. These four take only the slot: the
+ * GameCube ignored the second register, wasm traps on the signature when a
+ * replacement enemy spawns (see PORT_FNCAST). */
+#define GMEVENT_RESPAWN_ADAPTER(fn)                                            \
+    static void fn##__as_respawn_cb(int slot, int remaining)                  \
+    {                                                                          \
+        (void) remaining;                                                      \
+        fn(slot);                                                              \
+    }
+GMEVENT_RESPAWN_ADAPTER(gm_801BEA10)
+GMEVENT_RESPAWN_ADAPTER(gm_801BEA4C)
+GMEVENT_RESPAWN_ADAPTER(gm_801BEAF0)
+GMEVENT_RESPAWN_ADAPTER(gm_801BEB2C)
+#endif
+#define GMEVENT_RESPAWN_CB(fn)                                                 \
+    PORT_FNCAST((void (*)(int))(void*) fn##__as_respawn_cb, fn)
+
 static gm_803DF94C_t gm_804D4330 = { gm_801BC754, NULL };
 static gm_803DF94C_t gm_804D4338 = { gm_801BC754, NULL };
 static gm_803DF94C_t gm_804D4340 = { gm_801BC754, NULL };
@@ -1118,13 +1139,13 @@ static gm_803DF94C_t gm_804D4388 = { gm_801BC754, NULL };
 static gm_803DF94C_t gm_804D4390 = { gm_801BD028, NULL };
 static gm_803DF94C_t gm_804D4398 = { gm_801BC754, NULL };
 static gm_803DF94C_t gm_804D43A0 = { gm_801BC754, NULL };
-static gm_803DF94C_t gm_804D43A8 = { gm_801BC754, gm_801BEA10 };
+static gm_803DF94C_t gm_804D43A8 = { gm_801BC754, GMEVENT_RESPAWN_CB(gm_801BEA10) };
 static gm_803DF94C_t gm_804D43B0 = { gm_801BD164, NULL };
 static gm_803DF94C_t gm_804D43B8 = { gm_801BC754, NULL };
 static gm_803DF94C_t gm_804D43C0 = { gm_801BD30C, NULL };
 static gm_803DF94C_t gm_804D43C8 = { gm_801BD44C, NULL };
 static gm_803DF94C_t gm_804D43D0 = { gm_801BD46C, NULL };
-static gm_803DF94C_t gm_804D43D8 = { gm_801BD658, gm_801BEA4C };
+static gm_803DF94C_t gm_804D43D8 = { gm_801BD658, GMEVENT_RESPAWN_CB(gm_801BEA4C) };
 static gm_803DF94C_t gm_804D43E0 = { gm_801BC754, NULL };
 
 /// @todo Fix this callback signature
@@ -1136,7 +1157,7 @@ static gm_803DF94C_t gm_804D43E8 = {
 static gm_803DF94C_t gm_804D43F0 = { gm_801BD7FC, NULL };
 static gm_803DF94C_t gm_804D43F8 = { gm_801BC754, NULL };
 static gm_803DF94C_t gm_804D4400 = { gm_801BC754, NULL };
-static gm_803DF94C_t gm_804D4408 = { gm_801BC754, gm_801BEAF0 };
+static gm_803DF94C_t gm_804D4408 = { gm_801BC754, GMEVENT_RESPAWN_CB(gm_801BEAF0) };
 static gm_803DF94C_t gm_804D4410 = { gm_801BD93C, NULL };
 static gm_803DF94C_t gm_804D4418 = { gm_801BDAD4, NULL };
 static gm_803DF94C_t gm_804D4420 = { gm_801BC754, NULL };
@@ -1153,7 +1174,7 @@ static gm_803DF94C_t gm_804D4470 = { gm_801BC754, NULL };
 static gm_803DF94C_t gm_804D4478 = { gm_801BC754, NULL };
 static gm_803DF94C_t gm_804D4480 = { gm_801BC754, NULL };
 static gm_803DF94C_t gm_804D4488 = { gm_801BE39C, NULL };
-static gm_803DF94C_t gm_804D4490 = { gm_801BC754, gm_801BEB2C };
+static gm_803DF94C_t gm_804D4490 = { gm_801BC754, GMEVENT_RESPAWN_CB(gm_801BEB2C) };
 static gm_803DF94C_t gm_804D4498 = { gm_801BC754, NULL };
 static gm_803DF94C_t gm_804D44A0 = { gm_801BC754, NULL };
 static gm_803DF94C_t gm_804D44A8 = { gm_801BC754, NULL };

@@ -378,6 +378,20 @@ static int type_has_pointers(const port_type* t, unsigned depth)
 
 static int looks_like(const port_walk_ctx* c, const port_type* t, const uint8_t* obj);
 
+/* Does [e, e + size) hold the start of some other object (a pointer target or
+ * a public root)? A run whose element would straddle one has left its table:
+ * the effect tables run straight into the texels exported after them. */
+static int overlaps_target(port_walk_ctx* c, const uint8_t* e, uint32_t size)
+{
+    uint32_t off = (uint32_t) (e - c->base);
+    for (uint32_t k = 0; k < size; k++) {
+        if (is_target(c, off + k)) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
 /* One more element of an object run at `e` (element `i`)? The run stops at the
  * end of the archive, at the start of another object, and, when the element
  * type can be recognised by its pointers, at the first element that is not one. */
@@ -578,7 +592,8 @@ static int walk_field(port_walk_ctx* c, const port_field* f, uint8_t* obj)
         uint32_t n = read_len(f, obj);
         if (f->len_kind == LEN_RELOC_RUN) {
             n = 0;
-            while (n < 0x1000 && looks_like(c, f->type, p + n * f->type->size)) {
+            while (n < 0x1000 && looks_like(c, f->type, p + n * f->type->size)
+                   && (n == 0 || !overlaps_target(c, p + n * f->type->size, f->type->size))) {
                 n++;
             }
         } else if (f->len_kind == LEN_OBJECT_RUN) {

@@ -195,6 +195,33 @@ static void run(void)
         port_walk_ctx_free(&c);
     }
 
+    /* A reloc run (the effect tables) ends before an element that would
+     * straddle another object: the zero padding after the last descriptor
+     * looks like one more (null pointers), and the texels exported right after
+     * the table then read as a float and got swapped. */
+    {
+        static const port_field desc_fields[] = { { F_F32, 0 }, { F_PTR, 4, &Leaf_t }, { F_PTR, 8, &Leaf_t } };
+        static const port_type Desc_t = { "Desc", 12, desc_fields, 3 };
+        static const port_field tbl_fields[] = { { F_ARRAY, 0, &Desc_t, LEN_RELOC_RUN, 0 } };
+        static const port_type Tbl_t = { "Tbl", 0, tbl_fields, 1 };
+        uint8_t o[48];
+        memset(o, 0, sizeof o);
+        be32(o + 0, 0x40000000u); native_ptr(o + 4, o + 40);  /* desc 0 -> leaf at 40 */
+        /* 12..20: padding; a texel root starts at 20 (first word zero) */
+        be32(o + 24, 0xAABBCCDDu);
+        be16(o + 40, 0x0102); be16(o + 42, 0x0304); be32(o + 44, 0x3F800000u);
+        uint32_t orelocs[] = { 4 };
+        uint32_t starts[] = { 20 };
+        CHECK_EQ_U32(port_walk_ctx_init(&c, o, sizeof o, orelocs, 1, 1), 0);
+        CHECK_EQ_U32(port_walk_ctx_set_object_starts(&c, starts, 1), 0);
+        CHECK_EQ_U32(port_walk(&c, &Tbl_t, o), 0);
+        CHECK(c.error == NULL);
+        float f;
+        memcpy(&f, o + 0, 4); CHECK(f == 2.0f);                 /* desc 0 converted */
+        CHECK_EQ_U32(o[24], 0xAA);                              /* the texels were left alone */
+        port_walk_ctx_free(&c);
+    }
+
     /* bitfield repacking: 16-bit unit with padding, and a full 8-bit unit */
     uint8_t w16[2];
     be16(w16, (0x3u << 14) | (0x2Au << 8) | 0x00FF); /* fields 2,6 then 8 unused bits */

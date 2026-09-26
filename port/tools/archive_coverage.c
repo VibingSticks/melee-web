@@ -105,6 +105,99 @@ static void check_archive(const char* name, uint8_t* file, uint32_t size)
     port_archive_convert_scripts(&c, pub, hdr.nb_public, syms, name, NULL);
     port_walk_visited_foreach(&c, collect, NULL);
     qsort(g_vis, g_nvis, sizeof *g_vis, cmp_vis);
+    /* palettes and images must stay big-endian (the GX layer reads them as the
+     * hardware would); report any the walk swapped bytes in */
+    int texture_hits = 0;
+    for (size_t k = 0; k < g_nvis; k++) {
+        const char* tn = g_vis[k].type->name;
+        int is_tlut = strcmp(tn, "HSD_TlutDesc") == 0 || strcmp(tn, "HSD_Tlut") == 0;
+        int is_img = strcmp(tn, "HSD_ImageDesc") == 0;
+        if (!is_tlut && !is_img) continue;
+        const uint8_t* o = g_vis[k].obj;
+        uint32_t off, len;
+        memcpy(&off, o, 4);
+        off -= (uint32_t) (uintptr_t) data; /* slots hold absolute (truncated) addresses */
+        if (is_tlut) {
+            uint16_t n;
+            memcpy(&n, o + 12, 2);
+            len = n * 2u;
+        } else {
+            uint16_t w, h;
+            uint32_t fmt;
+            memcpy(&w, o + 4, 2);
+            memcpy(&h, o + 6, 2);
+            memcpy(&fmt, o + 8, 4);
+            uint32_t bpp = (fmt == 0 || fmt == 8 || fmt == 14) ? 4 : (fmt == 1 || fmt == 2 || fmt == 9) ? 8 : (fmt == 6) ? 32 : 16;
+            /* GX tiles: 8x8 at 4 bpp, 8x4 at 8 bpp, 4x4 at 16/32 bpp */
+            uint32_t tw = bpp == 4 ? 8 : bpp == 8 ? 8 : 4, th = bpp == 4 ? 8 : 4;
+            len = (uint32_t) (((w + tw - 1) / tw * tw) * ((h + th - 1) / th * th) * bpp / 8);
+        }
+        {
+            uint16_t w = 0, h = 0, n = 0;
+            uint32_t fmt = 0;
+            memcpy(&w, o + 4, 2);
+            memcpy(&h, o + 6, 2);
+            memcpy(&fmt, o + 8, 4);
+            memcpy(&n, o + 12, 2);
+            uint32_t tfmt;
+            memcpy(&tfmt, o + 4, 4);
+            int bogus = is_tlut ? (n == 0 || n > 16384 || tfmt > 2) : (w == 0 || h == 0 || w > 1024 || h > 1024 || fmt > 14);
+            if (bogus) {
+                texture_hits++;
+                if (getenv("DUMPTEX") && texture_hits <= 4) {
+                    printf("%s: dump %s@+%#x:", name, tn, (unsigned) (o - data));
+                    for (int b = 0; b < 24; b++) printf(" %02x", o[b]);
+                    printf("\n");
+                }
+                /* who points here: a relocated slot whose target is this object */
+                uint32_t target = (uint32_t) (o - data) + (uint32_t) (uintptr_t) data;
+                for (uint32_t i = 0; i < rn; i++) {
+                    uint32_t v;
+                    memcpy(&v, data + rs[i], 4);
+                    if (v != target) continue;
+                    const uint8_t* slot = data + rs[i];
+                    const vis* best = NULL;
+                    for (size_t m = 0; m < g_nvis; m++) {
+                        const vis* q = &g_vis[m];
+                        if (q->type->size && slot >= q->obj && slot < q->obj + q->type->size && (!best || q->obj > best->obj)) best = q;
+                    }
+                    printf("%s: bogus %s@+%#x, pointed to from +%#x in %s@+%#x (+%#x)\n", name, tn, (unsigned) (o - data), rs[i],
+                           best ? best->type->name : "?", best ? (unsigned) (best->obj - data) : 0u,
+                           best ? (unsigned) (slot - best->obj) : 0u);
+                }
+                continue;
+            }
+        }
+        if (off >= hdr.data_size || len == 0) continue;
+        if (off + len > hdr.data_size) len = hdr.data_size - off;
+        uint32_t hit = 0, first = 0;
+        for (uint32_t b = 0; b < len; b++) {
+            if (c.converted[(off + b) >> 3] & (1u << ((off + b) & 7))) {
+                if (!hit) first = b;
+                hit++;
+            }
+        }
+        if (hit) {
+            texture_hits++;
+            if (texture_hits <= g_max_slots) {
+                /* find a visited non-texture object covering the first swapped byte */
+                const uint8_t* at = data + off + first;
+                const char* who = "?";
+                uint32_t whooff = 0;
+                for (size_t m = 0; m < g_nvis; m++) {
+                    const vis* v = &g_vis[m];
+                    if (v->type->size && at >= v->obj && at < v->obj + v->type->size && strcmp(v->type->name, tn) != 0) {
+                        who = v->type->name;
+                        whooff = (uint32_t) (v->obj - data);
+                    }
+                }
+                printf("%s: %s@+%#x data +%#x (%u bytes): %u bytes swapped, first at +%#x, inside %s@+%#x\n", name, tn,
+                       (unsigned) (o - data), off, len, hit, off + first, who, whooff);
+            }
+        }
+    }
+    if (texture_hits) printf("%s: %d textures/palettes with swapped bytes\n", name, texture_hits);
+
     int unreached = 0;
     for (uint32_t i = 0; i < rn; i++) {
         const uint8_t* slot = data + rs[i];

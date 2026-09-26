@@ -18,10 +18,14 @@
 - { prefix: SIS_, type: opaque }             # sislib text tables: kerning bytes and glyph texels
 - { suffix: _camanim, type: HSD_CameraAnim }
 - { suffix: _lightanim, type: HSD_LightAnim }
-# Stage archives export their textures and palettes as plain HSD descriptors.
-- { suffix: _image, type: HSD_ImageDesc }
+# Texture exports: `_tlut_desc` is an HSD_TlutDesc, but `_image` and `_tlut`
+# name the raw texels and palette entries themselves (all 2903 and 644 of them
+# on the disc; none starts with a relocated pointer). Those stay big-endian for
+# the GX layer, so they must not be walked as descriptors -- doing so swapped
+# the first 24 texel bytes and 16 palette bytes of every stage texture.
+- { suffix: _image, type: opaque }
 - { suffix: _tlut_desc, type: HSD_TlutDesc }
-- { suffix: _tlut, type: HSD_Tlut }
+- { suffix: _tlut, type: opaque }
 - { prefix: MnSelectChrDataTable, type: port_MnSelectChrDataTable }
 - { prefix: MnSelectStageDataTable, type: port_MnSelectStageDataTable }
 - { prefix: sqEventInitDataLevelTbl, type: port_EventTable }

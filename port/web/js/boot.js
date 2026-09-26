@@ -12,13 +12,15 @@ const OFFLINE = globalThis.__MELEE_OFFLINE__ ?? null;
 // never the gameplay code that got there.
 Error.stackTraceLimit = 64;
 
-// Resolves to { loadNaga, installWebGL2Fallback }; only the WebGL2 path needs them.
+// Resolves to { loadNaga, installWebGL2Fallback, openGlslCache }; only the WebGL2 path needs them.
 function rendererModules() {
   if (OFFLINE) {
-    return Promise.resolve({ loadNaga: OFFLINE.loadNaga, installWebGL2Fallback: OFFLINE.installWebGL2Fallback });
+    return Promise.resolve({ loadNaga: OFFLINE.loadNaga, installWebGL2Fallback: OFFLINE.installWebGL2Fallback,
+                             openGlslCache: OFFLINE.openGlslCache });
   }
   return Promise.all([import('./naga/naga.js'), import('./gpu-gl2.js')])
-    .then(([a, b]) => ({ loadNaga: a.loadNaga, installWebGL2Fallback: b.installWebGL2Fallback }));
+    .then(([a, b]) => ({ loadNaga: a.loadNaga, installWebGL2Fallback: b.installWebGL2Fallback,
+                         openGlslCache: b.openGlslCache }));
 }
 
 // loadNaga takes either a URL or the bytes themselves.
@@ -255,9 +257,12 @@ async function selectRenderer() {
   if (forced === 'webgpu') throw new Error('This browser has no usable WebGPU adapter (?renderer=webgpu was requested).');
   const probe = document.createElement('canvas').getContext('webgl2');
   if (!probe) throw new Error('This browser has neither WebGPU nor WebGL2. Use a current Chrome, Edge, Firefox, or Safari.');
-  const { loadNaga, installWebGL2Fallback } = await rendererModules();
+  const { loadNaga, installWebGL2Fallback, openGlslCache } = await rendererModules();
   const naga = await loadNaga(nagaSource());
-  installWebGL2Fallback({ canvas, naga, force: true });
+  // Shader translations saved by earlier boots (?noglslcache ignores them).
+  const glslCache = params.has('noglslcache') ? null : await openGlslCache(naga.version);
+  if (glslCache) console.log(`[boot] saved shader translations: ${glslCache.loaded}`);
+  installWebGL2Fallback({ canvas, naga, force: true, glslCache });
   return 'webgl2';
 }
 
@@ -322,6 +327,7 @@ async function startGame(disc, fst) {
     noFrameSkip,
     audioBackend,
     preload,
+    preloadInFlight: +(params.get('preloadjobs') ?? 0), // pipelines compiling at once during the preload (default 16)
     onPreload: preloadScreen(),
     renderHeight,
     yieldTimer,
@@ -345,11 +351,12 @@ async function startGame(disc, fst) {
   if (rc !== 0) {
     throw new Error('The disc file table could not be parsed.');
   }
-  // The shader pipelines a recorded session used, compiled in the background
-  // from startup (port_pipeline_seed_take in imports.js hands them over).
-  // Not on the WebGL2 fallback: its pipeline creation compiles the shader on
-  // the main thread there and then, so a warm-up would stall the intro.
-  Module.pipelineSeed = (await rendererReady) === 'webgpu' ? await seedPromise : null;
+  // The shader pipelines a recorded session used, compiled behind the loading
+  // screen before the game starts (port_pipeline_seed_take in imports.js
+  // hands them over; main_loop.c preload_pipelines). On the WebGL2 fallback
+  // too: it compiles on the main thread, which the loading screen can afford.
+  await rendererReady;
+  Module.pipelineSeed = await seedPromise;
   if (Module.pipelineSeed) console.log('[boot] pipeline seed handed to the game');
   status('Running - press Tab to hide this bar');
   gameRunning = true;
@@ -366,6 +373,10 @@ function preloadScreen() {
   $('preload-skip').addEventListener('click', () => { skip = true; eta.textContent = 'starting...'; });
   return (done, total, finished) => {
     if (finished) {
+      const g = globalThis.gl2Stats; // WebGL2 fallback only (gpu-gl2.js)
+      if (g) console.log(`[boot] webgl2 shaders: ${g.programs} programs for ${g.pipelines} pipelines, ` +
+                         `${g.translations} translated (${Math.round(g.translateMs)} ms), ${g.saved} from saved, ` +
+                         `compile ${Math.round(g.compileMs)} ms`);
       el.hidden = true;
       status('Running - press Tab to hide this bar');
       canvas.focus();

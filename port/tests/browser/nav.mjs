@@ -11,7 +11,7 @@ import { spawn } from 'node:child_process';
 import path from 'node:path';
 
 const require = createRequire('/home/ralsei/.npm/_npx/9833c18b2d85bc59/node_modules/');
-const { chromium } = require('playwright-core');
+const { chromium, firefox } = require('playwright-core');
 
 // src/melee/gm/forward.h
 export const MODES = {
@@ -49,14 +49,19 @@ function decode(name) {
 export const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
 /** Serve the build, open it, feed it the disc, and wait until the game runs. */
-export async function launchGame({ buildDir, disc, port = 8795, query = 'renderer=webgl2&res=640x480', headed = false, init = null }) {
+export async function launchGame({ buildDir, disc, port = 8795, query = 'renderer=webgl2&res=640x480', headed = false, init = null,
+                                   browserName = process.env.MELEE_BROWSER || 'chromium' }) {
   const server = spawn('python3', ['-m', 'http.server', '-d', path.resolve(buildDir), String(port)], { stdio: 'ignore' });
   await sleep(800);
-  const browser = await chromium.launch({
-    headless: !headed,
-    executablePath: '/opt/google/chrome/chrome',
-    args: ['--enable-unsafe-webgpu', '--ignore-gpu-blocklist', '--no-sandbox', '--enable-unsafe-swiftshader'],
-  });
+  // Firefox (Playwright's build, `npx playwright install firefox`) for bugs
+  // that only its WebGL2 shows; it has no WebGPU on Linux.
+  const browser = browserName === 'firefox'
+    ? await firefox.launch({ headless: !headed, executablePath: process.env.MELEE_FIREFOX || undefined })
+    : await chromium.launch({
+      headless: !headed,
+      executablePath: '/opt/google/chrome/chrome',
+      args: ['--enable-unsafe-webgpu', '--ignore-gpu-blocklist', '--no-sandbox', '--enable-unsafe-swiftshader'],
+    });
   const context = await browser.newContext();
   // A script to run in the page before its own (e.g. to slow the file backend
   // down to what a Chromebook reading from Downloads sees).

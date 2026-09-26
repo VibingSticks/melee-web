@@ -57,16 +57,26 @@ static void preload_pipelines(void)
         return;
     }
     double t0 = emscripten_get_now();
-    aurora_pipeline_seed_set_max_in_flight(4);
+    int max_in_flight = emscripten_run_script_int("(typeof Module !== 'undefined' && Module.preloadInFlight) | 0");
+    aurora_pipeline_seed_set_max_in_flight(max_in_flight > 0 ? (size_t) max_in_flight : 16);
+    double last_ui = 0.0;
     int skipped = 0;
     size_t pending;
     while ((pending = aurora_pipeline_seed_pending()) > 0) {
         aurora_pipeline_seed_pump();
-        if (port_preload_progress((int) (total - pending), (int) total, 0)) {
-            skipped = 1;
-            break;
+        double now = emscripten_get_now();
+        if (now - last_ui >= 50.0) { /* the page's progress bar: a few times a second is plenty */
+            last_ui = now;
+            if (port_preload_progress((int) (total - pending), (int) total, 0)) {
+                skipped = 1;
+                break;
+            }
         }
-        emscripten_sleep(16); /* the compile callbacks run from the event loop */
+        /* The compile callbacks run from the event loop. A short sleep with
+         * many compiles in flight: 16 ms between checks with 4 in flight
+         * capped the rate, and yielding in a tight loop spent a fifth of the
+         * main thread spinning, which a 2-core machine's GPU process needs. */
+        emscripten_sleep(4);
     }
     aurora_pipeline_seed_set_max_in_flight(2);
     port_preload_progress((int) (total - aurora_pipeline_seed_pending()), (int) total, 1);

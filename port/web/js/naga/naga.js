@@ -25,7 +25,15 @@ export async function loadNaga(source) {
     return { ptr, len: b.length };
   }
 
+  // Identifies this translator build, so a saved translation from another
+  // build is not reused (gpu-gl2.js openGlslCache).
+  const u8 = new Uint8Array(bytes instanceof ArrayBuffer ? bytes : bytes.buffer, bytes.byteOffset ?? 0, bytes.byteLength);
+  let h = 0x811c9dc5;
+  for (let i = 0; i < u8.length; i += 7) h = Math.imul(h ^ u8[i], 0x01000193);
+  const version = `${u8.length}-${(h >>> 0).toString(16)}`;
+
   return {
+    version,
     translate(wgsl, entryPoint, stage) {
       const st = STAGE[stage];
       if (st === undefined) throw new Error('naga: stage must be "vertex" or "fragment"');

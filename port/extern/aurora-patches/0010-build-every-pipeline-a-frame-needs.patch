@@ -1,0 +1,21 @@
+diff --git a/lib/gfx/pipeline_cache.cpp b/lib/gfx/pipeline_cache.cpp
+index e076807..55f6ed9 100644
+--- a/lib/gfx/pipeline_cache.cpp
++++ b/lib/gfx/pipeline_cache.cpp
+@@ -62,7 +62,15 @@ static std::mutex g_pipelineMutex;
+ static bool g_hasPipelineThread = false;
+ static size_t g_pipelinesPerFrame = 0;
+ // For synchronous pipeline fallback (OpenGL)
+-#ifdef NDEBUG
++#if defined(__EMSCRIPTEN__)
++// The browser has no pipeline thread. Deferring past a budget skips the draws
++// that need the rest, and a new stage then fills in over many frames with
++// holes where the clear colour shows. Build everything a frame asks for, and
++// let that frame take longer, as Dolphin's synchronous shader compilation does;
++// the port compiles its recorded pipelines before the game starts, so this is
++// rare.
++constexpr size_t BuildPipelinesPerFrame = SIZE_MAX;
++#elif defined(NDEBUG)
+ constexpr size_t BuildPipelinesPerFrame = 5;
+ #else
+ constexpr size_t BuildPipelinesPerFrame = 1;

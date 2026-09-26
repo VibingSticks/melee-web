@@ -37,7 +37,7 @@ ENTRY = "boot.js"
 # Every symbol the parts must still export into the shared scope after the
 # `export` keywords come off. Checked so a rename upstream fails the pack
 # rather than producing a page that dies at runtime.
-REQUIRED_SYMBOLS = ["DiscSource", "installWebGL2Fallback", "loadNaga"]
+REQUIRED_SYMBOLS = ["DiscSource", "installWebGL2Fallback", "loadNaga", "openGlslCache"]
 
 BOOT_IMPORT = re.compile(r"(?m)^import\s*\{[^}]*\}\s*from\s*'\./disc_source\.js';\s*\n")
 EXPORT_KEYWORD = re.compile(r"(?m)^export\s+")
@@ -110,7 +110,7 @@ def build_module(build: pathlib.Path, naga_wasm_b64: str) -> str:
         "  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);\n"
         "  return out;\n"
         "};\n"
-        f'globalThis.__MELEE_OFFLINE__ = {{ loadNaga, installWebGL2Fallback, nagaWasm: __b64("{naga_wasm_b64}") }};\n'
+        f'globalThis.__MELEE_OFFLINE__ = {{ loadNaga, installWebGL2Fallback, openGlslCache, nagaWasm: __b64("{naga_wasm_b64}") }};\n'
     )
 
     module = "\n".join(chunks + [bridge, f"// ---- {ENTRY} ----\n{boot}"])

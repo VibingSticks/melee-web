@@ -127,8 +127,63 @@ function originOf(o) {
   return { x: o.x ?? 0, y: o.y ?? 0, z: o.z ?? 0 };
 }
 
+// --- saved translations ---------------------------------------------------------------------
+// WGSL -> GLSL through naga is about 40% of creating a pipeline here, and the
+// game asks for the same shaders every boot. WebGL has no way to keep compiled
+// programs (the driver may keep its own cache), but the translated text can be
+// kept: IndexedDB, keyed by the WGSL's hash, cleared when the translator build
+// changes. Resolves to null when storage is unavailable; everything still works.
+const GLSL_DB = 'melee-glsl', GLSL_STORE = 'glsl', GLSL_FORMAT = 1;
+export async function openGlslCache(translatorVersion) {
+  const version = `${GLSL_FORMAT}:${translatorVersion}`;
+  try {
+    const db = await new Promise((resolve, reject) => {
+      const req = indexedDB.open(GLSL_DB, 1);
+      req.onupgradeneeded = () => req.result.createObjectStore(GLSL_STORE);
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    });
+    const all = await new Promise((resolve, reject) => {
+      const tx = db.transaction(GLSL_STORE, 'readonly');
+      const keys = tx.objectStore(GLSL_STORE).getAllKeys(), vals = tx.objectStore(GLSL_STORE).getAll();
+      tx.oncomplete = () => resolve([keys.result, vals.result]);
+      tx.onerror = () => reject(tx.error);
+    });
+    const map = new Map();
+    let stale = false;
+    all[0].forEach((k, i) => { const v = all[1][i]; if (v && v.version === version) map.set(k, v.r); else stale = true; });
+    if (stale) { // another translator build wrote these: start over
+      map.clear();
+      await new Promise((resolve) => { const tx = db.transaction(GLSL_STORE, 'readwrite'); tx.objectStore(GLSL_STORE).clear(); tx.oncomplete = resolve; tx.onerror = resolve; });
+    }
+    const pending = new Map();
+    let timer = 0;
+    const flush = () => {
+      timer = 0;
+      if (!pending.size) return;
+      const tx = db.transaction(GLSL_STORE, 'readwrite'), st = tx.objectStore(GLSL_STORE);
+      for (const [k, r] of pending) st.put({ version, r }, k);
+      pending.clear();
+    };
+    return {
+      loaded: map.size,
+      get: (k) => map.get(k),
+      put(k, r) { map.set(k, r); pending.set(k, r); if (!timer) timer = setTimeout(flush, 2000); },
+    };
+  } catch (e) {
+    console.warn('[gpu-gl2] no saved shader translations:', e && e.message);
+    return null;
+  }
+}
+
+function hashString(s) { // FNV-1a over UTF-16 units, plus the length
+  let h = 0x811c9dc5;
+  for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 0x01000193);
+  return `${(h >>> 0).toString(16)}-${s.length}`;
+}
+
 // --- install -----------------------------------------------------------------------------
-export function installWebGL2Fallback({ canvas, naga, force = false }) {
+export function installWebGL2Fallback({ canvas, naga, force = false, glslCache = null }) {
   if ('gpu' in navigator && !force) return navigator.gpu;
   const gl = canvas.getContext('webgl2', { antialias: false, depth: false, stencil: false, alpha: false, premultipliedAlpha: false, preserveDrawingBuffer: false, powerPreference: 'high-performance' });
   if (!gl) throw new Error('gpu-gl2: WebGL2 is not available');
@@ -370,25 +425,45 @@ export function installWebGL2Fallback({ canvas, naga, force = false }) {
       for (const e of desc.entries) this.entries.set(e.binding, e.resource);
     }
   }
+  // Translations by WGSL text, not by module: the game makes a module per
+  // pipeline, and about a third of them repeat another's source.
+  const translations = new Map();
   class GPUShaderModuleImpl {
-    constructor(desc) { this.id = uid(); this.label = desc.label ?? ''; this.code = desc.code; this.cache = new Map(); }
+    constructor(desc) { this.id = uid(); this.label = desc.label ?? ''; this.code = desc.code; this.hash = null; }
     getCompilationInfo() { return Promise.resolve({ messages: [] }); }
+    // Returns [key, translation]; the key names the GLSL for the program cache.
     translate(entryPoint, stage) {
-      const key = stage + ':' + entryPoint;
-      let r = this.cache.get(key);
-      if (!r) { r = naga.translate(this.code, entryPoint, stage); this.cache.set(key, r); }
-      return r;
+      this.hash ??= hashString(this.code);
+      const key = `${stage}:${entryPoint}:${this.hash}`;
+      let r = translations.get(key);
+      if (!r && glslCache) {
+        r = glslCache.get(key);
+        if (r) { translations.set(key, r); gl2Stats.saved++; }
+      }
+      if (!r) {
+        const t = performance.now();
+        r = naga.translate(this.code, entryPoint, stage);
+        gl2Stats.translateMs += performance.now() - t; gl2Stats.translations++;
+        translations.set(key, r);
+        if (glslCache) glslCache.put(key, r);
+      }
+      return [key, r];
     }
   }
 
   // ----- render pipelines -----
   const programCache = new Map();
+  // Where pipeline creation spends its time (read by the boot preload's log).
+  const gl2Stats = globalThis.gl2Stats = { pipelines: 0, programs: 0, translations: 0, saved: 0, translateMs: 0, compileMs: 0 };
   function compileProgram(vsMod, vsEntry, fsMod, fsEntry) {
-    const key = `${vsMod.id}:${vsEntry}|${fsMod?.id ?? 0}:${fsEntry ?? ''}`;
+    gl2Stats.pipelines++;
+    const [vsKey, vs] = vsMod.translate(vsEntry ?? 'vs_main', 'vertex');
+    const [fsKey, fs] = fsMod ? fsMod.translate(fsEntry ?? 'fs_main', 'fragment') : ['', null];
+    const key = `${vsKey}|${fsKey}`;
     let p = programCache.get(key);
     if (p) return p;
-    const vs = vsMod.translate(vsEntry ?? 'vs_main', 'vertex');
-    const fs = fsMod ? fsMod.translate(fsEntry ?? 'fs_main', 'fragment') : null;
+    gl2Stats.programs++;
+    const tCompile = performance.now();
     const program = gl.createProgram();
     for (const [type, src] of [[gl.VERTEX_SHADER, vs.glsl], [gl.FRAGMENT_SHADER, fs ? fs.glsl : '#version 300 es\nvoid main(){}']]) {
       const sh = gl.createShader(type);
@@ -398,6 +473,7 @@ export function installWebGL2Fallback({ canvas, naga, force = false }) {
     }
     gl.linkProgram(program);
     if (!gl.getProgramParameter(program, gl.LINK_STATUS)) throw new Error(`gpu-gl2: program link failed: ${gl.getProgramInfoLog(program)}`);
+    gl2Stats.compileMs += performance.now() - tCompile;
     // Resource bindings: (group, binding) -> uniform block binding point / texture unit.
     gl.useProgram(program);
     const ubos = new Map(); // key g:b -> point

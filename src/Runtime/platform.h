@@ -49,6 +49,27 @@ typedef void (*Event)(void);
 
 typedef bool (*Predicate)(void);
 
+/// Signed integer division as the GameCube's `divw` does it. A divisor of zero
+/// does not trap there: the result is -1 for a negative dividend and 0
+/// otherwise (what Dolphin's interpreter returns too), and INT_MIN / -1, which
+/// is undefined on hardware, gives 0 here. WebAssembly traps on both, so game
+/// code that really divides by zero needs this on the port.
+#ifdef TARGET_PC
+#define PORT_DIVW(a, b) port_divw((a), (b))
+static inline int port_divw(int a, int b)
+{
+    if (b == 0) {
+        return a < 0 ? -1 : 0;
+    }
+    if (b == -1 && a == (int) 0x80000000) {
+        return 0;
+    }
+    return a / b;
+}
+#else
+#define PORT_DIVW(a, b) ((a) / (b))
+#endif
+
 #if defined(__MWERKS__) && defined(__PPCGEKKO__)
 #define MWERKS_GEKKO
 #endif

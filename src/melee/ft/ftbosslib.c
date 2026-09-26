@@ -1,6 +1,7 @@
 #include "ftbosslib.h"
 
 #include <melee/pl/forward.h>
+#include <Runtime/platform.h>
 
 #include <math.h>
 
@@ -36,7 +37,9 @@ void ftBossLib_8015BD20(HSD_GObj* gobj)
 void ftBossLib_8015BD24(s32 arg0, float* arg1, float arg2, s32 arg3, s32 arg4,
                         s32 arg5)
 {
-    *arg1 = ((arg3 / arg0) + HSD_Randi(arg4 - arg5) + arg5) / arg2;
+    /* arg0 is the fighter's CPU level, which can be 0 (Master Hand at the
+     * end of Classic mode trapped here); the GameCube's divw returns 0. */
+    *arg1 = (PORT_DIVW(arg3, arg0) + HSD_Randi(arg4 - arg5) + arg5) / arg2;
 }
 
 void ftBossLib_ReportGObjSlotType(HSD_GObj* gobj)

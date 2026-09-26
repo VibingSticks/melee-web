@@ -153,6 +153,10 @@ export async function bootToMainMenu(page, { timeout = 90000 } = {}) {
   // present it lasts only a frame or two, and the game is in the opening movie
   // (24) before this first poll -- since the movie is skipped, that scene just
   // waits for A or START, which the presses below provide.
+  // The shader preload screen comes first, and until the game starts its
+  // scene state reads 0 (TITLE); wait for the game's first frame instead.
+  const until = Date.now() + timeout;
+  while (Date.now() < until && !(await page.evaluate(() => (window.Module?._port_frame_count?.() ?? 0) > 0))) await sleep(250);
   await waitForScene(page, s => s.mode === 40 || s.mode === 0 || s.mode === 1 || s.mode === 24, { timeout, what: 'the boot sequence' });
   await note('booted');
 

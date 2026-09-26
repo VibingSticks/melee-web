@@ -1503,6 +1503,13 @@ int HSD_SynthPStreamStart(int entrynum, u8 vol, u8 vol2, int channel)
     PAD_STACK(8);
 
     do {
+#ifdef TARGET_PC
+        /* Set while a block of the streamed music is being read; the read's
+         * DVD callback clears it, and the host pump only delivers that
+         * callback when the game yields. Starting a stream mid-read spun here
+         * forever: a hung tab (the browser's "page is slowing down" bar). */
+        port_yield();
+#endif
     } while (HSD_Synth_804D7778 != 0);
 
     HSD_Synth_804D7778 = 1;

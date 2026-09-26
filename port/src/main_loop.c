@@ -381,6 +381,16 @@ static void report_scene_change(void)
                  s_last >> 8, s_last & 0xFF, s_frames_here);
         s_last = now;
         s_frames_here = 0;
+        /* Between scenes, when this session has met pipelines it had not
+         * compiled before, have the page add them to the saved list the next
+         * boot's preload compiles (boot.js savePipelines). */
+        extern void port_pipelines_save(void);
+        static uint32_t s_created_at_save;
+        const AuroraStats* st = aurora_get_stats();
+        if (st != NULL && st->createdPipelines > s_created_at_save) {
+            s_created_at_save = st->createdPipelines;
+            port_pipelines_save();
+        }
     } else {
         s_frames_here++;
     }
@@ -623,15 +633,21 @@ int main(int argc, char** argv)
      * shader pipeline a recorded session used, compiled in the background
      * from here on so a match's first draws do not stall on them. */
     {
-        extern uint8_t* port_pipeline_seed_take(uint32_t* size);
-        uint32_t seed_size = 0;
-        uint8_t* seed = port_pipeline_seed_take(&seed_size);
-        if (seed != NULL) {
-            size_t queued = aurora_pipeline_seed_import(seed, seed_size);
-            port_log("pipeline seed: %u bytes, %u pipelines queued", seed_size, (unsigned) queued);
-            free(seed);
-            preload_pipelines();
+        /* Two lists: the one shipped with the page, and the pipelines this
+         * browser's own sessions met that it lacked (saved by boot.js).
+         * Import skips what is already queued. */
+        extern uint8_t* port_pipeline_seed_take(uint32_t* size, int saved);
+        for (int saved = 0; saved <= 1; saved++) {
+            uint32_t seed_size = 0;
+            uint8_t* seed = port_pipeline_seed_take(&seed_size, saved);
+            if (seed != NULL) {
+                size_t queued = aurora_pipeline_seed_import(seed, seed_size);
+                port_log("pipeline %s: %u bytes, %u pipelines queued", saved ? "list saved by earlier sessions" : "seed",
+                         seed_size, (unsigned) queued);
+                free(seed);
+            }
         }
+        preload_pipelines();
     }
     /* SDL creates the window resizable, and its resize handler sets the canvas
      * drawing buffer to whatever CSS size the page gives it. Aurora then makes

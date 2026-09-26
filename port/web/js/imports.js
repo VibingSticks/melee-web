@@ -76,11 +76,13 @@ mergeInto(LibraryManager.library, {
   },
   // The pipeline warm-up list boot.js decoded (Module.pipelineSeed), copied
   // into the heap for aurora_pipeline_seed_import; the caller frees it.
-  port_pipeline_seed_take__sig: 'ii',
+  // saved: 0 for the shipped list, 1 for the one earlier sessions saved.
+  port_pipeline_seed_take__sig: 'iii',
   port_pipeline_seed_take__deps: ['malloc'],
-  port_pipeline_seed_take: function (sizePtr) {
-    const seed = Module.pipelineSeed;
-    Module.pipelineSeed = null;
+  port_pipeline_seed_take: function (sizePtr, saved) {
+    const name = saved ? 'pipelineSeedSaved' : 'pipelineSeed';
+    const seed = Module[name];
+    Module[name] = null;
     if (!seed || !seed.length) { HEAPU32[sizePtr >> 2] = 0; return 0; }
     const p = _malloc(seed.length);
     HEAPU8.set(seed, p);
@@ -219,6 +221,12 @@ mergeInto(LibraryManager.library, {
   port_preload_progress__sig: 'iiii',
   port_preload_progress: function (done, total, finished) {
     return Module.onPreload && Module.onPreload(done, total, !!finished) ? 1 : 0;
+  },
+  // A scene changed after new pipelines were created: boot.js merges them
+  // into the saved list (it calls back into the wasm for the export).
+  port_pipelines_save__sig: 'v',
+  port_pipelines_save: function () {
+    if (Module.savePipelines) Module.savePipelines();
   },
   port_disc_size__sig: 'i',
   port_disc_size: function () {

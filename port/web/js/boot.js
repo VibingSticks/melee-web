@@ -357,6 +357,9 @@ async function startGame(disc, fst) {
   // too: it compiles on the main thread, which the loading screen can afford.
   await rendererReady;
   Module.pipelineSeed = await seedPromise;
+  const saved = params.has('noseed') ? null : await savedPipelines.load(Module.pipelineSeed);
+  Module.pipelineSeedSaved = saved;
+  Module.savePipelines = () => savedPipelines.merge(Module);
   if (Module.pipelineSeed) console.log('[boot] pipeline seed handed to the game');
   status('Running - press Tab to hide this bar');
   gameRunning = true;
@@ -399,6 +402,103 @@ function preloadScreen() {
     return skip;
   };
 }
+
+// The pipelines this browser's own sessions needed that the shipped list
+// lacked (a Classic boss, a stage the recording never visited), kept in
+// IndexedDB so the next boot's loading screen compiles them too. Stored as
+// the same seed format, gzipped: magic "APSD", count, then per entry
+// type, version, size, first frame (u32 LE each) and the config bytes.
+const savedPipelines = (() => {
+  const DB = 'melee-pipelines', STORE = 'lists', KEY = 'mine';
+  let entries = null;    // Map key -> Uint8Array entry (header + config)
+  let shipped = new Map(); // what pipelines.bin.gz already has: not worth saving again
+  let busy = false;
+  const open = () => new Promise((resolve, reject) => {
+    const req = indexedDB.open(DB, 1);
+    req.onupgradeneeded = () => req.result.createObjectStore(STORE);
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+  const gunzip = async (b) => new Uint8Array(await new Response(new Blob([b]).stream().pipeThrough(new DecompressionStream('gzip'))).arrayBuffer());
+  const gzip = async (b) => new Uint8Array(await new Response(new Blob([b]).stream().pipeThrough(new CompressionStream('gzip'))).arrayBuffer());
+  const keyOf = (u8, off, len) => { // FNV-1a over the entry's bytes
+    let h = 0x811c9dc5;
+    for (let i = off; i < off + len; i++) h = Math.imul(h ^ u8[i], 0x01000193);
+    return `${h >>> 0}:${len}`;
+  };
+  function parse(u8, into) {
+    const dv = new DataView(u8.buffer, u8.byteOffset, u8.byteLength);
+    if (u8.length < 8 || dv.getUint32(0, true) !== 0x44535041) return 0;
+    let off = 8, added = 0;
+    for (let i = 0, n = dv.getUint32(4, true); i < n && off + 16 <= u8.length; i++) {
+      const len = 16 + dv.getUint32(off + 8, true);
+      if (off + len > u8.length) break;
+      // The first-frame field (off + 12) differs between sessions; leave it out of the key.
+      const k = keyOf(u8, off, 12) + '/' + keyOf(u8, off + 16, len - 16);
+      if (!into.has(k) && !(into !== shipped && shipped.has(k))) { into.set(k, u8.slice(off, off + len)); added++; }
+      off += len;
+    }
+    return added;
+  }
+  function serialize() {
+    let total = 8;
+    for (const e of entries.values()) total += e.length;
+    const out = new Uint8Array(total), dv = new DataView(out.buffer);
+    dv.setUint32(0, 0x44535041, true); dv.setUint32(4, entries.size, true);
+    let off = 8;
+    for (const e of entries.values()) { out.set(e, off); off += e.length; }
+    return out;
+  }
+  return {
+    async load(shippedSeed) {
+      entries = new Map();
+      if (shippedSeed) parse(shippedSeed, shipped);
+      try {
+        if (typeof DecompressionStream !== 'function') return null;
+        const db = await open();
+        const gz = await new Promise((resolve) => {
+          const req = db.transaction(STORE, 'readonly').objectStore(STORE).get(KEY);
+          req.onsuccess = () => resolve(req.result); req.onerror = () => resolve(null);
+        });
+        if (!gz) return null;
+        const raw = await gunzip(gz);
+        parse(raw, entries);
+        console.log(`[boot] saved pipelines: ${entries.size} from earlier sessions (${gz.length} bytes)`);
+        return raw;
+      } catch (e) {
+        console.warn('[boot] saved pipelines not loaded:', e && e.message);
+        return null;
+      }
+    },
+    async merge(Module) {
+      if (busy || !entries || typeof CompressionStream !== 'function') return;
+      busy = true;
+      try {
+        const sizePtr = Module._malloc(4);
+        const p = Module._port_debug_pipeline_export(sizePtr);
+        const h = Module.HEAPU8, n = (h[sizePtr] | h[sizePtr + 1] << 8 | h[sizePtr + 2] << 16 | h[sizePtr + 3] << 24) >>> 0;
+        Module._free(sizePtr);
+        if (!p) return;
+        const exported = Module.HEAPU8.slice(p, p + n);
+        Module._free(p);
+        const added = parse(exported, entries);
+        if (!added) return;
+        const gz = await gzip(serialize());
+        const db = await open();
+        await new Promise((resolve) => {
+          const tx = db.transaction(STORE, 'readwrite');
+          tx.objectStore(STORE).put(gz, KEY);
+          tx.oncomplete = resolve; tx.onerror = resolve;
+        });
+        console.log(`[melee] pipelines: saved ${entries.size} for the next boot's preload (+${added}, ${gz.length} bytes)`);
+      } catch (e) {
+        console.warn('[melee] pipelines not saved:', e && e.message);
+      } finally {
+        busy = false;
+      }
+    },
+  };
+})();
 
 // The pipeline warm-up list, pipelines.bin.gz: base64 in a text script of the
 // offline file, a file next to the page otherwise. Absent or undecodable, the

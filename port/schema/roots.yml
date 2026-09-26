@@ -31,6 +31,18 @@
 - { prefix: sqEventInitDataLevelTbl, type: port_EventTable }
 # gmtou_0.c / gmtou_1.c: TmBox.dat bracket box tables (see port_BracketSrcEntry).
 - { prefix: tournament_box, type: port_BracketSrcEntry, array: object_run }
+# toy.c: the trophy tables (TyDatai.usd, TyDataf.dat) are pointer-free rows
+# with no stored count; each runs to the next root. Left big-endian, the
+# lottery drew trophy 0 ("Dummy") and never awarded anything.
+- { prefix: tyInitModelTbl, type: TrophyData, array: object_run }
+- { prefix: tyInitModelDTbl, type: TrophyData, array: object_run }
+- { prefix: tyModelSortTbl, type: ToyNameData, array: object_run }
+- { prefix: tyExpDifferentTbl, type: port_S16Run }
+- { prefix: tyNoGetUsTbl, type: port_S16Run }
+- { prefix: tyDisplayModelTbl, type: TyDspEntry, array: object_run }
+- { prefix: tyDisplayModelUsTbl, type: TyDspEntry, array: object_run }
+- { prefix: tyModelFileTbl, type: ToyModelFile, array: object_run }
+- { prefix: tyModelFileUsTbl, type: ToyModelFile, array: object_run }
 # gm_1879.c: the adventure stage intro (IrNml.dat) names one camera per stage
 # "mc01".."mc12", each a SceneCameraDesc {desc, anims}; the cobj projection
 # assertion (cobj.c:1304) fired on the big-endian descriptor without this.

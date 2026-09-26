@@ -409,6 +409,10 @@ typedef struct {
  * itcerebi.c, itlugia.c's aeroblasts): floats to the next object. */
 typedef struct { f32 v[1]; } port_F32Run;
 
+/* toy.c: s16 lists ended by -1 (tyNoGetUsTbl, tyExpDifferentTbl); run to the
+ * next object. */
+typedef struct { s16 v[1]; } port_S16Run;
+
 /* itfoods.c: one itFoodsAttributes row per food kind (it_8028F9D8 indexes the
  * block as Vec4 entries of the same size); the row count lives nowhere, so
  * the rows run to the next object. */

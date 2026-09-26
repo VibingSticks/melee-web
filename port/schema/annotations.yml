@@ -403,6 +403,8 @@ port_EvWords:
   w: { object_run: true }
 port_F32Run:
   v: { object_run: true }
+port_S16Run:
+  v: { object_run: true }
 port_KinokoAttrs:
   anims: { object_run: true }
 port_ItemModelDescJoints:

@@ -8,7 +8,8 @@
  * its envelopes and starts and stops voices.
  *
  * Here the AX frame is driven from the video frame instead (port_ax_pump),
- * mixed in software and pushed to an SDL audio stream. Bit-exactness with the
+ * mixed in software and pushed to an AudioWorklet (or an SDL audio stream
+ * with ?audio=sdl). Bit-exactness with the
  * DSP is not attempted: volumes ramp once per frame rather than per sample, and
  * resampling is linear rather than the DSP's 4-tap filter.
  *
@@ -415,7 +416,29 @@ static void run_ax_frame(s16* out, int run_callback)
 
 /* --- the port's side ----------------------------------------------------- */
 
+/* AudioWorklet output (web/js/imports.js). */
+extern int port_audio_open(int rate);
+extern int port_audio_running(void);
+extern int port_audio_queued_frames(void);
+extern int port_audio_dry_frames(void);
+extern void port_audio_push(const s16* samples, int frames);
+
+static int g_worklet; /* output through the AudioWorklet rather than SDL */
+static void open_sdl(void);
+
 void port_ax_init(void)
+{
+    /* ?audio=sdl (boot.js sets Module.audioBackend) keeps SDL's output. */
+    if (!emscripten_run_script_int("(typeof Module !== 'undefined' && Module.audioBackend === 'sdl') | 0") &&
+        port_audio_open(AX_SAMPLE_RATE)) {
+        g_worklet = 1;
+        port_log("audio: %d Hz stereo out (AudioWorklet)", AX_SAMPLE_RATE);
+        return;
+    }
+    open_sdl();
+}
+
+static void open_sdl(void)
 {
     SDL_AudioSpec spec = { SDL_AUDIO_S16, 2, AX_SAMPLE_RATE };
     if (!SDL_InitSubSystem(SDL_INIT_AUDIO)) {
@@ -430,7 +453,7 @@ void port_ax_init(void)
         return;
     }
     SDL_ResumeAudioStreamDevice(g_stream);
-    port_log("audio: %d Hz stereo out", AX_SAMPLE_RATE);
+    port_log("audio: %d Hz stereo out (SDL)", AX_SAMPLE_RATE);
 }
 
 static unsigned g_dry_frames; /* AX frames mixed and dropped after an underrun */
@@ -442,31 +465,105 @@ unsigned port_ax_take_dry_ms(void)
     return ms;
 }
 
+/* Mix and drop AX frames the output went without, so the music keeps its
+ * place on the wall clock (see port_ax_pump). */
+static void skip_ax_frames(int missed, int from_frame)
+{
+    if (missed > 50) {
+        missed = 50; /* 250 ms: a longer stall is a load, and the frame pump resyncs too */
+    }
+    g_dry_frames += (unsigned) missed;
+    while (missed-- > 0) {
+        s16 frame[AX_FRAME_SAMPLES * 2];
+        run_ax_frame(frame, from_frame);
+    }
+}
+
+/* No output (none opened, or the worklet still loading or held by the
+ * autoplay policy): the game still needs its AX callback to make progress,
+ * so run it on the wall clock and discard the mix. */
+static void pump_silent(int budget, int from_frame)
+{
+    static double s_next_ms;
+    double now = emscripten_get_now();
+    if (s_next_ms == 0 || s_next_ms < now - 250.0) {
+        s_next_ms = now;
+    }
+    while (budget-- > 0 && now >= s_next_ms) {
+        s16 frame[AX_FRAME_SAMPLES * 2];
+        run_ax_frame(frame, from_frame);
+        s_next_ms += 1000.0 * AX_FRAME_SAMPLES / AX_SAMPLE_RATE;
+    }
+    if (s_next_ms < now) {
+        s_next_ms = now;
+    }
+}
+
 void port_ax_pump(int from_frame)
 {
-    /* Keep roughly this much audio queued. Enough that a slow frame does not
-     * starve the device, short enough that input still feels attached to sound. */
-    const int target_bytes = AX_SAMPLE_RATE * 2 * 2 * 50 / 1000; /* 50 ms */
-    const int frame_bytes = AX_FRAME_SAMPLES * 2 * 2;
-
     /* This runs from the frame pump and from port_yield, because the game
      * blocks inside scene code waiting for sound banks to load and the synth
      * callback is what completes them (HSD_SynthSFXWaitForLoadCompletion).
      * Producing to a queue depth rather than on a schedule keeps the rate right
      * whichever one calls, and bounds how far ahead a burst can run. */
     int budget = 16;
+    const double frame_ms = 1000.0 * AX_FRAME_SAMPLES / AX_SAMPLE_RATE;
+
+    if (g_worklet) {
+        int running = port_audio_running();
+        if (running < 0) {
+            g_worklet = 0; /* the worklet failed to load: SDL's output instead */
+            port_log("audio: the AudioWorklet failed; falling back to SDL");
+            open_sdl();
+            return;
+        }
+        if (running == 0) {
+            pump_silent(budget, from_frame);
+            return;
+        }
+        /* The worklet plays on the audio thread, so a slow frame only costs
+         * sound when it outlasts the queue. Keep 60 ms queued, more for a
+         * while after the queue has run dry (a machine that stalls often
+         * gets a deeper buffer), and when it has run dry, drop what it
+         * missed so the music stays in time with the game's clock. */
+        static int s_dry_seen = -1;
+        static double s_target_ms = 60.0, s_last_ms;
+        double now = emscripten_get_now();
+        int dry = port_audio_dry_frames();
+        if (s_dry_seen < 0) {
+            s_dry_seen = dry;
+        }
+        if (dry != s_dry_seen) {
+            skip_ax_frames((dry - s_dry_seen) / AX_FRAME_SAMPLES, from_frame);
+            s_dry_seen = dry;
+            s_target_ms = s_target_ms + 20.0 > 150.0 ? 150.0 : s_target_ms + 20.0;
+        } else if (s_last_ms != 0.0 && s_target_ms > 60.0) {
+            s_target_ms -= (now - s_last_ms) * 0.002; /* back down 2 ms a second */
+        }
+        s_last_ms = now;
+        int target_frames = (int) (s_target_ms * AX_SAMPLE_RATE / 1000.0);
+        int queued = port_audio_queued_frames();
+        while (budget-- > 0 && queued < target_frames) {
+            s16 frame[AX_FRAME_SAMPLES * 2];
+            run_ax_frame(frame, from_frame);
+            port_audio_push(frame, AX_FRAME_SAMPLES);
+            queued += AX_FRAME_SAMPLES;
+        }
+        return;
+    }
 
     if (g_stream != NULL) {
-        /* The GameCube's DSP keeps mixing while the CPU is stuck on a slow
-         * frame. Here the browser's audio callback runs on the main thread,
-         * so a stall starves Web Audio without the stream ever looking empty,
-         * and the music resumes where it stopped: late for good, behind the
-         * movie, whose alarm clock catches up. Compare what the device has
-         * taken with the wall clock, and when it has fallen behind, mix the
-         * frames it missed and drop them, so the music stays on time. */
+        /* Keep roughly this much audio queued. Enough that a slow frame does
+         * not starve the device, short enough that input still feels attached
+         * to sound. */
+        const int target_bytes = AX_SAMPLE_RATE * 2 * 2 * 50 / 1000; /* 50 ms */
+        /* SDL's browser callback runs on the main thread, so a stall starves
+         * Web Audio without the stream ever looking empty, and the music
+         * resumes where it stopped: late for good, behind the movie, whose
+         * alarm clock catches up. Compare what the device has taken with the
+         * wall clock, and when it has fallen behind, drop what it missed. */
         static double s_start_ms, s_base_ms;
         static double s_put_ms, s_dropped_ms; /* audio produced: queued, and mixed but dropped */
-        const double frame_ms = 1000.0 * AX_FRAME_SAMPLES / AX_SAMPLE_RATE;
         const double bytes_per_ms = AX_SAMPLE_RATE * 2 * 2 / 1000.0;
         double now = emscripten_get_now();
         if (s_start_ms == 0.0) {
@@ -479,16 +576,11 @@ void port_ax_pump(int from_frame)
         } else if (behind_ms > 60.0) { /* the device pulls about 43 ms at a time */
             int missed = (int) (behind_ms / frame_ms);
             if (missed > 50) {
-                /* over 250 ms is a load, and the frame pump resyncs there too */
                 s_base_ms += (missed - 50) * frame_ms;
                 missed = 50;
             }
-            g_dry_frames += (unsigned) missed;
             s_dropped_ms += missed * frame_ms;
-            while (missed-- > 0) {
-                s16 frame[AX_FRAME_SAMPLES * 2];
-                run_ax_frame(frame, from_frame);
-            }
+            skip_ax_frames(missed, from_frame);
         }
         while (budget-- > 0 && (int) SDL_GetAudioStreamQueued(g_stream) < target_bytes) {
             s16 frame[AX_FRAME_SAMPLES * 2];
@@ -502,21 +594,7 @@ void port_ax_pump(int from_frame)
     if (!g_audio_failed) {
         return; /* not opened yet */
     }
-
-    /* Silent, but the game still needs its AX callback to make progress. */
-    static double s_next_ms;
-    double now = emscripten_get_now();
-    if (s_next_ms == 0) {
-        s_next_ms = now;
-    }
-    while (budget-- > 0 && now >= s_next_ms) {
-        s16 frame[AX_FRAME_SAMPLES * 2];
-        run_ax_frame(frame, from_frame);
-        s_next_ms += 1000.0 * AX_FRAME_SAMPLES / AX_SAMPLE_RATE;
-    }
-    if (s_next_ms < now) {
-        s_next_ms = now;
-    }
+    pump_silent(budget, from_frame);
 }
 
 /* --- AXFX ---------------------------------------------------------------- */

@@ -87,6 +87,133 @@ mergeInto(LibraryManager.library, {
     HEAPU32[sizePtr >> 2] = seed.length;
     return p;
   },
+  // Audio out through an AudioWorklet (ax_hle.c). SDL's Emscripten backend
+  // plays from a ScriptProcessorNode, whose callback runs on the main thread:
+  // any frame that holds the thread past its ~43 ms buffer is a gap in the
+  // sound. A worklet plays on the audio thread from a queue the game fills,
+  // so the game only has to stay ahead of the queue, not of every callback.
+  // The worklet reports how much it played and how long it ran dry, which is
+  // what the mixer uses to stay on the wall clock.
+  port_audio_open__sig: 'ii',
+  port_audio_open: function (rate) {
+    try {
+      var AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC || !AC.prototype || !('audioWorklet' in AC.prototype)) return 0;
+      var ctx = new AC({ sampleRate: rate, latencyHint: 'interactive' });
+      var a = Module.portAudio = {
+        ctx: ctx, rate: rate, node: null, failed: false,
+        posted: 0,         // frames handed to the worklet
+        played: 0,         // frames it had played at the last report
+        dry: 0,            // frames of silence it played for want of data
+        reportedAt: 0,     // performance.now() of that report
+        pending: [],       // chunks pushed before the worklet was ready
+      };
+      var src =
+        'class PortAudio extends AudioWorkletProcessor {\n' +
+        '  constructor() {\n' +
+        '    super(); this.q = []; this.off = 0; this.avail = 0;\n' +
+        '    this.played = 0; this.dry = 0; this.started = false; this.last = 0;\n' +
+        '    this.port.onmessage = (e) => {\n' +
+        '      const b = e.data; this.q.push(b); this.avail += b.length >> 1; this.started = true;\n' +
+        '      const cap = sampleRate * 0.4;\n' +  // never hold more than 400 ms
+        '      while (this.avail > cap && this.q.length > 1) {\n' +
+        '        const d = this.q.shift(), gone = (d.length >> 1) - this.off;\n' +
+        '        this.avail -= gone; this.played += gone; this.off = 0;\n' +  // counted as played: the game's queue estimate is posted - played
+        '      }\n' +
+        '    };\n' +
+        '  }\n' +
+        '  process(inputs, outputs) {\n' +
+        '    const out = outputs[0], L = out[0], R = out[1] || out[0], n = L.length;\n' +
+        '    let i = 0;\n' +
+        '    while (i < n && this.q.length) {\n' +
+        '      const b = this.q[0], left = (b.length >> 1) - this.off, take = Math.min(n - i, left);\n' +
+        '      for (let k = 0; k < take; k++) { const j = (this.off + k) << 1; L[i + k] = b[j]; R[i + k] = b[j + 1]; }\n' +
+        '      i += take; this.off += take;\n' +
+        '      if (take === left) { this.q.shift(); this.off = 0; }\n' +
+        '    }\n' +
+        '    this.avail -= i; this.played += i;\n' +
+        '    if (i < n) { L.fill(0, i); if (R !== L) R.fill(0, i); if (this.started) this.dry += n - i; }\n' +
+        '    if (currentFrame - this.last >= sampleRate / 50) {\n' +
+        '      this.last = currentFrame; this.port.postMessage([this.played, this.dry]);\n' +
+        '    }\n' +
+        '    return true;\n' +
+        '  }\n' +
+        '}\n' +
+        'registerProcessor("port-audio", PortAudio);\n';
+      // A blob: URL first; from file:// (the offline page) the document has
+      // no origin and Chrome refuses blob: worklet modules, so try data:.
+      var blobUrl = URL.createObjectURL(new Blob([src], { type: 'application/javascript' }));
+      var dataUrl = 'data:application/javascript;base64,' + btoa(src);
+      ctx.audioWorklet.addModule(blobUrl).catch(function () {
+        return ctx.audioWorklet.addModule(dataUrl);
+      }).then(function () {
+        var node = new AudioWorkletNode(ctx, 'port-audio', { numberOfInputs: 0, outputChannelCount: [2] });
+        node.port.onmessage = function (e) {
+          a.played = e.data[0]; a.dry = e.data[1]; a.reportedAt = performance.now();
+        };
+        node.connect(ctx.destination);
+        a.node = node;
+        a.reportedAt = performance.now();
+        for (var i = 0; i < a.pending.length; i++) node.port.postMessage(a.pending[i], [a.pending[i].buffer]);
+        a.pending = [];
+      }, function (err) {
+        console.error('[melee] audio: the AudioWorklet did not load:', err);
+        a.failed = true;
+        ctx.close(); // ax_hle.c falls back to SDL, which opens its own
+      });
+      // Autoplay: a context made before any gesture starts suspended. The
+      // disc was chosen with a click, so this is usually already allowed.
+      var resume = function () { if (ctx.state !== 'running') ctx.resume(); };
+      resume();
+      ['pointerdown', 'keydown', 'touchstart'].forEach(function (t) {
+        window.addEventListener(t, resume, { capture: true });
+      });
+      return 1;
+    } catch (err) {
+      console.error('[melee] audio: no AudioWorklet output:', err);
+      return 0;
+    }
+  },
+  // 1 while the worklet is playing, 0 while it is loading or the context is
+  // suspended (then the mixer runs on the wall clock, silently), -1 if it
+  // failed for good.
+  port_audio_running__sig: 'i',
+  port_audio_running: function () {
+    var a = Module.portAudio;
+    if (!a || a.failed) return -1;
+    return a.node && a.ctx.state === 'running' ? 1 : 0;
+  },
+  // Frames queued in the worklet, from its last report run forward by the
+  // time since: the report is at most ~20 ms old.
+  port_audio_queued_frames__sig: 'i',
+  port_audio_queued_frames: function () {
+    var a = Module.portAudio;
+    if (!a || !a.node) return 0;
+    var reported = a.posted - a.played;
+    var since = (performance.now() - a.reportedAt) * a.rate / 1000;
+    var q = reported - since;
+    return q > 0 ? Math.floor(q) : 0;
+  },
+  // Frames of silence the worklet has played for want of data, in total.
+  port_audio_dry_frames__sig: 'i',
+  port_audio_dry_frames: function () {
+    var a = Module.portAudio;
+    return a ? a.dry >>> 0 : 0;
+  },
+  port_audio_push__sig: 'vii',
+  port_audio_push: function (ptr, frames) {
+    var a = Module.portAudio;
+    if (!a) return;
+    var n = frames * 2, buf = new Float32Array(n), base = ptr >> 1;
+    for (var i = 0; i < n; i++) buf[i] = HEAP16[base + i] / 32768;
+    a.posted += frames;
+    if (a.node) {
+      a.node.port.postMessage(buf, [buf.buffer]);
+    } else {
+      a.pending.push(buf);
+      if (a.pending.length > 40) { a.posted -= a.pending.shift().length >> 1; }
+    }
+  },
   port_disc_size__sig: 'i',
   port_disc_size: function () {
     return Module.discSource ? Module.discSource.size >>> 0 : 0;

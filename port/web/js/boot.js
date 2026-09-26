@@ -310,6 +310,7 @@ async function startGame(disc, fst) {
   const yieldTimer = params.get('yield') === 'timer';
   // ?frameskip=off: draw every game frame even when that means slow motion.
   const noFrameSkip = params.get('frameskip') === 'off';
+  const audioBackend = params.get('audio'); // 'sdl' keeps SDL's ScriptProcessor output
   const createMelee = await meleeFactory();
   const seedPromise = params.has('noseed') ? Promise.resolve(null) : loadPipelineSeed();
   const Module = await createMelee({
@@ -318,6 +319,7 @@ async function startGame(disc, fst) {
     forceCompatProfile,
     renderWidth,
     noFrameSkip,
+    audioBackend,
     renderHeight,
     yieldTimer,
     noInitialRun: true,

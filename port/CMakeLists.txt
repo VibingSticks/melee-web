@@ -42,6 +42,7 @@ if (EMSCRIPTEN)
         src/dvd_web/fst.c
         src/dvd_web/dvd_web.c
         src/vi_shim.c src/pad_web.c
+        src/thp_web/thp_jpeg.c
         src/font_dol.c
         src/gx_shim.c
         $<IF:$<BOOL:${PORT_AUDIO}>,src/ax_hle/ax_hle.c,src/ax_hle/ax_stub.c>

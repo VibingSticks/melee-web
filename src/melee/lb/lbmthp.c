@@ -557,26 +557,6 @@ void lbMthp_8001F410(const char* filename, u32* rate_table, void* buf,
 
     HSD_ASSERT(833, !MoviePlayer.power);
     MoviePlayer.power = 1;
-#ifdef TARGET_PC
-    /* The SDK decoder builds, and its header and frame sizes read correctly
-     * now, but it cannot actually decode here: seven of its ten functions --
-     * the Huffman tables, the Huffman decode, the three DCT component decoders
-     * and both inverse DCTs -- exist only as PowerPC assembly behind
-     * __MWERKS__. Compiled for anything else they fall through and return
-     * whatever was in the register, so the Huffman reader never finds a valid
-     * code and spins. Playing movies needs those written in C. Until then,
-     * report the movie as finished at once with nothing to draw, so movie
-     * scenes still end normally. */
-    (void) memoryRequired;
-    MoviePlayer.rate_table = rate_table;
-    MoviePlayer.unk_140 = NULL;
-    MoviePlayer.unk_68 = loop;
-    MoviePlayer.unk_144 = 1;
-    MoviePlayer.unk_148 = 0;
-    MoviePlayer.unk_70 = 0;
-    port_log("movie '%s' skipped: the SDK decoder's hot path is PowerPC asm", filename);
-    return;
-#endif
     fn_8001EB14(&MoviePlayer, filename);
     MoviePlayer.rate_table = rate_table;
     memoryRequired = fn_8001EBF0(&MoviePlayer);

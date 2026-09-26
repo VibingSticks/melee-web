@@ -8,13 +8,10 @@ file(GLOB_RECURSE GAME_SOURCES CONFIGURE_DEPENDS
     ${GAME_ROOT}/src/melee/*.c
     ${GAME_ROOT}/src/sysdolphin/*.c)
 
-# The SDK's THP video decoder, which the intro movie needs. It compiles, but it
-# does NOT decode on this target: 36 asm blocks sit behind __MWERKS__ and all
-# but three of them are the hot path itself -- both inverse DCTs, the Huffman
-# lookup, and the three DCT component readers. Only three prime the
-# paired-single quantisation registers, and even those carry meaning (GQR6
-# encodes the IDCT's level-shift and clamp). Movies are skipped in lbmthp.c
-# until those routines are written in C.
+# The SDK's THP video decoder, which the movies (.mth) and ending stills (.thp)
+# need. Its Huffman decoding and inverse DCTs are PowerPC asm behind
+# __MWERKS__, so on this target THPVideoDecode and the two tile stores hand
+# the frame to a portable JPEG decoder (port/src/thp_web/thp_jpeg.c).
 list(APPEND GAME_SOURCES ${GAME_ROOT}/libs/dolphin/src/dolphin/thp/THPDec.c)
 
 set(GAME_EXCLUDE

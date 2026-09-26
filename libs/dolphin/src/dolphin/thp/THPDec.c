@@ -256,9 +256,72 @@ typedef struct THPVideoDecodeHeader {
  * @return       @p work, ready for ::THPDec_80331340 / ::THPDec_803313D0, or
  *               NULL if the frame could not be read.
  */
+#ifdef TARGET_PC
+/* The SDK decoder's Huffman decoding and inverse DCTs exist only as PowerPC
+ * assembly, so on this target a frame is decoded whole by a portable JPEG
+ * decoder (port/src/thp_web/thp_jpeg.c) into planar Y/U/V, and the two copy
+ * functions below tile those planes into the caller's GX I8 textures -- the
+ * layout the SDK's per-MCU-row stores produce. One frame is decoded at a
+ * time, so the planes are simply held here. */
+#include <stdlib.h>
+#include <thp_web/thp_jpeg.h>
+#include <port.h>
+
+static u8* port_thp_planes;
+static size_t port_thp_planes_cap;
+static int port_thp_w, port_thp_h;
+
+static THPFileInfo* port_thp_video_decode(THPVideoDecodeHeader* header, u8* statusOut, THPFileInfo* work,
+                                          const u8* data)
+{
+    int w = header->xSize, h = header->ySize, fw, fh, rc;
+    size_t need = (size_t) w * h * 3 / 2;
+    if (!port_thp_frame_size(data, (size_t) 1 << 24, &fw, &fh) || fw != w || fh != h) {
+        port_log("thp: frame is %dx%d, the player expects %dx%d", fw, fh, w, h);
+        *statusOut = 3;
+        return NULL;
+    }
+    if (need > port_thp_planes_cap) {
+        free(port_thp_planes);
+        port_thp_planes = malloc(need);
+        port_thp_planes_cap = port_thp_planes != NULL ? need : 0;
+        if (port_thp_planes == NULL) {
+            *statusOut = 3;
+            return NULL;
+        }
+    }
+    rc = port_thp_decode(data, (size_t) 1 << 24, port_thp_planes, port_thp_planes + w * h,
+                         port_thp_planes + w * h + w * h / 4, w, h);
+    if (rc != 0) {
+        static int logged;
+        if (logged++ < 4) {
+            port_log("thp: frame did not decode (%d)", rc);
+        }
+    }
+    port_thp_w = w;
+    port_thp_h = h;
+    *statusOut = 0;
+    return work;
+}
+
+static void port_thp_store(void* tileY, void* tileU, void* tileV)
+{
+    int w = port_thp_w, h = port_thp_h;
+    if (port_thp_planes == NULL || w == 0) {
+        return;
+    }
+    port_thp_tile_i8(port_thp_planes, tileY, w, h);
+    port_thp_tile_i8(port_thp_planes + w * h, tileU, w / 2, h / 2);
+    port_thp_tile_i8(port_thp_planes + w * h + w * h / 4, tileV, w / 2, h / 2);
+}
+#endif
+
 THPFileInfo* THPVideoDecode(void* hdr, void* status_out, THPFileInfo* work,
                             void* data, THPDec_8032FD40_Data* desc)
 {
+#ifdef TARGET_PC
+    return port_thp_video_decode(hdr, status_out, work, data);
+#endif
     u8 done;
     THPFileInfo* info = work;
     THPVideoDecodeHeader* header = hdr;
@@ -788,6 +851,11 @@ static u8 __THPRestartDefinition(THPFileInfo* info)
 
 void THPDec_80331340(THPFileInfo* info, void* tileY, void* tileU, void* tileV)
 {
+#ifdef TARGET_PC
+    (void) info;
+    port_thp_store(tileY, tileU, tileV);
+    return;
+#endif
     info->tileY = tileY;
     info->tileU = tileU;
     info->tileV = tileV;
@@ -813,6 +881,12 @@ void THPDec_80331340(THPFileInfo* info, void* tileY, void* tileU, void* tileV)
 void THPDec_803313D0(THPFileInfo* info, void* tileY, void* tileU, void* tileV,
                      u32 x)
 {
+#ifdef TARGET_PC
+    (void) info;
+    (void) x;
+    port_thp_store(tileY, tileU, tileV);
+    return;
+#endif
     u32 width = x;
     info->tileY = tileY;
     info->tileU = tileU;

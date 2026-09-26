@@ -16,6 +16,11 @@
 - { prefix: MemCardBanner_, type: opaque }   # LbMcGame: raw banner texels
 - { prefix: MemCardIcon, type: opaque }      # LbMcGame: icon pointer table and texels
 - { prefix: SIS_, type: opaque }             # sislib text tables: kerning bytes and glyph texels
+- { prefix: ftDemo, type: opaque }           # demo motion blocks (intro/ending/results/Vi): each motion
+                                             # is its own archive, relocated and converted when played
+                                             # (ftData_80085CD8 -> lbArchiveRelocate)
+- { prefix: smSoundTestLoadData, type: opaque }  # SmSt.dat: the debug sound test only
+- { prefix: dbLoadCommonData, type: opaque }     # DbCo.dat: debug menus only
 - { suffix: _camanim, type: HSD_CameraAnim }
 - { suffix: _lightanim, type: HSD_LightAnim }
 # Texture exports: `_tlut_desc` is an HSD_TlutDesc, but `_image` and `_tlut`

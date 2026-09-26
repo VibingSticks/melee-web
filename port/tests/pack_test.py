@@ -27,7 +27,8 @@ MELEE_JS = """var createMelee = (() => {
 """
 
 DISC_SOURCE = "export class DiscSource {\n  constructor(f) { this.file = f; }\n}\n"
-GPU_GL2 = "export function installWebGL2Fallback(opts) { return opts; }\n"
+GPU_GL2 = ("export function installWebGL2Fallback(opts) { return opts; }\n"
+           "export async function openGlslCache(v) { return null; }\n")
 NAGA_JS = "export async function loadNaga(source) { return { source }; }\n"
 BOOT = """import { DiscSource } from './disc_source.js';
 const OFFLINE = globalThis.__MELEE_OFFLINE__ ?? null;

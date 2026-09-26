@@ -214,6 +214,12 @@ mergeInto(LibraryManager.library, {
       if (a.pending.length > 40) { a.posted -= a.pending.shift().length >> 1; }
     }
   },
+  // The boot screen's pipeline preload (main_loop.c preload_pipelines):
+  // boot.js draws it; returns 1 once the player has pressed Skip.
+  port_preload_progress__sig: 'iiii',
+  port_preload_progress: function (done, total, finished) {
+    return Module.onPreload && Module.onPreload(done, total, !!finished) ? 1 : 0;
+  },
   port_disc_size__sig: 'i',
   port_disc_size: function () {
     return Module.discSource ? Module.discSource.size >>> 0 : 0;

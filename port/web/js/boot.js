@@ -311,6 +311,7 @@ async function startGame(disc, fst) {
   // ?frameskip=off: draw every game frame even when that means slow motion.
   const noFrameSkip = params.get('frameskip') === 'off';
   const audioBackend = params.get('audio'); // 'sdl' keeps SDL's ScriptProcessor output
+  const preload = params.get('preload'); // 'off' starts without compiling the pipelines first
   const createMelee = await meleeFactory();
   const seedPromise = params.has('noseed') ? Promise.resolve(null) : loadPipelineSeed();
   const Module = await createMelee({
@@ -320,6 +321,8 @@ async function startGame(disc, fst) {
     renderWidth,
     noFrameSkip,
     audioBackend,
+    preload,
+    onPreload: preloadScreen(),
     renderHeight,
     yieldTimer,
     noInitialRun: true,
@@ -352,6 +355,38 @@ async function startGame(disc, fst) {
   gameRunning = true;
   canvas.focus();
   Module.callMain([]);
+}
+
+// The boot screen while the pipeline seed compiles (preload_pipelines in
+// main_loop.c calls this through port_preload_progress). Returns true once
+// Skip has been pressed.
+function preloadScreen() {
+  const el = $('preload'), bar = $('preload-bar'), count = $('preload-count'), eta = $('preload-eta');
+  let skip = false, t0 = 0, done0 = 0;
+  $('preload-skip').addEventListener('click', () => { skip = true; eta.textContent = 'starting...'; });
+  return (done, total, finished) => {
+    if (finished) {
+      el.hidden = true;
+      status('Running - press Tab to hide this bar');
+      canvas.focus();
+      return skip;
+    }
+    if (el.hidden) {
+      el.hidden = false;
+      status('Compiling shaders before the game starts...');
+    }
+    if (!t0) { t0 = performance.now(); done0 = done; }
+    const secs = (performance.now() - t0) / 1000, rate = (done - done0) / secs;
+    bar.max = total || 1;
+    bar.value = done;
+    count.textContent = `${done} / ${total} shaders (${total ? Math.floor(100 * done / total) : 0}%)` +
+                        (secs > 1 && rate > 0 ? `, ${rate.toFixed(1)} per second` : '');
+    if (!skip && secs > 3 && rate > 0) {
+      const left = Math.round((total - done) / rate);
+      eta.textContent = `elapsed ${Math.round(secs)} s, about ${left < 60 ? left + ' s' : Math.round(left / 60) + ' min'} left`;
+    }
+    return skip;
+  };
 }
 
 // The pipeline warm-up list, pipelines.bin.gz: base64 in a text script of the

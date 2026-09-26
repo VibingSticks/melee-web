@@ -1,0 +1,55 @@
+diff --git a/include/aurora/gfx.h b/include/aurora/gfx.h
+index 69e7f93..d88d511 100644
+--- a/include/aurora/gfx.h
++++ b/include/aurora/gfx.h
+@@ -48,6 +48,10 @@ size_t aurora_pipeline_seed_import(const uint8_t* data, size_t size);
+  * aurora_pipeline_seed_pending says how many are left. */
+ void aurora_pipeline_seed_pause(bool paused);
+ size_t aurora_pipeline_seed_pending(void);
++// How many seed pipelines may compile at once (2 while the game runs).
++void aurora_pipeline_seed_set_max_in_flight(size_t n);
++// Start queued seed compiles now, outside a frame.
++void aurora_pipeline_seed_pump(void);
+ 
+ #ifdef __cplusplus
+ }
+diff --git a/lib/gfx/pipeline_cache.cpp b/lib/gfx/pipeline_cache.cpp
+index 640ccd5..e076807 100644
+--- a/lib/gfx/pipeline_cache.cpp
++++ b/lib/gfx/pipeline_cache.cpp
+@@ -361,7 +361,7 @@ size_t g_seedInFlight = 0;
+ size_t g_seedCompiled = 0;
+ size_t g_seedPresent = 0;
+ size_t g_seedTotal = 0;
+-constexpr size_t SeedMaxInFlight = 2;
++size_t g_seedMaxInFlight = 2; // raised while the port's boot screen waits on the seed
+ bool g_seedPaused = false;
+ constexpr uint32_t SeedMagic = 0x44535041; // "APSD"
+ 
+@@ -376,7 +376,7 @@ void record_seen(const PipelineCacheWrite& write) {
+ }
+ 
+ void pump_seed_queue() {
+-  while (!g_seedPaused && g_seedInFlight < SeedMaxInFlight && !g_seedQueue.empty()) {
++  while (!g_seedPaused && g_seedInFlight < g_seedMaxInFlight && !g_seedQueue.empty()) {
+     SeedEntry entry = std::move(g_seedQueue.front());
+     g_seedQueue.pop_front();
+     {
+@@ -1319,6 +1319,17 @@ extern "C" size_t aurora_pipeline_seed_export(uint8_t** out) {
+ 
+ extern "C" void aurora_pipeline_seed_pause(bool paused) { aurora::gfx::g_seedPaused = paused; }
+ 
++extern "C" void aurora_pipeline_seed_set_max_in_flight(size_t n) {
++  aurora::gfx::g_seedMaxInFlight = n == 0 ? 1 : n;
++}
++
++// Start queued seed compiles now, outside a frame (the port's boot screen).
++extern "C" void aurora_pipeline_seed_pump(void) {
++#ifdef __EMSCRIPTEN__
++  aurora::gfx::pump_seed_queue();
++#endif
++}
++
+ extern "C" size_t aurora_pipeline_seed_pending(void) {
+   return aurora::gfx::g_seedQueue.size() + aurora::gfx::g_seedInFlight;
+ }

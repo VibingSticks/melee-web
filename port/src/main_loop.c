@@ -39,6 +39,42 @@
 
 int melee_main(void); /* the game's main(), renamed under TARGET_PC */
 
+/* boot.js's loading screen: shows done/total, hides when finished is set, and
+ * returns 1 once the player has pressed Skip (web/js/imports.js). */
+extern int port_preload_progress(int done, int total, int finished);
+
+/* Compile the pipeline seed before the game starts, as Dolphin's "Compile
+ * Shaders Before Starting" does. In the background, 2 at a time and paused
+ * whenever a frame runs late, a slow GPU (about 400 ms a pipeline on a
+ * Chromebook's) never finished it, and every new effect stalled the game the
+ * first time it drew. With nothing else running, let more compile at once.
+ * Skip (or ?preload=off) leaves the rest to the background warm-up. */
+static void preload_pipelines(void)
+{
+    size_t total = aurora_pipeline_seed_pending();
+    if (total == 0 ||
+        emscripten_run_script_int("(typeof Module !== 'undefined' && Module.preload === 'off') | 0")) {
+        return;
+    }
+    double t0 = emscripten_get_now();
+    aurora_pipeline_seed_set_max_in_flight(4);
+    int skipped = 0;
+    size_t pending;
+    while ((pending = aurora_pipeline_seed_pending()) > 0) {
+        aurora_pipeline_seed_pump();
+        if (port_preload_progress((int) (total - pending), (int) total, 0)) {
+            skipped = 1;
+            break;
+        }
+        emscripten_sleep(16); /* the compile callbacks run from the event loop */
+    }
+    aurora_pipeline_seed_set_max_in_flight(2);
+    port_preload_progress((int) (total - aurora_pipeline_seed_pending()), (int) total, 1);
+    port_log("pipeline preload: %u of %u compiled in %.1f s%s", (unsigned) (total - aurora_pipeline_seed_pending()),
+             (unsigned) total, (emscripten_get_now() - t0) / 1000.0,
+             skipped ? " (skipped; the rest compile in the background)" : "");
+}
+
 #if defined(__has_feature)
 #if __has_feature(address_sanitizer)
 /* Sanitizer builds (port/build/web-asan): keep running after a report so one
@@ -584,6 +620,7 @@ int main(int argc, char** argv)
             size_t queued = aurora_pipeline_seed_import(seed, seed_size);
             port_log("pipeline seed: %u bytes, %u pipelines queued", seed_size, (unsigned) queued);
             free(seed);
+            preload_pipelines();
         }
     }
     /* SDL creates the window resizable, and its resize handler sets the canvas

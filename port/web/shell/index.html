@@ -19,9 +19,18 @@
   /* The game renders 4:3. Let the canvas take the space it is given but keep
      its own shape inside it, so a wider window letterboxes instead of
      stretching everything sideways. */
+  #stage { flex: 1; min-height: 0; position: relative; display: flex; }
   #canvas { flex: 1; width: 100%; min-height: 0; background: #000; outline: none;
             object-fit: contain; }
+  /* The boot screen while the shader pipelines compile (preload_pipelines in
+     main_loop.c). Tab does not hide it: it is the game's screen for now. */
+  #preload { position: absolute; inset: 0; display: grid; place-items: center; background: #000; }
+  #preload[hidden] { display: none; }
+  #preload .box { width: min(420px, 86%); font: 13px monospace; color: #bbb; }
+  #preload progress { width: 100%; height: 14px; margin: 8px 0; }
+  #preload button { margin-top: 10px; font: inherit; }
   #saves, #crash { display: flex; gap: 8px; align-items: center; }
+  #saves[hidden], #crash[hidden] { display: none; } /* the rule above would otherwise override hidden */
   #bar button, #bar .btn { font: inherit; color: #ddd; background: #24242c; border: 1px solid #3a3a46;
                            border-radius: 4px; padding: 3px 9px; cursor: pointer; }
   #bar button[disabled] { opacity: .45; cursor: default; }
@@ -48,7 +57,18 @@
       <button id="crash-save" type="button" title="Save the crash report as a text file">Save report</button>
     </span>
   </div>
-  <canvas id="canvas" tabindex="-1" oncontextmenu="event.preventDefault()"></canvas>
+  <div id="stage">
+    <canvas id="canvas" tabindex="-1" oncontextmenu="event.preventDefault()"></canvas>
+    <div id="preload" hidden>
+      <div class="box">
+        <div>Compiling shaders...</div>
+        <progress id="preload-bar" max="1" value="0"></progress>
+        <div id="preload-count">0 / 0</div>
+        <div id="preload-eta">&nbsp;</div>
+        <button id="preload-skip" type="button" title="The rest compile in the background">Skip</button>
+      </div>
+    </div>
+  </div>
   <pre id="log"></pre>
 </div>
 <script type="module" src="boot.js"></script>

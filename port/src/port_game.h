@@ -40,6 +40,10 @@ void port_swap_ft_model(void* obj, int kind);
 /* 1 when `p` lies inside the wasm heap (NULL and wild values are 0). */
 int port_ptr_ok(const void* p);
 
+/* True when the game's pad queue is full, so another pad sample would merge
+ * into the oldest instead of adding a logic frame. */
+int port_pad_queue_full(void);
+
 /* Aurora (port patch): deliver deferred memory-card operation callbacks. */
 void CARDPumpCallbacks(void);
 

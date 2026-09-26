@@ -93,3 +93,4 @@ void AXFXReverbStdCallback(struct AXFX_BUFFERUPDATE* b, struct AXFX_REVERBSTD* r
 /* --- the port's side (no-ops here; see ax_hle.c) --- */
 void port_ax_init(void) {}
 void port_ax_pump(int from_frame) { (void) from_frame; }
+unsigned port_ax_take_dry_ms(void) { return 0; }

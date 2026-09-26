@@ -12,4 +12,7 @@ void port_ax_init(void);
  * game is not re-entered. */
 void port_ax_pump(int from_frame);
 
+/* Milliseconds of audio the device went without since the last call. */
+unsigned port_ax_take_dry_ms(void);
+
 #endif

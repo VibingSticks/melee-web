@@ -87,10 +87,15 @@ static bool g_exit_requested;
 static bool g_paused;
 static double g_next_vblank_ms;
 static const double kFrameMs = 1000.0 / 60.0;
-/* Frame skip: how many extra game-logic frames a late frame may run before
- * the next draw (0 turns it off; ?frameskip=off). */
-static int g_max_catchup = 4; /* the game's pad queue holds 5 samples (gmmain.c HSD_PadInit) */
-static unsigned g_skipped_frames; /* logic frames run without a draw, per second */
+/* Frame skip: how many missed vblanks a late frame may make up before the
+ * next draw (0 turns it off; ?frameskip=off). The clock and its alarms catch
+ * up all of them, as the GameCube's keep firing through a slow frame, so
+ * alarm-driven things such as the movie player stay in time with the music.
+ * Game logic is bounded by the pad queue instead: it holds 5 samples
+ * (gmmain.c HSD_PadInit) and merges the rest, as on the console. */
+static int g_max_catchup = 14; /* just under the 250 ms resync below */
+static unsigned g_ticks;          /* vblanks the clock advanced, per report */
+static unsigned g_merged_samples; /* of those, pad samples merged into a full queue */
 
 void port_log(const char* fmt, ...)
 {
@@ -210,13 +215,17 @@ static void prof_report(unsigned frame)
     double now = emscripten_get_now();
     double fps = g_prof.window_start > 0.0 && now > g_prof.window_start ? n * 1000.0 / (now - g_prof.window_start) : 0.0;
     port_log("frame %u | %.1f fps (%.1f ms/frame) | game %.1f present %.1f events %.1f pace %.1f browser %.1f "
-             "dvd %.1f alarm %.1f vi %.1f audio %.1f begin %.1f | worst %.1f | game speed %.0f%% (%u skipped)",
+             "dvd %.1f alarm %.1f vi %.1f audio %.1f begin %.1f | worst %.1f | game speed %.0f%% (%u skipped) | "
+             "audio dropped %u ms",
              frame, fps, fps > 0.0 ? 1000.0 / fps : 0.0, g_prof.game / n, g_prof.present / n, g_prof.events / n,
              g_prof.pace / n, g_prof.browser / n, g_prof.dvd / n, g_prof.alarm / n, g_prof.vi / n, g_prof.audio / n,
              g_prof.begin / n, g_prof.worst,
-             now > g_prof.window_start ? (n + g_skipped_frames) * 1000.0 / (now - g_prof.window_start) / 60.0 * 100.0 : 0.0,
-             g_skipped_frames);
-    g_skipped_frames = 0;
+             now > g_prof.window_start
+                 ? (g_ticks - g_merged_samples) * 1000.0 / (now - g_prof.window_start) / 60.0 * 100.0
+                 : 0.0,
+             g_ticks - g_merged_samples > n ? (unsigned) (g_ticks - g_merged_samples - n) : 0u, port_ax_take_dry_ms());
+    g_ticks = 0;
+    g_merged_samples = 0;
     {
         /* What the last frame asked of the GPU: on a slow machine "present"
          * scales with the draw count (each draw is several WebGPU calls, and
@@ -224,10 +233,11 @@ static void prof_report(unsigned frame)
         const AuroraStats* st = aurora_get_stats();
         if (st != NULL) {
             port_log("gpu: %u draws (%u merged), %u KB verts, %u KB indices, %u KB uniforms, %u KB storage, "
-                     "%u KB texture uploads, %u pipelines created, warm-up left %u",
+                     "%u KB texture uploads, %u MB textures live, %u pipelines created, warm-up left %u",
                      st->drawCallCount, st->mergedDrawCallCount, st->lastVertSize / 1024, st->lastIndexSize / 1024,
                      st->lastUniformSize / 1024, st->lastStorageSize / 1024, st->lastTextureUploadSize / 1024,
-                     st->createdPipelines, (unsigned) aurora_pipeline_seed_pending());
+                     (unsigned) (aurora_live_texture_bytes() >> 20), st->createdPipelines,
+                     (unsigned) aurora_pipeline_seed_pending());
         }
     }
     memset(&g_prof, 0, sizeof(g_prof));
@@ -427,6 +437,10 @@ void port_vblank(void)
     {
         static OSTime s_virtual_time;
         for (int tick = 0; tick <= catchup; tick++) {
+            if (port_pad_queue_full()) {
+                g_merged_samples++; /* this vblank's pad sample adds no logic frame */
+            }
+            g_ticks++;
             if (s_virtual_time == 0) {
                 s_virtual_time = OSGetTime();
             } else {
@@ -434,7 +448,6 @@ void port_vblank(void)
             }
             port_alarm_tick(s_virtual_time);
         }
-        g_skipped_frames += (unsigned) catchup;
     }
     double t_alarm = emscripten_get_now();
     g_prof.alarm += t_alarm - t_dvd;
@@ -534,7 +547,7 @@ int main(int argc, char** argv)
     if (emscripten_run_script_int("(typeof Module !== 'undefined' && Module.noFrameSkip) | 0")) {
         g_max_catchup = 0;
     }
-    port_log("frame skip: up to %d logic frames per draw", g_max_catchup + 1);
+    port_log("frame skip: %s", g_max_catchup > 0 ? "on (up to 5 logic frames per draw)" : "off");
 
     /* Before Aurora: it opens the memory card during aurora_initialize and
      * formats a blank one if the image is absent, so the stored card has to be

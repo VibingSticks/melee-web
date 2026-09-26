@@ -433,6 +433,15 @@ void port_ax_init(void)
     port_log("audio: %d Hz stereo out", AX_SAMPLE_RATE);
 }
 
+static unsigned g_dry_frames; /* AX frames mixed and dropped after an underrun */
+
+unsigned port_ax_take_dry_ms(void)
+{
+    unsigned ms = g_dry_frames * 1000u * AX_FRAME_SAMPLES / AX_SAMPLE_RATE;
+    g_dry_frames = 0;
+    return ms;
+}
+
 void port_ax_pump(int from_frame)
 {
     /* Keep roughly this much audio queued. Enough that a slow frame does not
@@ -448,10 +457,44 @@ void port_ax_pump(int from_frame)
     int budget = 16;
 
     if (g_stream != NULL) {
+        /* The GameCube's DSP keeps mixing while the CPU is stuck on a slow
+         * frame. Here the browser's audio callback runs on the main thread,
+         * so a stall starves Web Audio without the stream ever looking empty,
+         * and the music resumes where it stopped: late for good, behind the
+         * movie, whose alarm clock catches up. Compare what the device has
+         * taken with the wall clock, and when it has fallen behind, mix the
+         * frames it missed and drop them, so the music stays on time. */
+        static double s_start_ms, s_base_ms;
+        static double s_put_ms, s_dropped_ms; /* audio produced: queued, and mixed but dropped */
+        const double frame_ms = 1000.0 * AX_FRAME_SAMPLES / AX_SAMPLE_RATE;
+        const double bytes_per_ms = AX_SAMPLE_RATE * 2 * 2 / 1000.0;
+        double now = emscripten_get_now();
+        if (s_start_ms == 0.0) {
+            s_start_ms = now;
+        }
+        double played_ms = s_put_ms - SDL_GetAudioStreamQueued(g_stream) / bytes_per_ms + s_dropped_ms;
+        double behind_ms = (now - s_start_ms) - played_ms - s_base_ms;
+        if (behind_ms < 0.0) {
+            s_base_ms += behind_ms; /* the device runs ahead of the wall clock: take that as the new zero */
+        } else if (behind_ms > 60.0) { /* the device pulls about 43 ms at a time */
+            int missed = (int) (behind_ms / frame_ms);
+            if (missed > 50) {
+                /* over 250 ms is a load, and the frame pump resyncs there too */
+                s_base_ms += (missed - 50) * frame_ms;
+                missed = 50;
+            }
+            g_dry_frames += (unsigned) missed;
+            s_dropped_ms += missed * frame_ms;
+            while (missed-- > 0) {
+                s16 frame[AX_FRAME_SAMPLES * 2];
+                run_ax_frame(frame, from_frame);
+            }
+        }
         while (budget-- > 0 && (int) SDL_GetAudioStreamQueued(g_stream) < target_bytes) {
             s16 frame[AX_FRAME_SAMPLES * 2];
             run_ax_frame(frame, from_frame);
             SDL_PutAudioStreamData(g_stream, frame, (int) sizeof frame);
+            s_put_ms += frame_ms;
         }
         return;
     }

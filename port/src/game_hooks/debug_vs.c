@@ -142,3 +142,35 @@ EMSCRIPTEN_KEEPALIVE void port_debug_set_pokemon(int n)
 {
     port_debug_db_set_pokemon(n);
 }
+
+/*   Module._port_debug_fighter_state(slot)   // -> JSON-ish string in the log
+ *   Module._port_debug_poison(slot)          // as touching a Poison Mushroom
+ * For reproducing item-state bugs: the poison mushroom only counts a touch
+ * (Fighter::x2010) and the fighter shrinks when it processes the count. */
+#include <melee/ft/inlines.h>
+#include <melee/ft/types.h>
+EMSCRIPTEN_KEEPALIVE void port_debug_poison(int slot)
+{
+    HSD_GObj* g = Player_GetEntity(slot);
+    if (g != NULL) {
+        GET_FIGHTER(g)->x2010++;
+    }
+}
+
+EMSCRIPTEN_KEEPALIVE void port_debug_fighter_state(int slot)
+{
+    HSD_GObj* g = Player_GetEntity(slot);
+    if (g == NULL) {
+        port_log("debug: slot %d has no fighter", slot);
+        return;
+    }
+    Fighter* fp = GET_FIGHTER(g);
+    port_log("debug: slot %d kind %d motion %d anim %d pos (%.1f, %.1f) item %p air %d frame %.1f",
+             slot, fp->kind, (int) fp->motion_id, fp->anim_id, fp->cur_pos.x, fp->cur_pos.y,
+             (void*) fp->item_gobj, fp->ground_or_air, (double) fp->cur_anim_frame);
+    port_log("debug: slot %d cpu kind %d lvl %d tgt %p item4C %p itemF4 %p tgtitem %p cmd %p/%p dur %u q %u/%u x14 %d x18 %d x1C %d x20 %d x24 %d x28 %d x2C %d x30 %d x34 %d",
+             slot, (int) fp->cpu.kind, fp->cpu.level, (void*) fp->cpu.x44, (void*) fp->cpu.x4C,
+             (void*) fp->cpu.xF4, (void*) fp->target_item_gobj, (void*) fp->cpu.x444, (void*) fp->cpu.x448,
+             fp->cpu.command_duration, fp->cpu.xC8, fp->cpu.xEC, fp->cpu.x14, fp->cpu.x18, fp->cpu.x1C,
+             fp->cpu.x20, fp->cpu.x24, fp->cpu.x28, fp->cpu.x2C, fp->cpu.x30, fp->cpu.x34);
+}

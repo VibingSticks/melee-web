@@ -13,8 +13,8 @@
 #include <melee/ft/types.h>
 #include <melee/gr/grcorneria.h>
 #include <melee/pl/player.h>
-#include <melee/pl/plbonus.h>
 #include <melee/pl/plbonuslib.h>
+#include <melee/pl/pltrick.h>
 
 #define FTFOX_APPEALS_ATTACKID 0x72
 
@@ -99,8 +99,8 @@ void ftFx_AppealS_Enter(HSD_GObj* gobj)
     actionDir = fp->mv.fx.AppealS.facingDir;
     animCount = fp->mv.fx.AppealS.animCount;
 
-    Fighter_ChangeMotionState(gobj, ASID_AppealS[actionDir][animCount], 0,
-                              0.0f, 1.0f, 0.0f, NULL);
+    Fighter_ChangeMotionState(gobj, ASID_AppealS[actionDir][animCount],
+                              Ft_MF_None, 0.0f, 1.0f, 0.0f, NULL);
 }
 
 /// Fox & Falco's Special Taunt OnTakeDamage/OnDeath callback
@@ -141,7 +141,7 @@ void ftFx_AppealS_Anim(HSD_GObj* gobj)
         Fighter_ChangeMotionState(gobj,
                                   ASID_AppealS[fp->mv.fx.AppealS.facingDir]
                                               [fp->mv.fx.AppealS.animCount],
-                                  0, 0.0f, 1.0f, 0.0f, NULL);
+                                  Ft_MF_None, 0.0f, 1.0f, 0.0f, NULL);
     }
 }
 

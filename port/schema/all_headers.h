@@ -3,7 +3,6 @@
 #include <sysdolphin/baselib/aobj.h>
 #include <sysdolphin/baselib/archive.h>
 #include <sysdolphin/baselib/axdriver.h>
-#include <sysdolphin/baselib/axdriver.static.h>
 #include <sysdolphin/baselib/bytecode.h>
 #include <sysdolphin/baselib/class.h>
 #include <sysdolphin/baselib/cobj.h>
@@ -11,7 +10,6 @@
 #include <sysdolphin/baselib/debugconsole_main.h>
 #include <sysdolphin/baselib/debug.h>
 #include <sysdolphin/baselib/devcom.h>
-#include <sysdolphin/baselib/devcom.static.h>
 #include <sysdolphin/baselib/displayfunc.h>
 #include <sysdolphin/baselib/dobj.h>
 #include <sysdolphin/baselib/fobj.h>
@@ -49,7 +47,6 @@
 #include <sysdolphin/baselib/objalloc.h>
 #include <sysdolphin/baselib/object.h>
 #include <sysdolphin/baselib/particle.h>
-#include <sysdolphin/baselib/particle.static.h>
 #include <sysdolphin/baselib/perf.h>
 #include <sysdolphin/baselib/pobj.h>
 #include <sysdolphin/baselib/psappsrt.h>
@@ -63,12 +60,10 @@
 #include <sysdolphin/baselib/shadow.h>
 #include <sysdolphin/baselib/sislib_font.h>
 #include <sysdolphin/baselib/sislib.h>
-#include <sysdolphin/baselib/sislib.static.h>
 #include <sysdolphin/baselib/sobjlib.h>
 #include <sysdolphin/baselib/spline.h>
 #include <sysdolphin/baselib/state.h>
 #include <sysdolphin/baselib/synth.h>
-#include <sysdolphin/baselib/synth.static.h>
 #include <sysdolphin/baselib/tev.h>
 #include <sysdolphin/baselib/texpdag.h>
 #include <sysdolphin/baselib/texp.h>

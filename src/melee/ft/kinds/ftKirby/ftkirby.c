@@ -8,7 +8,6 @@ int port_archive_take_fresh(const void* p);
 
 #include <stddef.h>
 
-#include "ftKb_Init.static.h"
 #include "ftkirbyattackdash.h"
 #include "ftkirbyspecialdonkey.h"
 #include "ftkirbyspecialgamewatch.h"
@@ -43,6 +42,13 @@ int port_archive_take_fresh(const void* p);
 #include <sysdolphin/baselib/id.h>
 #include <sysdolphin/baselib/jobj.h>
 #include <sysdolphin/baselib/random.h>
+
+typedef struct ftKirby_CostumeArchive {
+    /* +0 */ HSD_Joint* joint;
+    /* +4 */ HSD_MatAnimJoint* matanim;
+} ftKirby_CostumeArchive;
+
+extern HSD_GObjEvent ftKb_Init_803C9CC8[];
 
 /* 459C10 */ UnkCostumeStruct ftKb_CostumeList[6];
 /* 459B88 */ struct ft_80459B88_t ft_80459B88;
@@ -3613,44 +3619,34 @@ void ftKb_SpecialN_800F0F5C(Fighter_GObj* gobj)
     ftKb_SpecialN_800EFAF0_inline(gobj);
     ftCo_UnloadDynamicBones(fp);
 }
-/// Shared body of the Kirby hat loaders: load the hat model/parts for
-/// @p kind and start its animation.
-/// @todo Should be an inline function (which would also allow removing the
-/// callers' @c dont_inline pragmas), but that shifts register allocation.
-#define LOAD_HAT(gobj, fp, fp2, kind, hat, part_dobj_indices)                 \
-    do {                                                                      \
-        (hat) = ft_80459B88.hats[kind];                                       \
-        ftKb_SpecialN_800EF040(gobj, (kind) + 1, hat);                        \
-        (fp2)->u.kb.hat.x14.data = HSD_ObjAlloc(&fighter_x2040_alloc_data);   \
-        (fp2)->u.kb.hat.x1C.data = HSD_ObjAlloc(&fighter_x2040_alloc_data);   \
-        ftKb_SpecialN_800EF0E4(gobj, (kind) + 1, part_dobj_indices);          \
-        ftKb_SpecialN_800EF35C(gobj, (kind) + 1, part_dobj_indices);          \
-        ftKb_SpecialN_800EF438(gobj, hat);                                    \
-        ftParts_8007487C((FtPartsDesc*) (hat), &(fp)->u.kb.hat.x24,           \
-                         (fp)->costume_id, &(fp)->u.kb.hat.x14,               \
-                         &(fp)->u.kb.hat.x1C);                                \
-        ftAnim_80070200(fp, (ftData_x8_x8*) &(hat)->desc.vis_table,           \
-                        &(fp)->u.kb.x44, &(fp)->u.kb.hat.x14);                \
-    } while (0)
 
-#ifdef MUST_MATCH
-#pragma push
-#pragma dont_inline on
-#endif
+/// Load a hat that replaces fighter parts; counterpart of
+/// ftKb_SpecialN_800EF69C.
+static inline void ftKb_LoadHatParts(Fighter_GObj* gobj, int arg1,
+                                     KirbyHatStruct* hat)
+{
+    u8 part_dobj_indices[0x8C];
+    Fighter* fp = GET_FIGHTER(gobj);
+    ftKb_SpecialN_800EF040(gobj, arg1, hat);
+    fp->u.kb.hat.x14.data = HSD_ObjAlloc(&fighter_x2040_alloc_data);
+    fp->u.kb.hat.x1C.data = HSD_ObjAlloc(&fighter_x2040_alloc_data);
+    ftKb_SpecialN_800EF0E4(gobj, arg1, part_dobj_indices);
+    ftKb_SpecialN_800EF35C(gobj, arg1, part_dobj_indices);
+    ftKb_SpecialN_800EF438(gobj, hat);
+    ftParts_8007487C((FtPartsDesc*) hat, &fp->u.kb.hat.x24, fp->costume_id,
+                     &fp->u.kb.hat.x14, &fp->u.kb.hat.x1C);
+    ftAnim_80070200(fp, (ftData_x8_x8*) &hat->desc.vis_table, &fp->u.kb.x44,
+                    &fp->u.kb.hat.x14);
+}
+
 void ftKb_SpecialN_800F0FC0(Fighter_GObj* gobj)
 {
-    u8 part_dobj_indices[0x90];
-    Fighter* fp = fp = gobj->user_data;
-    KirbyHatStruct* hat;
-    PAD_STACK(8);
-    if (fp->u.kb.hat.x14.data != NULL) {
-        return;
+    Fighter* fp = GET_FIGHTER(gobj);
+    if (fp->u.kb.hat.x14.data == NULL) {
+        KirbyHatStruct* hat = ft_80459B88.hats[Ft_Kind_Captain];
+        ftKb_LoadHatParts(gobj, 3, hat);
     }
-    LOAD_HAT(gobj, fp, fp, Ft_Kind_Captain, hat, part_dobj_indices);
 }
-#ifdef MUST_MATCH
-#pragma pop
-#endif
 
 void ftKb_SpecialN_800F10A4(Fighter_GObj* gobj)
 {
@@ -3658,27 +3654,15 @@ void ftKb_SpecialN_800F10A4(Fighter_GObj* gobj)
 }
 
 /// Load Yoshi's hat for Kirby copy ability.
-/// @note The split Fighter* locals are required for register allocation.
-#ifdef MUST_MATCH
-#pragma push
-#pragma dont_inline on
-#endif
 void ftKb_SpecialN_800F10D4(Fighter_GObj* gobj)
 {
-    u8 part_dobj_indices[0x88];
-    Fighter* fp = gobj->user_data;
-    Fighter* fp2 = gobj->user_data;
-    KirbyHatStruct* hat;
-    PAD_STACK(8);
-    if (fp2->u.kb.hat.x14.data != NULL) {
-        return;
+    Fighter* fp = GET_FIGHTER(gobj);
+    if (fp->u.kb.hat.x14.data == NULL) {
+        KirbyHatStruct* hat = ft_80459B88.hats[Ft_Kind_Yoshi];
+        ftKb_LoadHatParts(gobj, 0xF, hat);
+        ftCo_8009D81C(fp);
     }
-    LOAD_HAT(gobj, fp, fp2, Ft_Kind_Yoshi, hat, part_dobj_indices);
-    ftCo_8009D81C(fp2);
 }
-#ifdef MUST_MATCH
-#pragma pop
-#endif
 
 void ftKb_SpecialN_800F11AC(Fighter_GObj* gobj)
 {
@@ -3688,27 +3672,15 @@ void ftKb_SpecialN_800F11AC(Fighter_GObj* gobj)
 }
 
 /// Load Jigglypuff's hat for Kirby copy ability.
-/// @note The split Fighter* locals are required for register allocation.
-#ifdef MUST_MATCH
-#pragma push
-#pragma dont_inline on
-#endif
 void ftKb_SpecialN_800F11F0(Fighter_GObj* gobj)
 {
-    u8 part_dobj_indices[0x88];
-    Fighter* fp = gobj->user_data;
-    Fighter* fp2 = gobj->user_data;
-    KirbyHatStruct* hat;
-    PAD_STACK(8);
-    if (fp2->u.kb.hat.x14.data != NULL) {
-        return;
+    Fighter* fp = GET_FIGHTER(gobj);
+    if (fp->u.kb.hat.x14.data == NULL) {
+        KirbyHatStruct* hat = ft_80459B88.hats[Ft_Kind_Purin];
+        ftKb_LoadHatParts(gobj, 0x10, hat);
+        ftCo_8009DB50(fp);
     }
-    LOAD_HAT(gobj, fp, fp2, Ft_Kind_Purin, hat, part_dobj_indices);
-    ftCo_8009DB50(fp2);
 }
-#ifdef MUST_MATCH
-#pragma pop
-#endif
 
 void ftKb_SpecialN_800F12C8(Fighter_GObj* gobj)
 {
@@ -3718,25 +3690,14 @@ void ftKb_SpecialN_800F12C8(Fighter_GObj* gobj)
 }
 
 /// Load Dr. Mario's hat for Kirby copy ability.
-/// @note The self-assignment `fp = fp` is required for register allocation.
-#ifdef MUST_MATCH
-#pragma push
-#pragma dont_inline on
-#endif
 void ftKb_SpecialN_800F130C(Fighter_GObj* gobj)
 {
-    u8 part_dobj_indices[0x90];
-    Fighter* fp = fp = gobj->user_data;
-    KirbyHatStruct* hat;
-    PAD_STACK(8);
-    if (fp->u.kb.hat.x14.data != NULL) {
-        return;
+    Fighter* fp = GET_FIGHTER(gobj);
+    if (fp->u.kb.hat.x14.data == NULL) {
+        KirbyHatStruct* hat = ft_80459B88.hats[Ft_Kind_DrMario];
+        ftKb_LoadHatParts(gobj, 0x16, hat);
     }
-    LOAD_HAT(gobj, fp, fp, Ft_Kind_DrMario, hat, part_dobj_indices);
 }
-#ifdef MUST_MATCH
-#pragma pop
-#endif
 
 void ftKb_SpecialN_800F13F0(Fighter_GObj* gobj)
 {
@@ -3775,47 +3736,38 @@ u8* ftKb_SpecialN_800F1420(Fighter_GObj* gobj, const u32* arg1)
     return p;
 }
 
-#ifdef MUST_MATCH
-#pragma push
-#pragma dont_inline on
-#endif
 void ftKb_SpecialN_800F14B4(Fighter_GObj* gobj)
 {
-    u8 part_dobj_indices[0x88];
-    Fighter* fp = fp = gobj->user_data;
-    KirbyHatStruct* hat;
-    FtPartsVisLookup* lookup;
-    PAD_STACK(8);
-    if (fp->u.kb.hat.x14.data != NULL) {
-        return;
-    }
-    LOAD_HAT(gobj, fp, fp, Ft_Kind_Pichu, hat, part_dobj_indices);
-    lookup = (FtPartsVisLookup*) hat->hat_dynamics[3];
+    Fighter* fp = GET_FIGHTER(gobj);
+    if (fp->u.kb.hat.x14.data == NULL) {
+        KirbyHatStruct* hat = ft_80459B88.hats[Ft_Kind_Pichu];
+        FtPartsVisLookup* lookup;
+        ftKb_LoadHatParts(gobj, 0x18, hat);
+        lookup = (FtPartsVisLookup*) hat->hat_dynamics[3];
 #ifdef TARGET_PC
-    /* The lookup has one entry (the hat's one model), but Kirby's own parts
-     * table gets it too and has two models. On the GameCube the second
-     * entry's "count" is the visibility-table pointer stored after it,
-     * negative as an s32, so ftParts_80074D7C's loop skips it; a wasm
-     * pointer is a small positive number and the loop ran off the lists.
-     * Both tables get a copy whose second entry is empty. */
-    if (lookup != NULL) {
-        static FtPartsVisLookup port_lookup[2];
-        port_lookup[0] = lookup[0];
-        port_lookup[1].x0 = 0;
-        port_lookup[1].x4 = NULL;
-        lookup = port_lookup;
+        /* The lookup has one entry (the hat's one model), but Kirby's own
+         * parts table gets it too and has two models. On the GameCube the
+         * second entry's "count" is the visibility-table pointer stored after
+         * it, negative as an s32, so ftParts_80074D7C's loop skips it; a wasm
+         * pointer is a small positive number and the loop ran off the lists.
+         * Both tables get a copy whose second entry is empty. */
+        if (lookup != NULL) {
+            static FtPartsVisLookup port_lookup[2];
+            port_lookup[0] = lookup[0];
+            port_lookup[1].x0 = 0;
+            port_lookup[1].x4 = NULL;
+            lookup = port_lookup;
+        }
+#endif
+        fp->u.kb.hat.x24.xC[4] = lookup;
+        fp->x5AC.xC[4] = lookup;
+        ftParts_80074D7C(&fp->u.kb.hat.x24, 4, &fp->u.kb.hat.x14);
+        ftKb_SpecialN_800F1420(gobj, (u32*) ((u8*) hat->hat_dynamics[4] + 4));
+        *(u32*) &fp->x610_color_rgba[1] =
+            *(u32*) ((u8*) hat->hat_dynamics[4] + 8);
+        Fighter_UpdateModelScale(gobj);
     }
-#endif
-    fp->u.kb.hat.x24.xC[4] = lookup;
-    fp->x5AC.xC[4] = lookup;
-    ftParts_80074D7C(&fp->u.kb.hat.x24, 4, &fp->u.kb.hat.x14);
-    ftKb_SpecialN_800F1420(gobj, (u32*) ((u8*) hat->hat_dynamics[4] + 4));
-    *(u32*) &fp->x610_color_rgba[1] = *(u32*) ((u8*) hat->hat_dynamics[4] + 8);
-    Fighter_UpdateModelScale(gobj);
 }
-#ifdef MUST_MATCH
-#pragma pop
-#endif
 
 void ftKb_SpecialN_800F15D8(Fighter_GObj* gobj)
 {

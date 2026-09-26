@@ -126,7 +126,7 @@ EMSCRIPTEN_KEEPALIVE int port_debug_spawn_item_at_player(int kind, int slot)
     if (fighter == NULL) {
         return 0;
     }
-    ftLib_80086644(fighter, &pos);
+    ftLib_GetPos(fighter, &pos);
     pos.y += 2.0f;
     pos.z = 0.0f;
     port_log("debug: spawning item kind %d at player %d (%.1f, %.1f)", kind, slot, pos.x, pos.y);

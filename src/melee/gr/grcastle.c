@@ -703,10 +703,6 @@ void grCastle_801CDC44(Ground_GObj* gobj)
 
 void grCastle_801CDF50(Ground_GObj* gobj) {}
 
-#ifdef MUST_MATCH
-#pragma push
-#pragma dont_inline on
-#endif
 bool grCastle_801CDF54(Vec3* vec)
 {
     HSD_GObj* gobj;
@@ -726,9 +722,6 @@ bool grCastle_801CDF54(Vec3* vec)
     }
     return false;
 }
-#ifdef MUST_MATCH
-#pragma pop
-#endif
 
 void grCastle_801CDFD8(Ground_GObj* gobj)
 {
@@ -1219,7 +1212,7 @@ void grCastle_801CEACC(Ground_GObj* gobj)
 
     grCastle_801D0298(gobj, 0);
     Ground_UpdateMapColl(gobj);
-    ((HSD_GObj*) gobj)->render_cb = (GObj_RenderFunc) grCastle_801D0520;
+    ((HSD_GObj*) gobj)->render_cb = grCastle_801D0520;
 }
 
 bool grCastle_801CEEFC(Ground_GObj* gobj)
@@ -1615,7 +1608,7 @@ void fn_801CFAFC(Item_GObj* item, Ground* gp, Vec3* pos, HSD_GObj* gobj)
 {
     PAD_STACK(4);
     gp->u.castle7.xC4 = 4;
-    if (ftLib_80086960(gobj)) {
+    if (ftLib_IsFighter(gobj)) {
         ftLib_80086A4C(gobj, (f32) yakumono_param->x4);
     }
 }
@@ -1623,9 +1616,21 @@ void fn_801CFAFC(Item_GObj* item, Ground* gp, Vec3* pos, HSD_GObj* gobj)
 void fn_801CFB68(Item_GObj* item_gobj, Ground* gp, HSD_GObj* gobj)
 {
     gp->u.pura.xC4 = 4;
-    if (ftLib_80086960(gobj) != 0) {
+    if (ftLib_IsFighter(gobj) != 0) {
         ftLib_80086A4C(gobj, (f32) yakumono_param->x4);
     }
+}
+
+static inline bool isNearTarget(HSD_JObj* jobj, Vec3* pos, Vec3* target)
+{
+    if (grCastle_801CDF54(target) &&
+        (lb_8000B1CC(jobj, NULL, pos),
+         sqrtf__Ff((pos->x - target->x) * (pos->x - target->x) +
+                   (pos->y - target->y) * (pos->y - target->y)) < 40.0f))
+    {
+        return true;
+    }
+    return false;
 }
 
 s32 grCastle_801CFBD4(Ground_GObj* gobj, s32 arg1)
@@ -1648,21 +1653,7 @@ s32 grCastle_801CFBD4(Ground_GObj* gobj, s32 arg1)
 
             if (arg1 != 0) {
                 if (HSD_JObjGetFlags(jobj) & 0x10) {
-                    s32 close;
-
-                    if (grCastle_801CDF54(&target_pos) != 0 &&
-                        (lb_8000B1CC(jobj, NULL, &pos),
-                         sqrtf__Ff(
-                             (pos.x - target_pos.x) * (pos.x - target_pos.x) +
-                             (pos.y - target_pos.y) * (pos.y - target_pos.y)) <
-                             40.0f))
-                    {
-                        close = 1;
-                    } else {
-                        close = 0;
-                    }
-
-                    if (close == 0) {
+                    if (!isNearTarget(jobj, &pos, &target_pos)) {
                         HSD_JObjClearFlags(jobj, JOBJ_HIDDEN);
                         if (eff_a != NULL && eff_b != NULL) {
                             if (gm_8016AE80() != -1 && gm_8016B238() == 0) {
@@ -1813,7 +1804,7 @@ void grCastle_801D02B8(Ground_GObj* gobj)
     }
 }
 
-void grCastle_801D0520(Ground_GObj* gobj, int renderpass)
+void grCastle_801D0520(Ground_GObj* gobj, intptr_t renderpass)
 {
     Ground* gp = GET_GROUND(gobj);
     if (gp->u.castle.xC8 == 0) {
@@ -1861,7 +1852,7 @@ void grCastle_801D0680(void* arg0, unkCastle* arg1)
 
 static void grCastle_801D06CC_sub(unkCastle* arg0, Ground_GObj* gobj, s32 i)
 {
-    if (ftLib_80086960(gobj) || itGetKind(gobj) != It_PKind_Random) {
+    if (ftLib_IsFighter(gobj) || itGetKind(gobj) != It_PKind_Random) {
         arg0->x134[i] = 1;
         grMaterial_801C8CDC(arg0->x10C[i]);
         arg0->x10C[i] = NULL;
@@ -1894,7 +1885,7 @@ void grCastle_801D08AC(void* arg0, unkCastle* arg1, Ground_GObj* gobj)
     grCastle_801D06CC_sub(arg1, gobj, 4);
 }
 
-void fn_801D0924(HSD_GObj* gobj, int renderpass)
+void fn_801D0924(HSD_GObj* gobj, intptr_t renderpass)
 {
     Ground* gp = gobj->user_data;
     int i;
@@ -1924,15 +1915,15 @@ bool grCastle_801D09B8(void* unused, HSD_GObj* gobj, Vec3* arg2)
     f32 temp_f31;
 
     temp_f31 = 14.0f * Ground_801C0498();
-    ftLib_80086644(gobj, &sp2C);
-    ftLib_80086684(gobj, &sp20);
+    ftLib_GetPos(gobj, &sp2C);
+    ftLib_GetPrevPos(gobj, &sp20);
     if (sp2C.y < temp_f31) {
         if (sp20.y > temp_f31) {
             f32 temp_f1 = ftLib_80086B80(gobj) / 10.0f;
             sp2C.y = temp_f31;
             grCastle_801D0A9C(&sp2C, temp_f1);
         }
-        ftLib_80086BEC(gobj, &sp14);
+        ftLib_GetPosDelta(gobj, &sp14);
         if (sp14.y < -0.5f) {
             arg2->x = 0.0f;
             arg2->y = 0.1f;

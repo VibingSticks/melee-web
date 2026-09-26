@@ -6203,6 +6203,13 @@ static bool ftCo_800ADE48(Fighter* fp)
             } else {
                 data2->xFA_b1 = false;
             }
+#ifdef TARGET_PC
+            /* The original never sets the flag on this path: it tests r31,
+             * which still holds the caller's CpuFighter pointer, so the CPU
+             * always switches to hitlag DI here (800AE270). Left unset, a
+             * CPU in hitlag never DIs. */
+            switch_cmd = 1;
+#endif
         }
         if (switch_cmd != 0) {
             ftCo_800B4A78(fp);

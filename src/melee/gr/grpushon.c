@@ -254,6 +254,19 @@ bool fn_80218678(void)
     return false;
 }
 
+#ifdef TARGET_PC
+/* Ground_801C0C2C calls the stage's exit test as bool (*)(Vec3*, int):
+ * the fighter's position and the candidate exit. This one ignores both, so on
+ * the GameCube the extra registers did not matter; in wasm the call traps on
+ * the signature (see PORT_FNCAST). */
+static bool fn_80218678__as_exit_test(Vec3* pos, int idx)
+{
+    (void) pos;
+    (void) idx;
+    return fn_80218678();
+}
+#endif
+
 void grPushOn_802186C8(Ground_GObj* gobj)
 {
     Vec3 vec;
@@ -261,7 +274,7 @@ void grPushOn_802186C8(Ground_GObj* gobj)
     PAD_STACK(12);
 
     vec = grPushOn_803B8440;
-    Ground_801C3D44(fn_80218678, 25.0f, 20.0f);
+    Ground_801C3D44(PORT_FNCAST(fn_80218678__as_exit_test, fn_80218678), 25.0f, 20.0f);
     {
         HSD_GObj* gobj2 = Ground_GetP1Fighter();
         if (gobj2 != NULL) {

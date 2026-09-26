@@ -1,5 +1,6 @@
 #include "grshrineroute.h"
 
+#include <Runtime/platform.h>
 #include "granime.h"
 #include "grdisplay.h"
 #include "grlib.h"
@@ -402,6 +403,19 @@ bool grShrineRoute_80208F14(void)
     return false;
 }
 
+#ifdef TARGET_PC
+/* Ground_801C0C2C calls the stage's exit test (here the x94 one) as bool (*)(Vec3*, int):
+ * the fighter's position and the candidate exit. This one ignores both, so on
+ * the GameCube the extra registers did not matter; in wasm the call traps on
+ * the signature (see PORT_FNCAST). */
+static bool grShrineRoute_80208F14__as_exit_test(Vec3* pos, int idx)
+{
+    (void) pos;
+    (void) idx;
+    return grShrineRoute_80208F14();
+}
+#endif
+
 void grShrineRoute_80208F70(Ground_GObj* gobj)
 {
     Vec3 sp88;
@@ -432,7 +446,8 @@ void grShrineRoute_80208F70(Ground_GObj* gobj)
         track_plat = 0;
         radius = yakumono_param->x20 * Ground_801C0498();
         result =
-            Ground_801C3DB4(grShrineRoute_80208F14,
+            Ground_801C3DB4(PORT_FNCAST(grShrineRoute_80208F14__as_exit_test,
+                                        grShrineRoute_80208F14),
                             yakumono_param->x1C * Ground_801C0498(), radius);
         if (result != -1) {
             ix = result - 0xBD;

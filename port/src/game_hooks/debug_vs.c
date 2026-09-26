@@ -174,3 +174,22 @@ EMSCRIPTEN_KEEPALIVE void port_debug_fighter_state(int slot)
              fp->cpu.command_duration, fp->cpu.xC8, fp->cpu.xEC, fp->cpu.x14, fp->cpu.x18, fp->cpu.x1C,
              fp->cpu.x20, fp->cpu.x24, fp->cpu.x28, fp->cpu.x2C, fp->cpu.x30, fp->cpu.x34);
 }
+
+/*   Module._port_debug_warp_to_point(slot, id)   // onto the stage's point id
+ * For reproducing stage-exit bugs: the adventure stages test the player's
+ * position against their exit points (ids 0x99..0xB2 and 0xBD..0xC6,
+ * Ground_801C0C2C) only while the player stands at one. */
+#include <melee/gr/ground.h>
+EMSCRIPTEN_KEEPALIVE int port_debug_warp_to_point(int slot, int id)
+{
+    HSD_GObj* g = Player_GetEntity(slot);
+    Vec3 pos;
+    if (g == NULL || !Ground_801C2D24(id, &pos)) {
+        return 0;
+    }
+    Fighter* fp = GET_FIGHTER(g);
+    fp->cur_pos = pos;
+    fp->prev_pos = pos;
+    port_log("debug: slot %d warped to point %d (%.1f, %.1f)", slot, id, pos.x, pos.y);
+    return 1;
+}

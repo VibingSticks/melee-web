@@ -342,7 +342,7 @@ async function startGame(disc, fst) {
   // Not on the WebGL2 fallback: its pipeline creation compiles the shader on
   // the main thread there and then, so a warm-up would stall the intro.
   Module.pipelineSeed = (await rendererReady) === 'webgpu' ? await seedPromise : null;
-  if (Module.pipelineSeed) console.log(`[boot] pipeline seed: ${Module.pipelineSeed.length} bytes`);
+  if (Module.pipelineSeed) console.log('[boot] pipeline seed handed to the game');
   status('Running - press Tab to hide this bar');
   gameRunning = true;
   canvas.focus();
@@ -368,7 +368,9 @@ async function loadPipelineSeed() {
     }
     if (typeof DecompressionStream !== 'function') return null;
     const stream = new Blob([gz]).stream().pipeThrough(new DecompressionStream('gzip'));
-    return new Uint8Array(await new Response(stream).arrayBuffer());
+    const seed = new Uint8Array(await new Response(stream).arrayBuffer());
+    console.log(`[boot] pipeline seed: ${gz.length} bytes ${stashed ? 'embedded' : 'fetched'}, ${seed.length} decoded`);
+    return seed;
   } catch (e) {
     console.warn('[boot] pipeline seed not loaded:', e.message);
     return null;

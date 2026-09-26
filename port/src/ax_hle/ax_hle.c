@@ -110,8 +110,34 @@ void AXFreeVoice(AXVPB* p)
     }
 }
 
-void AXRegisterAuxACallback(void (*callback)(void*, void*), void* context) { (void) callback; (void) context; }
-void AXRegisterAuxBCallback(void (*callback)(void*, void*), void* context) { (void) callback; (void) context; }
+/* The aux buses: each voice sends to A and B at its own levels (vAuxA*,
+ * vAuxB*); once a frame the bus's callback (an AXFX effect) processes the
+ * summed send in place, and the result joins the main mix. */
+static void (*g_aux_cb[2])(void*, void*);
+static void* g_aux_ctx[2];
+
+static int g_aux_heard[2]; /* logged the bus's first send yet */
+static int g_fx_off;       /* ?fx=off: leave the aux buses dry, to compare */
+
+void AXRegisterAuxACallback(void (*callback)(void*, void*), void* context)
+{
+    if (callback != NULL) {
+        port_log("audio: aux A effect on");
+    }
+    g_aux_heard[0] = 0;
+    g_aux_cb[0] = callback;
+    g_aux_ctx[0] = context;
+}
+
+void AXRegisterAuxBCallback(void (*callback)(void*, void*), void* context)
+{
+    if (callback != NULL) {
+        port_log("audio: aux B effect on");
+    }
+    g_aux_heard[1] = 0;
+    g_aux_cb[1] = callback;
+    g_aux_ctx[1] = context;
+}
 
 void AXRegisterCallback(void (*callback)()) { g_frame_cb = callback; }
 
@@ -329,6 +355,10 @@ static int next_source_sample(AXVPB* p, const u8* aram, u32 aram_size, s16* out)
 
 /* --- mixing -------------------------------------------------------------- */
 
+/* Aux send buffers, per bus: left, right and surround, 160 samples each and
+ * contiguous -- the reverb walks all three from the left pointer. */
+static s32 g_aux[2][3][AX_FRAME_SAMPLES];
+
 static void mix_voice(AXVPB* p, const u8* aram, u32 aram_size, s32* accum)
 {
     AXPB* pb = &p->pb;
@@ -339,9 +369,28 @@ static void mix_voice(AXVPB* p, const u8* aram, u32 aram_size, s32* accum)
         ratio = 0x10000; /* no resampling means one source sample per output */
     }
 
-    float ve = (s16) pb->ve.currentVolume / AX_UNITY;
-    float gl = ve * (pb->mix.vL / AX_UNITY);
-    float gr = ve * (pb->mix.vR / AX_UNITY);
+    /* The volume envelope steps by its delta every sample, as on the DSP; the
+     * mix levels multiply it. */
+    s32 vol = (s16) pb->ve.currentVolume;
+    const s32 vdelta = (s16) pb->ve.currentDelta;
+    const float gl = pb->mix.vL / AX_UNITY / AX_UNITY;
+    const float gr = pb->mix.vR / AX_UNITY / AX_UNITY;
+    /* Sends, by bus then left/right/surround; a bus with no effect is not
+     * mixed, so its sends are skipped. */
+    const float ga[2][3] = {
+        { pb->mix.vAuxAL / AX_UNITY / AX_UNITY, pb->mix.vAuxAR / AX_UNITY / AX_UNITY, pb->mix.vAuxAS / AX_UNITY / AX_UNITY },
+        { pb->mix.vAuxBL / AX_UNITY / AX_UNITY, pb->mix.vAuxBR / AX_UNITY / AX_UNITY, pb->mix.vAuxBS / AX_UNITY / AX_UNITY },
+    };
+    int sends = 0;
+    for (int b = 0; b < 2; b++) {
+        if (g_aux_cb[b] != NULL && !g_fx_off && (ga[b][0] != 0.0f || ga[b][1] != 0.0f || ga[b][2] != 0.0f)) {
+            sends |= 1 << b;
+            if (!g_aux_heard[b]) {
+                g_aux_heard[b] = 1;
+                port_log("audio: first send to aux %c (voice %u)", 'A' + b, (unsigned) p->index);
+            }
+        }
+    }
 
     if (!r->primed) {
         if (!next_source_sample(p, aram, aram_size, &r->s0)) {
@@ -359,9 +408,22 @@ static void mix_voice(AXVPB* p, const u8* aram, u32 aram_size, s32* accum)
             break;
         }
         s32 t = r->frac & 0xFFFF;
-        s32 s = r->s0 + (((r->s1 - r->s0) * t) >> 16);
+        float s = (float) (r->s0 + (((r->s1 - r->s0) * t) >> 16)) * (float) vol;
         accum[i * 2 + 0] += (s32) (s * gl);
         accum[i * 2 + 1] += (s32) (s * gr);
+        for (int b = 0; b < 2; b++) {
+            if (sends & (1 << b)) {
+                g_aux[b][0][i] += (s32) (s * ga[b][0]);
+                g_aux[b][1][i] += (s32) (s * ga[b][1]);
+                g_aux[b][2][i] += (s32) (s * ga[b][2]);
+            }
+        }
+        vol += vdelta;
+        if (vol > 32767) {
+            vol = 32767;
+        } else if (vol < 0) {
+            vol = 0;
+        }
 
         r->frac += (s32) ratio;
         while (r->frac >= 0x10000) {
@@ -374,14 +436,6 @@ static void mix_voice(AXVPB* p, const u8* aram, u32 aram_size, s32* accum)
         }
     }
 
-    /* One volume step per frame rather than per sample: the envelope still
-     * tracks, an order of magnitude coarser than the DSP. */
-    s32 vol = (s16) pb->ve.currentVolume + (s32) pb->ve.currentDelta * AX_FRAME_SAMPLES;
-    if (vol > 32767) {
-        vol = 32767;
-    } else if (vol < 0) {
-        vol = 0;
-    }
     pb->ve.currentVolume = (u16) vol;
 }
 
@@ -408,6 +462,20 @@ static void run_ax_frame(s16* out, int run_callback)
         }
     }
 
+    /* The effects, then their output into the main mix. Surround has no
+     * speaker here (the main surround send is not mixed either). */
+    for (int b = 0; b < 2; b++) {
+        if (g_aux_cb[b] != NULL && !g_fx_off) {
+            struct AXFX_BUFFERUPDATE update = { (long*) g_aux[b][0], (long*) g_aux[b][1], (long*) g_aux[b][2] };
+            g_aux_cb[b](&update, g_aux_ctx[b]);
+            for (int i = 0; i < AX_FRAME_SAMPLES; i++) {
+                accum[i * 2 + 0] += g_aux[b][0][i];
+                accum[i * 2 + 1] += g_aux[b][1][i];
+            }
+        }
+    }
+    memset(g_aux, 0, sizeof g_aux);
+
     for (int i = 0; i < AX_FRAME_SAMPLES * 2; i++) {
         s32 v = accum[i];
         out[i] = (s16) (v > 32767 ? 32767 : v < -32768 ? -32768 : v);
@@ -428,6 +496,10 @@ static void open_sdl(void);
 
 void port_ax_init(void)
 {
+    g_fx_off = emscripten_run_script_int("(typeof Module !== 'undefined' && Module.audioFxOff) | 0");
+    if (g_fx_off) {
+        port_log("audio: effects off (?fx=off)");
+    }
     /* ?audio=sdl (boot.js sets Module.audioBackend) keeps SDL's output. */
     if (!emscripten_run_script_int("(typeof Module !== 'undefined' && Module.audioBackend === 'sdl') | 0") &&
         port_audio_open(AX_SAMPLE_RATE)) {
@@ -598,17 +670,14 @@ void port_ax_pump(int from_frame)
 }
 
 /* --- AXFX ---------------------------------------------------------------- */
-int AXFXChorusInit(struct AXFX_CHORUS* c) { (void) c; return 1; }
+/* The standard reverb and the delay -- the two effects Melee sets up
+ * (lbaudio_ax.c: reverb on aux A, delay on aux B) -- are the SDK's own code
+ * (libs/dolphin/src/dolphin/axfx, compiled into the game library). The high
+ * reverb and the chorus are PowerPC assembly the game never calls, so they
+ * stay out: Init fails, which makes AXDriverSetupAux leave the bus dry. */
+int AXFXChorusInit(struct AXFX_CHORUS* c) { (void) c; return 0; }
 int AXFXChorusShutdown(struct AXFX_CHORUS* c) { (void) c; return 1; }
-int AXFXDelayInit(struct AXFX_DELAY* delay) { (void) delay; return 1; }
-int AXFXDelayShutdown(struct AXFX_DELAY* delay) { (void) delay; return 1; }
-int AXFXReverbHiInit(struct AXFX_REVERBHI* rev) { (void) rev; return 1; }
+int AXFXReverbHiInit(struct AXFX_REVERBHI* rev) { (void) rev; return 0; }
 int AXFXReverbHiShutdown(struct AXFX_REVERBHI* rev) { (void) rev; return 1; }
-int AXFXReverbStdInit(struct AXFX_REVERBSTD* rev) { (void) rev; return 1; }
-int AXFXReverbStdShutdown(struct AXFX_REVERBSTD* rev) { (void) rev; return 1; }
-void AXFXSetHooks(void* (*alloc_hook)(size_t), void (*free_hook)(void*)) { (void) alloc_hook; (void) free_hook; }
-
 void AXFXChorusCallback(struct AXFX_BUFFERUPDATE* b, struct AXFX_CHORUS* c) { (void) b; (void) c; }
-void AXFXDelayCallback(struct AXFX_BUFFERUPDATE* b, struct AXFX_DELAY* d) { (void) b; (void) d; }
 void AXFXReverbHiCallback(struct AXFX_BUFFERUPDATE* b, struct AXFX_REVERBHI* r) { (void) b; (void) r; }
-void AXFXReverbStdCallback(struct AXFX_BUFFERUPDATE* b, struct AXFX_REVERBSTD* r) { (void) b; (void) r; }

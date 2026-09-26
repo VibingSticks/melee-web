@@ -3,6 +3,11 @@
 #include <dolphin/ax.h>
 #include <dolphin/axfx.h>
 
+#ifdef TARGET_PC
+#include <math.h>
+#include <string.h>
+#endif
+
 // functions
 static void DLsetdelay(struct AXFX_REVSTD_DELAYLINE* dl, long lag);
 static void DLcreate(struct AXFX_REVSTD_DELAYLINE* dl, long max_length);
@@ -133,6 +138,139 @@ static int ReverbSTDModify(struct AXFX_REVSTD_WORK* rv, float coloration,
     return ReverbSTDCreate(rv, coloration, time, mix, damping, predelay);
 }
 
+#ifdef TARGET_PC
+/* HandleReverb below is hand-written PowerPC. This is the same computation in
+ * C, step for step: for each of the three channels (left, right, surround,
+ * which the caller lays out one after another, 160 samples each), an optional
+ * pre-delay, two parallel comb filters, two all-pass filters with a one-pole
+ * low-pass between them, and a dry/wet mix written back over the input. */
+
+/* fctiwz: truncate toward zero, saturating (NaN gives INT_MIN). A plain C
+ * conversion is undefined out of range and traps in wasm. */
+static long ReverbToInt(float f)
+{
+    if (f != f) {
+        return (long) 0x80000000;
+    }
+    if (f >= 2147483648.0f) {
+        return 0x7FFFFFFF;
+    }
+    if (f <= -2147483648.0f) {
+        return (long) 0x80000000;
+    }
+    return (long) f;
+}
+
+/* The delay lines keep byte offsets, as the assembly indexes with them. */
+#define DL_AT(dl, off) (*(float*) ((u8*) (dl)->inputs + (off)))
+
+static void HandleReverb(long* sptr, struct AXFX_REVSTD_WORK* rv)
+{
+    const float allPass = rv->allPassCoeff;
+    const float damping = rv->damping;
+    const float wet = rv->level * 0.6f;
+    const float dry = 0.6f - wet;
+    int k;
+    int i;
+
+    for (k = 0; k < 3; k++) {
+        struct AXFX_REVSTD_DELAYLINE* c0 = &rv->C[k * 2];
+        struct AXFX_REVSTD_DELAYLINE* c1 = &rv->C[k * 2 + 1];
+        struct AXFX_REVSTD_DELAYLINE* ap0 = &rv->AP[k * 2];
+        struct AXFX_REVSTD_DELAYLINE* ap1 = &rv->AP[k * 2 + 1];
+        const float comb0 = rv->combCoef[k * 2];
+        const float comb1 = rv->combCoef[k * 2 + 1];
+        float lp = rv->lpLastout[k];
+        float* preLine = rv->preDelayLine[k];
+        float* prePtr = rv->preDelayPtr[k];
+        /* The wrap test runs after the pointer steps and compares against
+         * the last slot, so the line is effectively one sample shorter. */
+        float* preEnd = preLine + (rv->preDelayTime - 1);
+        float c0Last = c0->lastOutput;
+        float c1Last = c1->lastOutput;
+        float ap0Last = ap0->lastOutput;
+        float ap1Last = ap1->lastOutput;
+
+        for (i = 0; i < 160; i++) {
+            float in = (float) sptr[i];
+            float x = in;
+            float sum;
+            float t;
+            float y;
+
+            if (rv->preDelayTime != 0) {
+                x = *prePtr;
+                *prePtr++ = in;
+                if (prePtr == preEnd) {
+                    prePtr = preLine;
+                }
+            }
+
+            DL_AT(c0, c0->inPoint) = comb0 * c0Last + x;
+            DL_AT(c1, c1->inPoint) = comb1 * c1Last + x;
+            c0->inPoint += 4;
+            c1->inPoint += 4;
+            c0Last = DL_AT(c0, c0->outPoint);
+            c1Last = DL_AT(c1, c1->outPoint);
+            c0->outPoint += 4;
+            c1->outPoint += 4;
+            if (c0->inPoint == c0->length) {
+                c0->inPoint = 0;
+            }
+            if (c0->outPoint == c0->length) {
+                c0->outPoint = 0;
+            }
+            if (c1->inPoint == c1->length) {
+                c1->inPoint = 0;
+            }
+            if (c1->outPoint == c1->length) {
+                c1->outPoint = 0;
+            }
+            sum = c0Last + c1Last;
+
+            y = allPass * ap0Last + sum;
+            DL_AT(ap0, ap0->inPoint) = y;
+            t = ap0Last - allPass * y;
+            ap0->inPoint += 4;
+            ap0Last = DL_AT(ap0, ap0->outPoint);
+            ap0->outPoint += 4;
+            if (ap0->inPoint == ap0->length) {
+                ap0->inPoint = 0;
+            }
+            if (ap0->outPoint == ap0->length) {
+                ap0->outPoint = 0;
+            }
+
+            t = damping * lp + t * 0.3f;
+            lp = t;
+
+            y = allPass * ap1Last + t;
+            DL_AT(ap1, ap1->inPoint) = y;
+            t = ap1Last - allPass * y;
+            ap1->inPoint += 4;
+            ap1Last = DL_AT(ap1, ap1->outPoint);
+            ap1->outPoint += 4;
+            if (ap1->inPoint == ap1->length) {
+                ap1->inPoint = 0;
+            }
+            if (ap1->outPoint == ap1->length) {
+                ap1->outPoint = 0;
+            }
+
+            sptr[i] = ReverbToInt(wet * t + dry * in);
+        }
+
+        c0->lastOutput = c0Last;
+        c1->lastOutput = c1Last;
+        ap0->lastOutput = ap0Last;
+        ap1->lastOutput = ap1Last;
+        rv->lpLastout[k] = lp;
+        rv->preDelayPtr[k] = prePtr;
+        sptr += 160;
+    }
+}
+#undef DL_AT
+#else
 const static float value0_3 = 0.3f;
 const static float value0_6 = 0.6f;
 const static double i2fMagic = 4503601774854144.0;
@@ -401,6 +539,7 @@ L_0000090C:
 	blr
     // clang-format on
 }
+#endif
 
 static void ReverbSTDCallback(long* left, long* right, long* surround,
                               struct AXFX_REVSTD_WORK* rv)

@@ -91,7 +91,14 @@ int AXFXDelayInit(struct AXFX_DELAY* delay)
     delay->right = NULL;
     delay->sur = NULL;
     OSRestoreInterrupts(old);
+#ifdef TARGET_PC
+    /* No return statement: on the GameCube r3 still held AXFXDelaySettings'
+     * 1, which is what callers test (AXDriverSetupAux registers the effect
+     * only on 1). Say it here, or the delay never switches on. */
+    return AXFXDelaySettings(delay);
+#else
     AXFXDelaySettings(delay);
+#endif
 }
 
 int AXFXDelayShutdown(struct AXFX_DELAY* delay)

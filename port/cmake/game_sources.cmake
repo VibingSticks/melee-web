@@ -14,6 +14,15 @@ file(GLOB_RECURSE GAME_SOURCES CONFIGURE_DEPENDS
 # the frame to a portable JPEG decoder (port/src/thp_web/thp_jpeg.c).
 list(APPEND GAME_SOURCES ${GAME_ROOT}/libs/dolphin/src/dolphin/thp/THPDec.c)
 
+# The SDK's audio effects Melee uses: the standard reverb (its PowerPC inner
+# loop has a C twin under TARGET_PC) and the delay; axfx.c holds the heap hooks
+# the game points at its own buffers. port/src/ax_hle runs them on the aux
+# buses.
+list(APPEND GAME_SOURCES
+     ${GAME_ROOT}/libs/dolphin/src/dolphin/axfx/axfx.c
+     ${GAME_ROOT}/libs/dolphin/src/dolphin/axfx/reverb_std.c
+     ${GAME_ROOT}/libs/dolphin/src/dolphin/axfx/delay.c)
+
 set(GAME_EXCLUDE
     dberror.c debug.c debugconsole_main.c   # PPC register dumps / debug console thread (never)
 

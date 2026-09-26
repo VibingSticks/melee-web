@@ -316,6 +316,7 @@ async function startGame(disc, fst) {
   // ?frameskip=off: draw every game frame even when that means slow motion.
   const noFrameSkip = params.get('frameskip') === 'off';
   const audioBackend = params.get('audio'); // 'sdl' keeps SDL's ScriptProcessor output
+  const audioFxOff = params.get('fx') === 'off'; // the reverb and delay, for comparing
   const preload = params.get('preload'); // 'off' starts without compiling the pipelines first
   const createMelee = await meleeFactory();
   const seedPromise = params.has('noseed') ? Promise.resolve(null) : loadPipelineSeed();
@@ -326,6 +327,7 @@ async function startGame(disc, fst) {
     renderWidth,
     noFrameSkip,
     audioBackend,
+    audioFxOff,
     preload,
     preloadInFlight: +(params.get('preloadjobs') ?? 0), // pipelines compiling at once during the preload (default 16)
     onPreload: preloadScreen(),

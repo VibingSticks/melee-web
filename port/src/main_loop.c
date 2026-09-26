@@ -87,6 +87,10 @@ static bool g_exit_requested;
 static bool g_paused;
 static double g_next_vblank_ms;
 static const double kFrameMs = 1000.0 / 60.0;
+/* Frame skip: how many extra game-logic frames a late frame may run before
+ * the next draw (0 turns it off; ?frameskip=off). */
+static int g_max_catchup = 4; /* the game's pad queue holds 5 samples (gmmain.c HSD_PadInit) */
+static unsigned g_skipped_frames; /* logic frames run without a draw, per second */
 
 void port_log(const char* fmt, ...)
 {
@@ -206,10 +210,13 @@ static void prof_report(unsigned frame)
     double now = emscripten_get_now();
     double fps = g_prof.window_start > 0.0 && now > g_prof.window_start ? n * 1000.0 / (now - g_prof.window_start) : 0.0;
     port_log("frame %u | %.1f fps (%.1f ms/frame) | game %.1f present %.1f events %.1f pace %.1f browser %.1f "
-             "dvd %.1f alarm %.1f vi %.1f audio %.1f begin %.1f | worst %.1f",
+             "dvd %.1f alarm %.1f vi %.1f audio %.1f begin %.1f | worst %.1f | game speed %.0f%% (%u skipped)",
              frame, fps, fps > 0.0 ? 1000.0 / fps : 0.0, g_prof.game / n, g_prof.present / n, g_prof.events / n,
              g_prof.pace / n, g_prof.browser / n, g_prof.dvd / n, g_prof.alarm / n, g_prof.vi / n, g_prof.audio / n,
-             g_prof.begin / n, g_prof.worst);
+             g_prof.begin / n, g_prof.worst,
+             now > g_prof.window_start ? (n + g_skipped_frames) * 1000.0 / (now - g_prof.window_start) / 60.0 * 100.0 : 0.0,
+             g_skipped_frames);
+    g_skipped_frames = 0;
     {
         /* What the last frame asked of the GPU: on a slow machine "present"
          * scales with the draw count (each draw is several WebGPU calls, and
@@ -356,8 +363,26 @@ void port_vblank(void)
     /* Pace to 60 Hz. After a long stall, resynchronise instead of running
      * several frames back to back. */
     double now = t_events;
-    if (g_next_vblank_ms == 0.0 || now > g_next_vblank_ms + 4 * kFrameMs) {
+    int catchup = 0;
+    /* A stall this long is a load, not a slow draw: resynchronise instead of
+     * running the missed frames. */
+    if (g_next_vblank_ms == 0.0 || now > g_next_vblank_ms + 250.0) {
         g_next_vblank_ms = now;
+    } else if (now >= g_next_vblank_ms + kFrameMs) {
+        /* Late by whole frames. The GameCube never slows the game down for a
+         * slow draw: its pad alarm keeps queueing a sample every 1/60 s, and
+         * the scene loop runs one logic frame per queued sample before it
+         * draws again (gmscene.c). Give the loop those samples too, so a
+         * machine that can only draw 20 frames a second still plays at full
+         * speed, skipping draws, instead of in slow motion. */
+        catchup = (int) ((now - g_next_vblank_ms) / kFrameMs);
+        if (catchup > g_max_catchup) {
+            catchup = g_max_catchup;
+        }
+        g_next_vblank_ms += catchup * kFrameMs;
+        if (now > g_next_vblank_ms + kFrameMs) {
+            g_next_vblank_ms = now; /* beyond the cap: drop the rest */
+        }
     }
     bool yielded = false;
     while (now < g_next_vblank_ms) {
@@ -401,12 +426,15 @@ void port_vblank(void)
      * per frame makes that alarm fire exactly once per vblank. */
     {
         static OSTime s_virtual_time;
-        if (s_virtual_time == 0) {
-            s_virtual_time = OSGetTime();
-        } else {
-            s_virtual_time += (OSTime) (OS_TIMER_CLOCK / 60);
+        for (int tick = 0; tick <= catchup; tick++) {
+            if (s_virtual_time == 0) {
+                s_virtual_time = OSGetTime();
+            } else {
+                s_virtual_time += (OSTime) (OS_TIMER_CLOCK / 60);
+            }
+            port_alarm_tick(s_virtual_time);
         }
-        port_alarm_tick(s_virtual_time);
+        g_skipped_frames += (unsigned) catchup;
     }
     double t_alarm = emscripten_get_now();
     g_prof.alarm += t_alarm - t_dvd;
@@ -501,6 +529,12 @@ int main(int argc, char** argv)
         render_h = 960;
     }
     port_log("render size %dx%d", render_w, render_h);
+    /* ?frameskip=off (boot.js sets Module.noFrameSkip): draw every frame and
+     * let a slow machine run the game in slow motion instead. */
+    if (emscripten_run_script_int("(typeof Module !== 'undefined' && Module.noFrameSkip) | 0")) {
+        g_max_catchup = 0;
+    }
+    port_log("frame skip: up to %d logic frames per draw", g_max_catchup + 1);
 
     /* Before Aurora: it opens the memory card during aurora_initialize and
      * formats a blank one if the image is absent, so the stored card has to be

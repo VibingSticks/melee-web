@@ -308,6 +308,8 @@ async function startGame(disc, fst) {
   // ?yield=timer puts the game's busy-wait yields back on setTimeout(0), for
   // A/B-ing the menu pauses (see port_yield_browser in imports.js).
   const yieldTimer = params.get('yield') === 'timer';
+  // ?frameskip=off: draw every game frame even when that means slow motion.
+  const noFrameSkip = params.get('frameskip') === 'off';
   const createMelee = await meleeFactory();
   const seedPromise = params.has('noseed') ? Promise.resolve(null) : loadPipelineSeed();
   const Module = await createMelee({
@@ -315,6 +317,7 @@ async function startGame(disc, fst) {
     discSource: disc,
     forceCompatProfile,
     renderWidth,
+    noFrameSkip,
     renderHeight,
     yieldTimer,
     noInitialRun: true,

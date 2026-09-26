@@ -43,6 +43,15 @@ int port_debug_vs_ckind[2] = { -1, -1 };
 /* Player 2 as a CPU of this level (1..9); -1 keeps it a second human. */
 int port_debug_vs_cpu_level = -1;
 
+/* The match's time limit in seconds; 0 keeps the mode's default. */
+int port_debug_vs_time_limit = 0;
+
+/*   Module._port_debug_set_vs_time_limit(seconds);   // before starting */
+EMSCRIPTEN_KEEPALIVE void port_debug_set_vs_time_limit(int seconds)
+{
+    port_debug_vs_time_limit = seconds;
+}
+
 /*   Module._port_debug_start_vs_stage(stkind);   // StKind, e.g. 4 = Castle */
 EMSCRIPTEN_KEEPALIVE void port_debug_start_vs_stage(int stkind)
 {

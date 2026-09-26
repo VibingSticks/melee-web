@@ -177,6 +177,16 @@ void onEnterDebugVs(GameModeState* state)
     start->rules.item_freq = -1;
     start->rules.sd_penalty = -1;
     start->rules.match_kind = MatchKind_Time;
+#ifdef TARGET_PC
+    /* ... and a short time limit, so a test reaches the results screen. */
+    {
+        extern int port_debug_vs_time_limit;
+        if (port_debug_vs_time_limit > 0) {
+            start->rules.time_limit = port_debug_vs_time_limit;
+            start->rules.timer_enabled = true;
+        }
+    }
+#endif
 
     for (i = 0; i < Gm_Player_NumMax; i++) {
         gm_SetupPlayerDefaults(&start->players[i]);

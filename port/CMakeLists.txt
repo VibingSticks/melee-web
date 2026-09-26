@@ -110,6 +110,10 @@ if (EMSCRIPTEN)
     endforeach ()
     # WebGL2 fallback translator (built by tools/build_naga.sh; optional).
     configure_file(web/js/naga/naga.js ${CMAKE_BINARY_DIR}/naga/naga.js COPYONLY)
+    # The pipeline warm-up list (see aurora_pipeline_seed_import); optional.
+    if (EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/web/pipelines.bin.gz)
+        configure_file(web/pipelines.bin.gz ${CMAKE_BINARY_DIR}/pipelines.bin.gz COPYONLY)
+    endif ()
     if (EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/web/js/naga/naga.wasm)
         configure_file(web/js/naga/naga.wasm ${CMAKE_BINARY_DIR}/naga/naga.wasm COPYONLY)
     else ()

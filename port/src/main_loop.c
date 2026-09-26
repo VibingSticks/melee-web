@@ -517,6 +517,19 @@ int main(int argc, char** argv)
     };
     reserve_low_heap();
     aurora_initialize(argc, argv, &cfg);
+    /* The pipeline warm-up list boot.js loaded (pipelines.bin.gz): every
+     * shader pipeline a recorded session used, compiled in the background
+     * from here on so a match's first draws do not stall on them. */
+    {
+        extern uint8_t* port_pipeline_seed_take(uint32_t* size);
+        uint32_t seed_size = 0;
+        uint8_t* seed = port_pipeline_seed_take(&seed_size);
+        if (seed != NULL) {
+            size_t queued = aurora_pipeline_seed_import(seed, seed_size);
+            port_log("pipeline seed: %u bytes, %u pipelines queued", seed_size, (unsigned) queued);
+            free(seed);
+        }
+    }
     /* SDL creates the window resizable, and its resize handler sets the canvas
      * drawing buffer to whatever CSS size the page gives it. Aurora then makes
      * the framebuffer match, and scales x and y independently -- so the page's

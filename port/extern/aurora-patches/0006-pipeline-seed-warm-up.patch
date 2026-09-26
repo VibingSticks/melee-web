@@ -1,0 +1,360 @@
+diff --git a/lib/gx/gx.cpp b/lib/gx/gx.cpp
+index f083ba5..62acc64 100644
+--- a/lib/gx/gx.cpp
++++ b/lib/gx/gx.cpp
+@@ -13,6 +13,7 @@
+ #include "gx_fmt.hpp"
+ 
+ #include <absl/container/flat_hash_map.h>
++#include <functional>
+ #include <tracy/Tracy.hpp>
+ 
+ #include <atomic>
+@@ -313,9 +314,9 @@ void set_render_scissor(const gfx::ClipRect& scissor) noexcept {
+ 
+ const gfx::TextureBind& get_texture(GXTexMapID id) noexcept { return g_gxState.textures[static_cast<size_t>(id)]; }
+ 
+-wgpu::RenderPipeline build_pipeline(const PipelineConfig& config, ArrayRef<wgpu::VertexBufferLayout> vtxBuffers,
+-                                    wgpu::ShaderModule shader, const char* label) noexcept {
+-  ZoneScoped;
++template <typename F>
++static auto with_pipeline_descriptor(const PipelineConfig& config, ArrayRef<wgpu::VertexBufferLayout> vtxBuffers,
++                                     wgpu::ShaderModule shader, const char* label, F&& f) noexcept {
+   const float depthBias = (UseReversedZ ? -1.0f : 1.0f) * std::bit_cast<float>(config.polygonOffsetBits);
+   const float depthBiasSlopeScale = (UseReversedZ ? -1.0f : 1.0f) * std::bit_cast<float>(config.polygonOffsetScaleBits);
+   const float depthBiasClamp = webgpu::g_hasCoreFeatures ? std::bit_cast<float>(config.polygonOffsetClampBits) : 0.0f;
+@@ -358,7 +359,37 @@ wgpu::RenderPipeline build_pipeline(const PipelineConfig& config, ArrayRef<wgpu:
+           },
+       .fragment = &fragmentState,
+   };
+-  return g_device.CreateRenderPipeline(&descriptor);
++  return f(descriptor);
++}
++
++wgpu::RenderPipeline build_pipeline(const PipelineConfig& config, ArrayRef<wgpu::VertexBufferLayout> vtxBuffers,
++                                    wgpu::ShaderModule shader, const char* label) noexcept {
++  ZoneScoped;
++  return with_pipeline_descriptor(config, vtxBuffers, shader, label, [](const wgpu::RenderPipelineDescriptor& d) {
++    return g_device.CreateRenderPipeline(&d);
++  });
++}
++
++// The same pipeline, compiled off the queue: the browser's GPU process builds
++// it on its own worker threads and hands it over later, so a warm-up of many
++// pipelines does not hold up the frames drawn meanwhile.
++void build_pipeline_async(const PipelineConfig& config, ArrayRef<wgpu::VertexBufferLayout> vtxBuffers,
++                          wgpu::ShaderModule shader, const char* label,
++                          std::function<void(wgpu::RenderPipeline)> done) noexcept {
++  ZoneScoped;
++  with_pipeline_descriptor(config, vtxBuffers, shader, label, [&](const wgpu::RenderPipelineDescriptor& d) {
++    g_device.CreateRenderPipelineAsync(
++        &d, wgpu::CallbackMode::AllowSpontaneous,
++        [done = std::move(done)](wgpu::CreatePipelineAsyncStatus status, wgpu::RenderPipeline pipeline,
++                                 wgpu::StringView message) {
++          if (status != wgpu::CreatePipelineAsyncStatus::Success) {
++            Log.warn("async pipeline creation failed: {}", std::string_view{message.data, message.length});
++            pipeline = nullptr;
++          }
++          done(std::move(pipeline));
++        });
++    return 0;
++  });
+ }
+ 
+ void populate_pipeline_config(PipelineConfig& config, GXPrimitive primitive, GXVtxFmt fmt) noexcept {
+diff --git a/lib/gx/gx.hpp b/lib/gx/gx.hpp
+index d2c4f4e..21ab3f1 100644
+--- a/lib/gx/gx.hpp
++++ b/lib/gx/gx.hpp
+@@ -10,6 +10,7 @@
+ #include <type_traits>
+ #include <cstring>
+ #include <bitset>
++#include <functional>
+ #include <memory>
+ #include <array>
+ #include <cfloat>
+@@ -548,6 +549,9 @@ struct BindGroupRanges {
+ void populate_pipeline_config(PipelineConfig& config, GXPrimitive primitive, GXVtxFmt fmt) noexcept;
+ wgpu::RenderPipeline build_pipeline(const PipelineConfig& config, ArrayRef<wgpu::VertexBufferLayout> vtxBuffers,
+                                     wgpu::ShaderModule shader, const char* label) noexcept;
++void build_pipeline_async(const PipelineConfig& config, ArrayRef<wgpu::VertexBufferLayout> vtxBuffers,
++                          wgpu::ShaderModule shader, const char* label,
++                          std::function<void(wgpu::RenderPipeline)> done) noexcept;
+ std::string build_shader_source(const ShaderConfig& config) noexcept;
+ wgpu::ShaderModule build_shader(const ShaderConfig& config) noexcept;
+ GXBindGroups build_bind_groups(const ShaderInfo& info) noexcept;
+diff --git a/lib/gx/pipeline.cpp b/lib/gx/pipeline.cpp
+index 346bc04..285e538 100644
+--- a/lib/gx/pipeline.cpp
++++ b/lib/gx/pipeline.cpp
+@@ -22,6 +22,15 @@ wgpu::RenderPipeline create_pipeline(const PipelineConfig& config) {
+   return build_pipeline(config, {}, shader, label.c_str());
+ }
+ 
++void create_pipeline_async(const PipelineConfig& config, std::function<void(wgpu::RenderPipeline)> done) {
++  ZoneScoped;
++  const auto shader = build_shader(config.shaderConfig);
++  const auto label =
++      fmt::format("GX Pipeline {:x} shader {:x}", xxh3_hash(config, static_cast<HashType>(gfx::ShaderType::GX)),
++                  xxh3_hash(config.shaderConfig));
++  build_pipeline_async(config, {}, shader, label.c_str(), std::move(done));
++}
++
+ void render(const DrawData& data, const wgpu::RenderPassEncoder& pass) {
+   if (!gfx::bind_pipeline(data.pipeline, pass)) {
+     return;
+diff --git a/lib/gx/pipeline.hpp b/lib/gx/pipeline.hpp
+index 1abcbd5..f013431 100644
+--- a/lib/gx/pipeline.hpp
++++ b/lib/gx/pipeline.hpp
+@@ -3,6 +3,8 @@
+ #include "../gfx/types.hpp"
+ #include "gx.hpp"
+ 
++#include <functional>
++
+ namespace aurora::gx {
+ struct DrawData {
+   gfx::PipelineRef pipeline;
+@@ -36,6 +38,7 @@ struct PipelineConfig {
+ static_assert(std::has_unique_object_representations_v<PipelineConfig>);
+ 
+ wgpu::RenderPipeline create_pipeline([[maybe_unused]] const PipelineConfig& config);
++void create_pipeline_async(const PipelineConfig& config, std::function<void(wgpu::RenderPipeline)> done);
+ void render(const DrawData& data, const wgpu::RenderPassEncoder& pass);
+ 
+ void queue_surface(const u8* dlStart, uint32_t dlSize, bool bigEndian) noexcept;
+diff --git a/lib/gfx/pipeline_cache.cpp b/lib/gfx/pipeline_cache.cpp
+index 5e4e7ff..88a3d91 100644
+--- a/lib/gfx/pipeline_cache.cpp
++++ b/lib/gfx/pipeline_cache.cpp
+@@ -334,6 +334,91 @@ static AtomicStatRef queuedPipelines{detail::resources().stats.queuedPipelines};
+ static AtomicStatRef createdPipelines{detail::resources().stats.createdPipelines};
+ #endif
+ 
++#ifdef __EMSCRIPTEN__
++// --- Pipeline seed: the browser build's stand-in for the on-disk cache -------
++// The page has no persistent cache, so a recorded list of pipeline configs is
++// shipped with it (aurora_pipeline_seed_import) and compiled in the background
++// from startup, off the queue, so a match's first draws do not stall on shader
++// compilation. Every config this session uses is kept for the recording side
++// (aurora_pipeline_seed_export).
++namespace {
++struct SeenConfig {
++  ShaderType type;
++  uint32_t configVersion;
++  ByteBuffer config;
++  uint32_t firstFrameUsed;
++};
++absl::flat_hash_map<PipelineRef, SeenConfig> g_seenConfigs;
++
++struct SeedEntry {
++  PipelineRef hash;
++  gx::PipelineConfig config;
++  uint32_t firstFrameUsed;
++};
++std::deque<SeedEntry> g_seedQueue;
++absl::flat_hash_set<PipelineRef> g_seedQueued;
++size_t g_seedInFlight = 0;
++size_t g_seedCompiled = 0;
++size_t g_seedPresent = 0;
++size_t g_seedTotal = 0;
++constexpr size_t SeedMaxInFlight = 4;
++constexpr uint32_t SeedMagic = 0x44535041; // "APSD"
++
++void record_seen(const PipelineCacheWrite& write) {
++  auto [it, inserted] = g_seenConfigs.try_emplace(
++      write.hash, SeenConfig{write.type, write.configVersion, ByteBuffer(write.config.size()), write.firstFrameUsed});
++  if (inserted) {
++    std::memcpy(it->second.config.data(), write.config.data(), write.config.size());
++  } else if (write.firstFrameUsed < it->second.firstFrameUsed) {
++    it->second.firstFrameUsed = write.firstFrameUsed;
++  }
++}
++
++void pump_seed_queue() {
++  while (g_seedInFlight < SeedMaxInFlight && !g_seedQueue.empty()) {
++    SeedEntry entry = std::move(g_seedQueue.front());
++    g_seedQueue.pop_front();
++    {
++      std::lock_guard lock{g_pipelineMutex};
++      if (g_pipelines.contains(entry.hash) || g_pendingPipelines.contains(entry.hash)) {
++        ++g_seedPresent;
++        continue;
++      }
++      g_pendingPipelines.insert(entry.hash);
++    }
++    ++g_seedInFlight;
++    const PipelineRef hash = entry.hash;
++    const uint32_t firstFrameUsed = entry.firstFrameUsed;
++    gx::create_pipeline_async(entry.config, [hash, firstFrameUsed](wgpu::RenderPipeline pipeline) {
++      {
++        std::lock_guard lock{g_pipelineMutex};
++        g_pendingPipelines.erase(hash);
++        if (pipeline) {
++          g_pipelines.try_emplace(hash, CachedPipeline{
++                                            .pipeline = std::move(pipeline),
++                                            .firstFrameUsed = firstFrameUsed,
++                                        });
++          ++g_seedCompiled;
++        }
++      }
++      --g_seedInFlight;
++      ++createdPipelines;
++      if (g_seedQueue.empty() && g_seedInFlight == 0) {
++        Log.info("pipeline seed done: {} compiled, {} already present, of {}", g_seedCompiled, g_seedPresent,
++                 g_seedTotal);
++      }
++    });
++  }
++}
++
++template <typename T>
++void put(std::vector<uint8_t>& out, const T& v) {
++  const auto* p = reinterpret_cast<const uint8_t*>(&v);
++  out.insert(out.end(), p, p + sizeof v);
++}
++} // namespace
++#endif
++
+ template <typename PipelineConfig>
+ static PipelineCacheWrite make_pipeline_cache_write(ShaderType type, PipelineRef hash, const PipelineConfig& config,
+                                                     uint32_t firstFrameUsed) {
+@@ -351,6 +436,10 @@ static PipelineCacheWrite make_pipeline_cache_write(ShaderType type, PipelineRef
+ }
+ 
+ static void enqueue_pipeline_cache_write(PipelineCacheWrite write) {
++#ifdef __EMSCRIPTEN__
++  record_seen(write);
++  return;
++#endif
+   if (g_pipelineCacheBroken || g_pipelineCacheDb == nullptr) {
+     return;
+   }
+@@ -1179,6 +1268,9 @@ void end_pipeline_frame() {
+   if (!g_hasPipelineThread) {
+     pipeline_worker();
+   }
++#ifdef __EMSCRIPTEN__
++  pump_seed_queue();
++#endif
+ }
+ 
+ bool get_pipeline(PipelineRef ref, wgpu::RenderPipeline& pipeline) {
+@@ -1192,3 +1284,84 @@ bool get_pipeline(PipelineRef ref, wgpu::RenderPipeline& pipeline) {
+ }
+ 
+ } // namespace aurora::gfx
++
++#ifdef __EMSCRIPTEN__
++extern "C" size_t aurora_pipeline_seed_export(uint8_t** out) {
++  using namespace aurora;
++  using namespace aurora::gfx;
++  std::vector<const SeenConfig*> rows;
++  rows.reserve(g_seenConfigs.size());
++  for (const auto& [_, seen] : g_seenConfigs) {
++    rows.push_back(&seen);
++  }
++  std::sort(rows.begin(), rows.end(),
++            [](const SeenConfig* a, const SeenConfig* b) { return a->firstFrameUsed < b->firstFrameUsed; });
++  std::vector<uint8_t> bytes;
++  put(bytes, SeedMagic);
++  put(bytes, static_cast<uint32_t>(rows.size()));
++  for (const auto* seen : rows) {
++    put(bytes, static_cast<uint32_t>(seen->type));
++    put(bytes, seen->configVersion);
++    put(bytes, static_cast<uint32_t>(seen->config.size()));
++    put(bytes, seen->firstFrameUsed);
++    bytes.insert(bytes.end(), seen->config.data(), seen->config.data() + seen->config.size());
++  }
++  auto* mem = static_cast<uint8_t*>(malloc(bytes.size()));
++  if (mem == nullptr) {
++    *out = nullptr;
++    return 0;
++  }
++  std::memcpy(mem, bytes.data(), bytes.size());
++  *out = mem;
++  return bytes.size();
++}
++
++extern "C" size_t aurora_pipeline_seed_import(const uint8_t* data, size_t size) {
++  using namespace aurora;
++  using namespace aurora::gfx;
++  auto rd = [&](size_t off, uint32_t& v) {
++    if (off + 4 > size) {
++      return false;
++    }
++    std::memcpy(&v, data + off, 4);
++    return true;
++  };
++  uint32_t magic = 0, count = 0;
++  if (!rd(0, magic) || magic != SeedMagic || !rd(4, count)) {
++    Log.warn("pipeline seed: not a seed file");
++    return 0;
++  }
++  size_t off = 8, queued = 0;
++  for (uint32_t i = 0; i < count; i++) {
++    uint32_t type, version, configSize, firstFrameUsed;
++    if (!rd(off, type) || !rd(off + 4, version) || !rd(off + 8, configSize) || !rd(off + 12, firstFrameUsed) ||
++        off + 16 + configSize > size) {
++      Log.warn("pipeline seed: truncated at entry {}", i);
++      break;
++    }
++    const uint8_t* blob = data + off + 16;
++    off += 16 + configSize;
++    if (type != static_cast<uint32_t>(ShaderType::GX) || version != gx::GXPipelineConfigVersion ||
++        configSize != sizeof(gx::PipelineConfig)) {
++      continue;
++    }
++    SeedEntry entry{};
++    std::memcpy(&entry.config, blob, sizeof entry.config);
++    // What the recording machine's adapter allowed is not what this one does:
++    // these come from the graphics profile, not the GX state, so take the
++    // local values before hashing (populate_pipeline_config sets the same).
++    entry.config.shaderConfig.noImmediates = (webgpu::g_graphicsConfig.profile & AURORA_COMPAT_NO_IMMEDIATES) != 0;
++    entry.config.shaderConfig.noStorage = (webgpu::g_graphicsConfig.profile & AURORA_COMPAT_NO_STORAGE) != 0;
++    entry.config.msaaSamples = webgpu::g_graphicsConfig.msaaSamples; // what the passes use; no pass is open yet
++    entry.hash = xxh3_hash(entry.config, static_cast<HashType>(ShaderType::GX));
++    entry.firstFrameUsed = firstFrameUsed;
++    if (!g_seedQueued.insert(entry.hash).second) {
++      continue;
++    }
++    g_seedQueue.push_back(std::move(entry));
++    ++queued;
++  }
++  g_seedTotal += queued;
++  return queued;
++}
++#endif
+diff --git a/include/aurora/gfx.h b/include/aurora/gfx.h
+index 94504b1..a6a4858 100644
+--- a/include/aurora/gfx.h
++++ b/include/aurora/gfx.h
+@@ -2,10 +2,12 @@
+ #define AURORA_GFX_H
+ 
+ #ifdef __cplusplus
++#include <cstddef>
+ #include <cstdint>
+ 
+ extern "C" {
+ #else
++#include "stddef.h"
+ #include "stdint.h"
+ #endif
+ 
+@@ -33,6 +35,13 @@ float aurora_get_fps();
+ 
+ void aurora_enable_vsync(bool enabled);
+ 
++/* The browser build's pipeline warm-up. aurora_pipeline_seed_export writes a
++ * malloc'd list of every pipeline configuration this session used (the caller
++ * frees it); aurora_pipeline_seed_import queues such a list for background
++ * compilation, and returns how many pipelines it queued. */
++size_t aurora_pipeline_seed_export(uint8_t** out);
++size_t aurora_pipeline_seed_import(const uint8_t* data, size_t size);
++
+ #ifdef __cplusplus
+ }
+ #endif

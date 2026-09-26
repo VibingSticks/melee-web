@@ -74,6 +74,19 @@ mergeInto(LibraryManager.library, {
       portYieldChannel.port2.postMessage(0);
     });
   },
+  // The pipeline warm-up list boot.js decoded (Module.pipelineSeed), copied
+  // into the heap for aurora_pipeline_seed_import; the caller frees it.
+  port_pipeline_seed_take__sig: 'ii',
+  port_pipeline_seed_take__deps: ['malloc'],
+  port_pipeline_seed_take: function (sizePtr) {
+    const seed = Module.pipelineSeed;
+    Module.pipelineSeed = null;
+    if (!seed || !seed.length) { HEAPU32[sizePtr >> 2] = 0; return 0; }
+    const p = _malloc(seed.length);
+    HEAPU8.set(seed, p);
+    HEAPU32[sizePtr >> 2] = seed.length;
+    return p;
+  },
   port_disc_size__sig: 'i',
   port_disc_size: function () {
     return Module.discSource ? Module.discSource.size >>> 0 : 0;

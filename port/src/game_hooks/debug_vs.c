@@ -46,6 +46,29 @@ int port_debug_vs_cpu_level = -1;
 /* The match's time limit in seconds; 0 keeps the mode's default. */
 int port_debug_vs_time_limit = 0;
 
+/* Player 1 as a CPU of this level too (1..9); -1 keeps the human. A match
+ * between two computer players exercises both fighters' moves unattended. */
+int port_debug_vs_p1_cpu_level = -1;
+
+/*   Module._port_debug_set_p1_cpu(level);   // before starting */
+EMSCRIPTEN_KEEPALIVE void port_debug_set_p1_cpu(int level)
+{
+    port_debug_vs_p1_cpu_level = level;
+}
+
+/*   Module._port_debug_pipeline_export(size_ptr)   // -> malloc'd bytes, Module._free them
+ * The shader pipelines this session has used so far, in the format
+ * aurora_pipeline_seed_import reads (port/web/pipelines.bin.gz is one of these,
+ * gzipped). */
+#include <aurora/gfx.h>
+EMSCRIPTEN_KEEPALIVE uint8_t* port_debug_pipeline_export(uint32_t* size)
+{
+    uint8_t* out = NULL;
+    size_t n = aurora_pipeline_seed_export(&out);
+    *size = (uint32_t) n;
+    return out;
+}
+
 /*   Module._port_debug_set_vs_time_limit(seconds);   // before starting */
 EMSCRIPTEN_KEEPALIVE void port_debug_set_vs_time_limit(int seconds)
 {

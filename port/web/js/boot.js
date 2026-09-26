@@ -309,6 +309,7 @@ async function startGame(disc, fst) {
   // A/B-ing the menu pauses (see port_yield_browser in imports.js).
   const yieldTimer = params.get('yield') === 'timer';
   const createMelee = await meleeFactory();
+  const seedPromise = params.has('noseed') ? Promise.resolve(null) : loadPipelineSeed();
   const Module = await createMelee({
     canvas,
     discSource: disc,
@@ -336,10 +337,42 @@ async function startGame(disc, fst) {
   if (rc !== 0) {
     throw new Error('The disc file table could not be parsed.');
   }
+  // The shader pipelines a recorded session used, compiled in the background
+  // from startup (port_pipeline_seed_take in imports.js hands them over).
+  // Not on the WebGL2 fallback: its pipeline creation compiles the shader on
+  // the main thread there and then, so a warm-up would stall the intro.
+  Module.pipelineSeed = (await rendererReady) === 'webgpu' ? await seedPromise : null;
+  if (Module.pipelineSeed) console.log(`[boot] pipeline seed: ${Module.pipelineSeed.length} bytes`);
   status('Running - press Tab to hide this bar');
   gameRunning = true;
   canvas.focus();
   Module.callMain([]);
+}
+
+// The pipeline warm-up list, pipelines.bin.gz: base64 in a text script of the
+// offline file, a file next to the page otherwise. Absent or undecodable, the
+// game just compiles pipelines as it meets them.
+async function loadPipelineSeed() {
+  try {
+    let gz;
+    const stashed = document.getElementById('melee-pipelines');
+    if (stashed) {
+      const bin = atob(stashed.textContent.trim());
+      stashed.remove();
+      gz = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) gz[i] = bin.charCodeAt(i);
+    } else {
+      const r = await fetch(new URL('pipelines.bin.gz', location.href));
+      if (!r.ok) return null;
+      gz = new Uint8Array(await r.arrayBuffer());
+    }
+    if (typeof DecompressionStream !== 'function') return null;
+    const stream = new Blob([gz]).stream().pipeThrough(new DecompressionStream('gzip'));
+    return new Uint8Array(await new Response(stream).arrayBuffer());
+  } catch (e) {
+    console.warn('[boot] pipeline seed not loaded:', e.message);
+    return null;
+  }
 }
 
 // --- Memory-card export and import -----------------------------------------
@@ -518,6 +551,11 @@ function wireSaveButtons(Module) {
   exportBtn.disabled = false;
   exportBtn.addEventListener('click', () => {
     try { exportSave(Module); } catch (e) { status('Export failed: ' + e.message, true); }
+  });
+  // The same report a crash produces, on demand: the per-second frame timings
+  // and load lines are what a performance question needs.
+  $('log-save')?.addEventListener('click', () => {
+    download(`melee-log-${Date.now()}.txt`, crashReport('log', 'saved by the player, no crash'), 'text/plain');
   });
   importInput.addEventListener('change', async () => {
     const file = importInput.files?.[0];

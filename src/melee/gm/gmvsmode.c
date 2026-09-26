@@ -220,6 +220,13 @@ void onEnterDebugVs(GameModeState* state)
             start->players[1].slot_type = Gm_PKind_Cpu;
             start->players[1].cpu_level = port_debug_vs_cpu_level;
         }
+        {
+            extern int port_debug_vs_p1_cpu_level;
+            if (port_debug_vs_p1_cpu_level >= 0) {
+                start->players[0].slot_type = Gm_PKind_Cpu;
+                start->players[0].cpu_level = port_debug_vs_p1_cpu_level;
+            }
+        }
     }
 #endif
     start->players[2].slot_type = Gm_PKind_NA;

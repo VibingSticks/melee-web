@@ -198,10 +198,21 @@ def pack(build: pathlib.Path) -> tuple[str, list[str]]:
     if n != 1:
         raise PackError(f"index.html: expected exactly one boot.js script tag, found {n}")
 
+    # The pipeline warm-up list, when the build has one (web/pipelines.bin.gz).
+    seed = build / "pipelines.bin.gz"
+    seed_block = ""
+    if seed.exists():
+        seed_block = (
+            "<script type=\"text/plain\" id=\"melee-pipelines\">\n"
+            + base64.b64encode(seed.read_bytes()).decode("ascii")
+            + "\n</script>\n"
+        )
+
     # The engines go in as inert text: parsing the unused one's embedded wasm
     # would cost a slow machine seconds and memory for nothing.
     blocks = (
-        "<script type=\"text/plain\" id=\"melee-engine\">\n"
+        seed_block
+        + "<script type=\"text/plain\" id=\"melee-engine\">\n"
         + close_script_safe(engines["melee.js"])
         + "\n</script>\n<script type=\"text/plain\" id=\"melee-engine-jspi\">\n"
         + close_script_safe(engines["melee-jspi.js"])

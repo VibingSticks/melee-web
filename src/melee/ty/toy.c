@@ -2285,6 +2285,8 @@ void Toy_80307470(s32 arg0)
         loaded_jobj = HSD_JObjLoadJoint(joint[0]);
 #ifdef TARGET_PC
         anim[0] = HSD_ArchiveGetPublicAddress(tg->x50, _Toy_803FDF3C.animjoint);
+        matanim[0] = HSD_ArchiveGetPublicAddress(tg->x50,
+                                                 _Toy_803FDF3C.matanim_joint);
 #else
         anim[0] = HSD_ArchiveGetPublicAddress(
             tg->x50, (&_Toy_803FDF3C)[arg0].animjoint);

@@ -413,6 +413,10 @@ typedef struct { f32 v[1]; } port_F32Run;
  * next object. */
 typedef struct { s16 v[1]; } port_S16Run;
 
+/* gm_181A.c RegClearSpawnEntry (defined in the .c file): Multi-Man Melee
+ * spawn rows in GmKumite.dat. */
+typedef struct { s32 x0; u8 x4, x5, x6, x7; f32 x8, xC; } port_KumiteSpawn;
+
 /* itfoods.c: one itFoodsAttributes row per food kind (it_8028F9D8 indexes the
  * block as Vec4 entries of the same size); the row count lives nowhere, so
  * the rows run to the next object. */

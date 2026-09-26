@@ -34,6 +34,21 @@
 # toy.c: the trophy tables (TyDatai.usd, TyDataf.dat) are pointer-free rows
 # with no stored count; each runs to the next root. Left big-endian, the
 # lottery drew trophy 0 ("Dummy") and never awarded anything.
+# Scene descriptions with no suffix rule: the results screen (GmRst: pnlsce,
+# flmsce -- its camera's projection was still big-endian and CObjLoad
+# asserted), the Classic ending and trophy stand (GmRegEnd, GmRgStnd) and the
+# Adventure cutscenes (Vi*). All are SceneDesc in the code that loads them.
+- { prefix: pnlsce, type: SceneDesc }
+- { prefix: flmsce, type: SceneDesc }
+- { suffix: Scene, type: SceneDesc }
+# gmcamera.c: the off-screen player bubble (IfVsCam) reads these as models.
+- { suffix: _Top_model_set, type: DynamicModelDesc }
+# gmstaffroll.c: the credits' name models, a DynamicModelDesc** list.
+- { prefix: ScGamRegStaffrollNames_scene_modelset, type: "DynamicModelDesc*", array: null_term }
+# gm_1832.c: the Classic "vs" splash layout, 0x9B8 bytes of floats.
+- { prefix: gmIntroEasyTable, type: port_F32Run }
+# gm_181A.c: Multi-Man Melee spawn tables, rows ended by x0 == 999.
+- { prefix: gmKumiteSystemTable, type: port_KumiteSpawn, array: object_run }
 - { prefix: tyInitModelTbl, type: TrophyData, array: object_run }
 - { prefix: tyInitModelDTbl, type: TrophyData, array: object_run }
 - { prefix: tyModelSortTbl, type: ToyNameData, array: object_run }

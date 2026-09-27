@@ -170,6 +170,15 @@ port_FtLoadCommonData:
   colanim_b:       { ptr_array: Fighter_804D653C_t, object_run: true }
 Fighter_804D6540_t:
   x0: { ptr_array: Fighter_804D6540_x0_t, len_field: x4 }
+# Declared HSD_Joint**, but the word points at an HSD_Joint (class name 0,
+# flags 8, child): ftCo_Guard.c reads x0[2], the joint's child, as the guard
+# pose (ftAnim_8006FA58). Followed as a pointer to one HSD_Joint* word, the
+# rest of the joint tree kept big-endian rotations, scales and translations:
+# every hard shield press (GuardReflect -> Guard) collapsed the fighter's
+# skeleton to NaN and huge values, and items then hit its NaN hurtboxes from
+# anywhere on the stage (the F-Zero route's "damage log over 20!!" assert).
+ftData_x20:
+  x0: { ptr: HSD_Joint }
 Fighter_ShakeTable_t:
   x0: { ptr_array: Vec2, len_field: x4 }
 ftData:

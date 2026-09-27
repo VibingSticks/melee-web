@@ -1,26 +1,104 @@
-# Melee Web
+Melee Web
+=============
 
 Super Smash Bros. Melee running in a web browser, built from the
 [doldecomp/melee](https://github.com/doldecomp/melee) decompilation and
 compiled to WebAssembly.
 
-This is a fork. The game code is the decompilation project's work; this fork
-adds a port layer (`port/`) that runs it in the browser (tested in Chrome and
-Firefox), either from a web server or from a single offline HTML file.
+This repository is a fork. The game code is the decompilation project's work;
+this fork adds a port layer (`port/`) that runs it in the browser (tested in
+Chrome and Firefox), either from a web server or from a single offline HTML
+file.
 
 > [!IMPORTANT]
 > Nothing from the game is included. You need your own disc image of
-> Super Smash Bros. Melee, NTSC-U version 1.02 (game ID `GALE01`), as an
-> `.iso` or `.gcm`. The page reads it from your computer; it is never
-> uploaded anywhere.
+> Super Smash Bros. Melee, NTSC-U version 1.02 (game ID `GALE01`). The page
+> reads it from your computer; it is never uploaded anywhere.
 
-## Playing
+It builds:
 
-1. Build `melee-offline.html` (see [Building](#building)), or serve a hosted
-   build.
-2. Open it in a current Chrome or Firefox.
-3. Pick your disc image.
-4. The first time, a loading bar compiles the game's graphics shaders. This
+|Output|What it is
+-|-
+`port/build/web-release/`|A hosted build: a static folder any web server can serve
+`port/melee-offline.html`|One self-contained HTML file that runs from `file://`, with nothing beside it
+
+Both play the same disc:
+
+|Version|Game ID|Disc image
+-|-|-
+1.02|`GALE01`|A plain `.iso` or `.gcm` (an NKit `.iso` works too)
+
+# Dependencies
+
+The port is built and tested on **Linux**. The build scripts are Bash; Windows
+(through WSL) and macOS have not been tried.
+
+- [Git](https://git-scm.com/), [CMake](https://cmake.org/) 3.25 or newer,
+  [Ninja](https://ninja-build.org/), a C/C++ compiler for the host tests, and
+  Python 3.
+- The Python packages `libclang` (the schema generator reads the game's headers
+  with it) and `pyyaml`:
+  ```sh
+  python -m venv --upgrade-deps .venv
+  . .venv/bin/activate
+  pip install libclang pyyaml
+  ```
+- [Rust](https://rustup.rs/) with the WebAssembly target, for the shader
+  translator the WebGL2 renderer uses:
+  ```sh
+  rustup target add wasm32-unknown-unknown
+  ```
+- Emscripten is **not** a separate install: `port/tools/setup.sh` downloads the
+  pinned version (emsdk 6.0.9) into `port/extern`.
+- Optional, for the browser tests: [Node.js](https://nodejs.org/) and
+  [Playwright](https://playwright.dev/) (`playwright-core`).
+
+# Building
+
+- Clone the repository:
+  ```sh
+  git clone https://github.com/VibingSticks/melee-web.git
+  cd melee-web
+  ```
+- Install Emscripten and Aurora (the GameCube API layer) at their pinned
+  versions, with the port's patches applied. This only needs doing once:
+  ```sh
+  port/tools/setup.sh
+  ```
+- Build the shader translator (writes `port/web/js/naga/naga.wasm`):
+  ```sh
+  port/tools/build_naga.sh
+  ```
+- Put Emscripten on your `PATH` (in every new shell):
+  ```sh
+  source port/tools/env.sh
+  ```
+- Build and serve the hosted version:
+  ```sh
+  cd port
+  cmake --preset web-release
+  cmake --build --preset web-release
+  python3 -m http.server -d build/web-release 8080
+  ```
+  Then open <http://localhost:8080>.
+- Or build the single offline file:
+  ```sh
+  cd port
+  cmake --preset web-single
+  cmake --build --preset web-single
+  python3 tools/pack_single_html.py build/web-single -o melee-offline.html
+  ```
+  `melee-offline.html` can then be copied anywhere (a USB stick works) and
+  opened directly.
+
+The `web-debug` preset builds with debug information for development.
+More detail on the port's internals is in [`port/README.md`](../port/README.md).
+
+# Playing
+
+1. Open the page in a current Chrome or Firefox.
+2. Pick your disc image.
+3. The first time, a loading bar compiles the game's graphics shaders. This
    takes about 10 to 20 seconds on a desktop and a couple of minutes on a
    low-end Chromebook. Later boots are quicker on the WebGL2 renderer, which
    keeps its shader translations, and every session adds the shaders it met to
@@ -30,7 +108,7 @@ The toolbar has **Export save** and **Import save** for the memory card, and
 **Save log**, which downloads a report with frame timings for bug reports.
 **Tab** hides the toolbar and log.
 
-### Keyboard (controller port 1)
+## Keyboard (controller port 1)
 
 | Key | Button | | Key | Button |
 |---|---|---|---|---|
@@ -40,13 +118,13 @@ The toolbar has **Export save** and **Import save** for the memory card, and
 | Q / W | L / R | | S | Y |
 | D | Z | | T F G H | D-pad |
 
-### Renderers
+## Renderers
 
 - **WebGPU** is used when the browser has it (Chrome).
 - **WebGL2** is the fallback, for example Firefox on Linux. It uses a small
   WebGPU-on-WebGL2 layer in `port/web/js/gpu-gl2.js`.
 
-### URL options
+## URL options
 
 Add these to the address, for example `melee-offline.html?res=640x480`.
 
@@ -59,7 +137,24 @@ Add these to the address, for example `melee-offline.html?res=640x480`.
 | `fx=off` | Play audio without the game's reverb and echo |
 | `audio=sdl` | Use SDL's audio output instead of the AudioWorklet |
 
-## Status
+# Testing
+
+- Host unit tests (the disc-data converter, the disc layer and the offline
+  packer, among others):
+  ```sh
+  cd port
+  cmake --preset host-tests
+  cmake --build --preset host-tests
+  ctest --preset host-tests
+  ```
+- Browser tests live in `port/tests/browser` and drive the game with
+  Playwright. Point `NODE_PATH` at a `node_modules` that has `playwright-core`,
+  for example:
+  ```sh
+  NODE_PATH=/path/to/node_modules node port/tests/browser/boot_probe.mjs port/build/web-release /path/to/GALE01.iso 20 --headed
+  ```
+
+# Status
 
 The whole game is compiled in: every unit of the decompilation except three
 debug-only files. Tested and running: the menus, VS matches, Classic mode
@@ -69,8 +164,8 @@ echo. The other modes are compiled in but have had less play-testing.
 
 What the port adds on top of the decompilation:
 
-- **Graphics** through [Aurora](https://github.com/encounter/aurora), a
-  reimplementation of the GameCube's graphics API, on WebGPU or WebGL2.
+- **Graphics** through Aurora, a reimplementation of the GameCube's graphics
+  API, on WebGPU or WebGL2.
 - **Disc, controllers, memory card, timers and video sync** reimplemented for
   the browser.
 - **Audio**: a software version of the GameCube's sound chip, played through
@@ -82,8 +177,8 @@ What the port adds on top of the decompilation:
 
 The game was written for the GameCube's CPU, which tolerates things the
 browser does not (a divide by zero, a function called with the wrong number
-of arguments). Those turn up as crashes and get fixed one at a time; a crash
-report from the **Save log** button is the most useful thing to send.
+of arguments). Those turn up as crashes and get fixed one at a time; a report
+from the **Save log** button is the most useful thing to send.
 
 Known issues:
 
@@ -94,49 +189,56 @@ Known issues:
 - Slow machines (for example a 2-core Chromebook) draw around 20 frames a
   second. Frame skip keeps the game itself at full speed.
 
-## Building
-
-The port builds on Linux. It needs CMake 3.25 or newer, Ninja, Python 3 with
-the `libclang` and `pyyaml` packages, and Rust (for the shader translator,
-built by `port/tools/build_naga.sh`); `setup.sh` installs Emscripten.
-
-```sh
-port/tools/setup.sh          # installs emsdk under port/extern and clones Aurora at the pinned revision
-source port/tools/env.sh     # puts emcc on PATH
-cd port
-
-# a hosted build, served by any web server
-cmake --preset web-release && cmake --build --preset web-release
-python3 -m http.server -d build/web-release 8080
-
-# the single offline file
-cmake --preset web-single && cmake --build --preset web-single
-python3 tools/pack_single_html.py build/web-single -o melee-offline.html
-```
-
-Host unit tests: `cmake --preset host-tests && cmake --build --preset host-tests && ctest --preset host-tests`.
-The browser tests in `port/tests/browser` use Playwright; point `NODE_PATH` at a
-`node_modules` that has `playwright-core`.
-
-More detail is in [`port/README.md`](../port/README.md).
-
-## Branches
+# Branches
 
 - `master`: the fork's release branch.
 - `web-port`: development.
-- Upstream decompilation changes are merged in from
-  [doldecomp/melee](https://github.com/doldecomp/melee).
+- Changes from [doldecomp/melee](https://github.com/doldecomp/melee) are merged
+  in from time to time.
 
-## Credits
+# Credits
 
-- [doldecomp/melee](https://github.com/doldecomp/melee) contributors, for the
-  decompilation this is built on.
-- [Aurora](https://github.com/encounter/aurora), for the GameCube API layer.
-- [Emscripten](https://emscripten.org), [Dawn / emdawnwebgpu](https://dawn.googlesource.com/dawn),
-  [SDL](https://github.com/libsdl-org/SDL) and [naga](https://github.com/gfx-rs/wgpu/tree/trunk/naga).
+This port stands on the work of these projects:
+
+| Project | What it does here | Version used |
+|---|---|---|
+| [doldecomp/melee](https://github.com/doldecomp/melee) | The decompiled game: all of the game code, HAL's engine library and the Dolphin SDK sources (including the AXFX reverb and delay and the THP movie code) | merged regularly |
+| [Aurora](https://github.com/encounter/aurora) | The GameCube API layer: GX graphics on WebGPU, controllers, video, memory card, ARAM, matrices and part of the OS | the [r-burns fork](https://github.com/r-burns/aurora) at `e6a6f02`, plus the patches in `port/extern/aurora-patches` |
+| [Emscripten](https://emscripten.org/) | The C/C++ to WebAssembly compiler and browser runtime | emsdk 6.0.9 |
+| [Dawn](https://dawn.googlesource.com/dawn) (emdawnwebgpu) | The WebGPU C API on top of the browser's WebGPU | remote port v20260910.214722 |
+| [SDL](https://github.com/libsdl-org/SDL) | The window and keyboard input, and the fallback audio output | Emscripten's SDL3 port (3.4.2) |
+| [naga](https://github.com/gfx-rs/wgpu/tree/trunk/naga) (wgpu) | Translates the shaders from WGSL to GLSL for the WebGL2 renderer | naga 30 |
+| [Abseil](https://github.com/abseil/abseil-cpp), [{fmt}](https://github.com/fmtlib/fmt), [xxHash](https://github.com/Cyan4973/xxHash), [FreeType](https://freetype.org/), [zlib](https://zlib.net/), [libpng](http://www.libpng.org/pub/png/libpng.html), [SQLite](https://sqlite.org/), [Dear ImGui](https://github.com/ocornut/imgui), [Tracy](https://github.com/wolfpld/tracy) | Libraries Aurora builds with | as pinned by Aurora |
+| [LLVM / libclang](https://clang.llvm.org/) and [PyYAML](https://pyyaml.org/) | Read the game's C headers to generate the tables that convert disc data | pip packages |
+| [Playwright](https://playwright.dev/) | Drives the browser for the automated tests | `playwright-core` |
+| [Dolphin](https://dolphin-emu.org/) | Reference for how the game should look and behave, and for GameCube hardware details | Dolphin 2606 |
+
+The port was developed with [Claude Code](https://claude.com/claude-code),
+Anthropic's AI coding assistant.
 
 Super Smash Bros. Melee is a trademark of Nintendo. This project is not
 affiliated with or endorsed by Nintendo or HAL Laboratory.
+
+# FAQ
+
+## Why does it need my disc?
+
+The repository contains code, not game data. The models, textures, music and
+stages all come from your disc image, read in the browser as the game needs
+them.
+
+## Where are my saves?
+
+In the browser's storage for the page (IndexedDB). Clearing the site's data
+removes them, so use **Export save** to keep a copy; **Import save** brings one
+back, on the same or another computer.
+
+## It is slow on my computer
+
+Try `?res=640x480`, which gives the graphics a quarter of the pixels to draw.
+On a slow machine frame skip keeps the game itself at full speed and draws
+fewer frames. The first boot's shader compile is the slowest part; later boots
+are faster.
 
 ---
 

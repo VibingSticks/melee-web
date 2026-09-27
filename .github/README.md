@@ -104,11 +104,13 @@ More detail on the port's internals is in [`port/README.md`](../port/README.md).
 
 1. Open the page in a current Chrome or Firefox.
 2. Pick your disc image.
-3. The first time, a loading bar compiles the game's graphics shaders. This
-   takes about 10 to 20 seconds on a desktop and a couple of minutes on a
-   low-end Chromebook. Later boots are quicker on the WebGL2 renderer, which
-   keeps its shader translations, and every session adds the shaders it met to
-   the list the loading bar compiles next time.
+3. A loading bar compiles the game's graphics shaders for at most 6 seconds,
+   starting with the ones the title screen, menus and a first match need,
+   then the game starts. On WebGPU the rest compile in the background, and
+   the toolbar counts how many are left. On WebGL2, where compiling during
+   play would make the game stutter, each remaining shader compiles the
+   first time a frame needs it. Every session adds the shaders it met to the
+   list the loading bar compiles next time.
 
 The toolbar has **Export save** and **Import save** for the memory card, and
 **Save log**, which downloads a report with frame timings for bug reports.
@@ -152,6 +154,8 @@ Add these to the address, for example `melee-offline.html?res=640x480`.
 | `res=WxH` | Render size (default 1280x960; 640x480 on small machines) |
 | `frameskip=off` | Draw every frame, even if that means slow motion on a slow machine |
 | `preload=off` | Start without compiling the shaders first |
+| `preload=all` | Wait for every shader before starting |
+| `preload=N` | Wait at most N seconds for shaders before starting (default 6) |
 | `fx=off` | Play audio without the game's reverb and echo |
 | `audio=sdl` | Use SDL's audio output instead of the AudioWorklet |
 

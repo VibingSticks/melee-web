@@ -222,6 +222,12 @@ mergeInto(LibraryManager.library, {
   port_preload_progress: function (done, total, finished) {
     return Module.onPreload && Module.onPreload(done, total, !!finished) ? 1 : 0;
   },
+  // Once a second while the rest of the pipeline seed compiles in the
+  // background (main_loop.c): the toolbar shows how many are left.
+  port_seed_background__sig: 'vi',
+  port_seed_background: function (pending) {
+    if (Module.onSeedBackground) Module.onSeedBackground(pending);
+  },
   // A scene changed after new pipelines were created: boot.js merges them
   // into the saved list (it calls back into the wasm for the export).
   port_pipelines_save__sig: 'v',

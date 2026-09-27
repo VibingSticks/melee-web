@@ -367,6 +367,15 @@ async function startGame(disc, fst, renderer) {
   const audioBackend = params.get('audio'); // 'sdl' keeps SDL's ScriptProcessor output
   const audioFxOff = params.get('fx') === 'off'; // the reverb and delay, for comparing
   const preload = params.get('preload'); // 'off' starts without compiling the pipelines first
+  // How long the loading bar waits for the shaders before the game starts
+  // (?preload=all waits for every one, ?preload=N for N seconds). WebGPU then
+  // compiles the rest in the background. WebGL2 compiles on the main thread,
+  // a program taking tens of milliseconds, where background compiles would
+  // stutter the game: the rest compile when a frame first needs them.
+  const preloadSecs = preload === 'all' ? 0
+    : /^\d+$/.test(preload ?? '') ? Number(preload)
+    : 6;
+  const preloadBackground = renderer === 'webgpu';
   const createMelee = await meleeFactory();
   const seedPromise = params.has('noseed') ? Promise.resolve(null) : loadPipelineSeed();
   const Module = await createMelee({
@@ -378,6 +387,11 @@ async function startGame(disc, fst, renderer) {
     audioBackend,
     audioFxOff,
     preload,
+    preloadSecs,
+    preloadBackground,
+    onSeedBackground: (pending) => status(pending > 0
+      ? `Running - compiling ${pending} more shaders in the background - press Tab to hide this bar`
+      : 'Running - press Tab to hide this bar'),
     preloadInFlight: +(params.get('preloadjobs') ?? 0), // pipelines compiling at once during the preload (default 16)
     onPreload: preloadScreen(),
     renderHeight,

@@ -49,6 +49,9 @@ extern int port_preload_progress(int done, int total, int finished);
  * Chromebook's) never finished it, and every new effect stalled the game the
  * first time it drew. With nothing else running, let more compile at once.
  * Skip (or ?preload=off) leaves the rest to the background warm-up. */
+/* Set when the preload left the rest of the seed paused, to compile on demand. */
+static int g_seed_on_demand;
+
 static void preload_pipelines(void)
 {
     size_t total = aurora_pipeline_seed_pending();
@@ -57,6 +60,11 @@ static void preload_pipelines(void)
         return;
     }
     double t0 = emscripten_get_now();
+    /* Module.preloadSecs (boot.js): stop waiting after that long and let the
+     * rest compile in the background while the game runs; 0 waits for all.
+     * The list is ordered by when a recorded session first needed each
+     * pipeline, so the title, the menus and a first match come first. */
+    int limit_secs = emscripten_run_script_int("(typeof Module !== 'undefined' && Module.preloadSecs) | 0");
     int max_in_flight = emscripten_run_script_int("(typeof Module !== 'undefined' && Module.preloadInFlight) | 0");
     aurora_pipeline_seed_set_max_in_flight(max_in_flight > 0 ? (size_t) max_in_flight : 16);
     double last_ui = 0.0;
@@ -65,6 +73,9 @@ static void preload_pipelines(void)
     while ((pending = aurora_pipeline_seed_pending()) > 0) {
         aurora_pipeline_seed_pump();
         double now = emscripten_get_now();
+        if (limit_secs > 0 && now - t0 >= limit_secs * 1000.0) {
+            break;
+        }
         if (now - last_ui >= 50.0) { /* the page's progress bar: a few times a second is plenty */
             last_ui = now;
             if (port_preload_progress((int) (total - pending), (int) total, 0)) {
@@ -79,10 +90,23 @@ static void preload_pipelines(void)
         emscripten_sleep(4);
     }
     aurora_pipeline_seed_set_max_in_flight(2);
+    /* Module.preloadBackground is 0 on the WebGL2 fallback: it compiles on
+     * the main thread, a program at a time taking tens of milliseconds, so
+     * compiling during play would stutter. Whatever is left compiles when a
+     * frame first needs it instead. */
+    if (aurora_pipeline_seed_pending() > 0 &&
+        !emscripten_run_script_int("(typeof Module !== 'undefined' && Module.preloadBackground) | 0")) {
+        aurora_pipeline_seed_pause(true);
+        g_seed_on_demand = 1;
+    }
     port_preload_progress((int) (total - aurora_pipeline_seed_pending()), (int) total, 1);
     port_log("pipeline preload: %u of %u compiled in %.1f s%s", (unsigned) (total - aurora_pipeline_seed_pending()),
              (unsigned) total, (emscripten_get_now() - t0) / 1000.0,
-             skipped ? " (skipped; the rest compile in the background)" : "");
+             !aurora_pipeline_seed_pending() ? ""
+             : g_seed_on_demand              ? (skipped ? " (skipped; the rest compile when first needed)"
+                                                        : " (time limit; the rest compile when first needed)")
+             : skipped                       ? " (skipped; the rest compile in the background)"
+                                             : " (time limit; the rest compile in the background)");
 }
 
 #if defined(__has_feature)
@@ -284,6 +308,16 @@ static void prof_report(unsigned frame)
                      st->lastUniformSize / 1024, st->lastStorageSize / 1024, st->lastTextureUploadSize / 1024,
                      (unsigned) (aurora_live_texture_bytes() >> 20), st->createdPipelines,
                      (unsigned) aurora_pipeline_seed_pending());
+        }
+        /* The toolbar's "compiling in the background" count (boot.js). */
+        {
+            extern void port_seed_background(int pending);
+            static size_t last_pending = (size_t) -1;
+            size_t pending = g_seed_on_demand ? 0 : aurora_pipeline_seed_pending();
+            if (pending != last_pending) {
+                last_pending = pending;
+                port_seed_background((int) pending);
+            }
         }
     }
     memset(&g_prof, 0, sizeof(g_prof));
@@ -540,7 +574,7 @@ void port_vblank(void)
         {
             static int s_seed_hold;
             s_seed_hold = busy > 20.0 ? 30 : (s_seed_hold > 0 ? s_seed_hold - 1 : 0);
-            aurora_pipeline_seed_pause(s_seed_hold > 0);
+            aurora_pipeline_seed_pause(g_seed_on_demand || s_seed_hold > 0);
         }
         /* A frame this long is a visible pause. Say where it went: how much of
          * the game's time was spent parked in port_yield (and in which half),

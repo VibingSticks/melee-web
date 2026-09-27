@@ -59,7 +59,12 @@ const browser = await playwright[browserName].launch(browserName === 'chromium' 
   headless: !headed,
   args: ['--enable-unsafe-webgpu', '--ignore-gpu-blocklist', '--no-sandbox', '--js-flags=--stack-trace-limit=100',
          '--disable-backgrounding-occluded-windows', '--disable-renderer-backgrounding'],
-} : { headless: !headed });
+} : {
+  headless: !headed,
+  executablePath: process.env.MELEE_FIREFOX || undefined,
+  // Firefox's WebGPU is off by default; the page picks WebGL2 unless ?renderer asks otherwise.
+  firefoxUserPrefs: { 'dom.webgpu.enabled': true },
+});
 // --viewport=WxH: the window shape to open. The game renders 4:3, so a
 // non-4:3 value is how you check the page letterboxes rather than stretches.
 const vp = (process.argv.find(a => a.startsWith('--viewport='))?.slice(11) ?? '1280x960').split('x');

@@ -622,8 +622,9 @@ int main(int argc, char** argv)
         .logLevel = LOG_INFO,
         .mem1Size = MEM1_DEFAULT_SIZE,
         .mem2Size = ARAM_DEFAULT_SIZE,
-        /* boot.js sets Module.forceCompatProfile from ?gpu=compat|noimm|nostorage (see the
-         * WebGL2 fallback spec); 0 lets Aurora pick from the adapter's limits. */
+        /* boot.js sets Module.forceCompatProfile from ?gpu=compat|noimm|nostorage|writestaging
+         * (see the WebGL2 fallback spec) and from what the browser's WebGPU lacks (Firefox);
+         * 0 lets Aurora pick from the adapter's limits. */
         .forceCompatProfile = (uint32_t) emscripten_run_script_int(
             "(typeof Module !== 'undefined' && Module.forceCompatProfile) | 0"),
     };

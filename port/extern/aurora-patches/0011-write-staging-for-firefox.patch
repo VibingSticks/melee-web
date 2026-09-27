@@ -1,0 +1,117 @@
+diff --git a/include/aurora/aurora.h b/include/aurora/aurora.h
+--- a/include/aurora/aurora.h
++++ b/include/aurora/aurora.h
+@@ -129,6 +129,8 @@ enum {
+   AURORA_COMPAT_NO_IMMEDIATES = 1, /* per-draw data goes in the uniform block instead of immediates */
+   AURORA_COMPAT_NO_STORAGE = 2,    /* vertex data is pulled from rgba32uint textures instead of storage buffers */
+   AURORA_COMPAT_NO_COMPUTE = 4,    /* no compute passes (depth peek disabled) */
++  AURORA_COMPAT_WRITE_STAGING = 8, /* browser build: one unmapped staging buffer filled with Queue::WriteBuffer,
++                                      for browsers that cap mappable buffer memory (Firefox) */
+ };
+ 
+ typedef struct {
+diff --git a/lib/gfx/frame.cpp b/lib/gfx/frame.cpp
+--- a/lib/gfx/frame.cpp
++++ b/lib/gfx/frame.cpp
+@@ -251,7 +251,31 @@ void pace_frame_start() {
+   }
+ }
+ 
++// AURORA_COMPAT_WRITE_STAGING: the frame's data goes to the GPU with
++// Queue::WriteBuffer instead of through mapped staging buffers. Mapping the
++// usual StagingBufferCount buffers needs over 300 MiB of mappable memory, and
++// Firefox refuses more than about 96 MiB of it. In the browser build every
++// frame is encoded and submitted inline, so the write is ordered after the
++// previous frame's submit and before this one's, and one buffer (slot 0,
++// always the first free slot) serves every frame. Chrome keeps the mapped
++// buffers, which cost it less per frame.
++bool write_staging() noexcept {
++#ifdef __EMSCRIPTEN__
++  return (webgpu::g_graphicsConfig.profile & AURORA_COMPAT_WRITE_STAGING) != 0;
++#else
++  return false;
++#endif
++}
++
+ void map_staging_buffer(size_t slot, bool releaseSlotOnCompletion = false) {
++  if (write_staging()) {
++    // Never mapped: ready as soon as it is free.
++    g_mappingStates[slot].store(BufferMapState::Mapped, std::memory_order_release);
++    if (releaseSlotOnCompletion) {
++      g_stagingSlots.release(slot);
++    }
++    return;
++  }
+   auto expected = BufferMapState::Unmapped;
+   if (!g_mappingStates[slot].compare_exchange_strong(expected, BufferMapState::Mapping, std::memory_order_acq_rel,
+                                                      std::memory_order_acquire)) {
+@@ -442,6 +466,13 @@ void initialize() {
+                StorageBufferSize, "Shared Storage Buffer");
+   for (size_t i = 0; i < g_stagingBuffers.size(); ++i) {
+     const auto label = fmt::format("Staging Buffer {}", i);
++    if (write_staging()) {
++      if (i == 0) {
++        createBuffer(g_stagingBuffers[i], wgpu::BufferUsage::CopyDst | wgpu::BufferUsage::CopySrc, StagingBufferSize,
++                     label.c_str());
++      }
++      continue;
++    }
+     createBuffer(g_stagingBuffers[i], wgpu::BufferUsage::MapWrite | wgpu::BufferUsage::CopySrc, StagingBufferSize,
+                  label.c_str());
+   }
+@@ -717,7 +748,7 @@ bool begin_frame() {
+   // of memory traffic per frame to move a few hundred KiB of real data, and
+   // 63 MiB of JavaScript garbage per frame on the WebGL2 fallback. Record into
+   // the arena instead; end_frame writes just the used prefix of each region
+-  // with WriteMappedRange.
++  // with WriteMappedRange (or Queue::WriteBuffer, see write_staging).
+   const auto mapBuffer = [&](ByteBuffer& buf, uint64_t size) {
+     if (size <= 0) {
+       return;
+@@ -775,7 +806,7 @@ void end_frame(EndFrameCallback callback) {
+ #ifdef __EMSCRIPTEN__
+     {
+       // Same region order and offsets as begin_frame. Sizes are rounded up to
+-      // 4, which WebGPU's getMappedRange requires; every region's capacity is
++      // 4, which WebGPU's getMappedRange and writeBuffer require; every region's capacity is
+       // a multiple of 4 so the rounded size still fits. The GPU-side copies
+       // only ever read up to each region's high-water mark, so nothing past
+       // the used prefix needs to reach the buffer.
+@@ -785,7 +816,11 @@ void end_frame(EndFrameCallback callback) {
+           return;
+         }
+         if (used > 0) {
+-          g_stagingBuffers[stagingSlot].WriteMappedRange(offset, g_stagingArena + offset, AURORA_ALIGN(used, 4));
++          if (write_staging()) {
++            g_queue.WriteBuffer(g_stagingBuffers[stagingSlot], offset, g_stagingArena + offset, AURORA_ALIGN(used, 4));
++          } else {
++            g_stagingBuffers[stagingSlot].WriteMappedRange(offset, g_stagingArena + offset, AURORA_ALIGN(used, 4));
++          }
+         }
+         offset += static_cast<size_t>(capacity);
+       };
+@@ -798,7 +833,9 @@ void end_frame(EndFrameCallback callback) {
+       }
+     }
+ #endif
+-    g_stagingBuffers[stagingSlot].Unmap();
++    if (!write_staging()) {
++      g_stagingBuffers[stagingSlot].Unmap();
++    }
+     g_mappingStates[stagingSlot].store(BufferMapState::Unmapped, std::memory_order_release);
+     auto encoder = std::move(packet.encoder);
+     const auto stats = packet.stats;
+diff --git a/lib/webgpu/gpu.cpp b/lib/webgpu/gpu.cpp
+--- a/lib/webgpu/gpu.cpp
++++ b/lib/webgpu/gpu.cpp
+@@ -871,8 +871,8 @@ bool initialize(AuroraBackend auroraBackend, bool allowCpu) {
+     sSelectedProfile = profile;
+     const bool noImmediates = (profile & AURORA_COMPAT_NO_IMMEDIATES) != 0;
+     const bool noStorage = (profile & AURORA_COMPAT_NO_STORAGE) != 0;
+-    Log.info("Compatibility profile: immediates={} storageBuffers={} compute={}", !noImmediates, !noStorage,
+-             (profile & AURORA_COMPAT_NO_COMPUTE) == 0);
++    Log.info("Compatibility profile: immediates={} storageBuffers={} compute={} writeStaging={}", !noImmediates,
++             !noStorage, (profile & AURORA_COMPAT_NO_COMPUTE) == 0, (profile & AURORA_COMPAT_WRITE_STAGING) != 0);
+     wgpu::CompatibilityModeLimits compatibilityModeLimits{wgpu::CompatibilityModeLimits::Init{
+         .maxStorageBuffersInVertexStage = noStorage ? 0u : 2u,
+         .maxStorageBuffersInFragmentStage = noStorage ? 0u : 2u,

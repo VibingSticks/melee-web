@@ -312,12 +312,12 @@ picker.addEventListener('change', async () => {
   picker.disabled = true;
   rendererSelect.disabled = true; // the game is about to start on the current renderer
   try {
-    await rendererReady;
+    const renderer = await rendererReady;
     const disc = new DiscSource(file);
     const hdr = await disc.validate();
     const fst = new Uint8Array(await disc.read(hdr.fstOffset, hdr.fstSize));
     status(`Disc ${hdr.gameId} (${(file.size / 1048576).toFixed(0)} MB). Starting…`);
-    await startGame(disc, fst);
+    await startGame(disc, fst, renderer);
   } catch (e) {
     status(String(e.message || e), true);
     picker.disabled = false;
@@ -325,10 +325,27 @@ picker.addEventListener('change', async () => {
   }
 });
 
-async function startGame(disc, fst) {
+async function startGame(disc, fst, renderer) {
   // Renderer profile overrides for testing (see docs/superpowers/specs/2026-09-11-webgl2-fallback-design.md).
   const gpuFlag = params.get('gpu');
-  const forceCompatProfile = { compat: 7, noimm: 1, nostorage: 2, nocompute: 4 }[gpuFlag] ?? 0;
+  let forceCompatProfile = { compat: 7, noimm: 1, nostorage: 2, nocompute: 4, writestaging: 8 }[gpuFlag] ?? 0;
+  if (renderer === 'webgpu') {
+    // Firefox's WebGPU (dom.webgpu.enabled) lacks WGSL's unrestricted_pointer_parameters,
+    // so shaders cannot pass storage pointers to functions. The no-storage profile reads
+    // that data from textures instead.
+    if (!navigator.gpu.wgslLanguageFeatures?.has('unrestricted_pointer_parameters')) {
+      console.log('[boot] WebGPU without unrestricted_pointer_parameters: vertex and storage data go through textures');
+      forceCompatProfile |= 2;
+    }
+    // Aurora's mapped staging buffers need over 300 MB of mappable memory, which
+    // Firefox does not allow (it stops at about 96 MB). Outside Chrome, each frame's
+    // data is written with queue.writeBuffer instead; Chrome keeps the mapped
+    // buffers, which cost it less per frame.
+    if (!/\bChrom(e|ium)\//.test(navigator.userAgent)) {
+      console.log('[boot] WebGPU outside Chrome: frame data goes up with queue.writeBuffer');
+      forceCompatProfile |= 8;
+    }
+  }
   // ?res=WxH renders at that size and scales to the canvas. The game itself is
   // 640x480; anything above that is supersampling, and the cost is fill-rate
   // bound, so dropping to 640x480 is the first thing to try on a slow machine.

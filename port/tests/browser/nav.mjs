@@ -54,9 +54,11 @@ export async function launchGame({ buildDir, disc, port = 8795, query = 'rendere
   const server = spawn('python3', ['-m', 'http.server', '-d', path.resolve(buildDir), String(port)], { stdio: 'ignore' });
   await sleep(800);
   // Firefox (Playwright's build, `npx playwright install firefox`) for bugs
-  // that only its WebGL2 shows; it has no WebGPU on Linux.
+  // that only it shows. Its WebGPU is behind dom.webgpu.enabled, turned on
+  // here; ?renderer=webgpu in the query uses it.
   const browser = browserName === 'firefox'
-    ? await firefox.launch({ headless: !headed, executablePath: process.env.MELEE_FIREFOX || undefined })
+    ? await firefox.launch({ headless: !headed, executablePath: process.env.MELEE_FIREFOX || undefined,
+                             firefoxUserPrefs: { 'dom.webgpu.enabled': true } })
     : await chromium.launch({
       headless: !headed,
       executablePath: '/opt/google/chrome/chrome',

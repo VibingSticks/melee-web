@@ -126,14 +126,21 @@ The toolbar has **Export save** and **Import save** for the memory card, and
 
 ## Renderers
 
-- **WebGPU** is used when the browser has it (Chrome).
-- **WebGL2** is the fallback, for example Firefox on Linux. It uses a small
-  WebGPU-on-WebGL2 layer in `port/web/js/gpu-gl2.js`.
+- **WebGPU** is used when the browser has it: Chrome, and Firefox where its
+  WebGPU is switched on (see below).
+- **WebGL2** is the fallback, for example Firefox on Linux with its default
+  settings. It uses a small WebGPU-on-WebGL2 layer in `port/web/js/gpu-gl2.js`.
 
 **Auto** picks WebGPU when it is available. To choose one yourself, use the
 **Renderer** menu in the toolbar before picking the disc: changing it reloads
 the page, and the choice is remembered. The menu locks once the game starts.
 WebGPU is the better choice where it works, including on Chromebooks.
+
+Firefox on Linux ships WebGPU switched off. To use it, open `about:config`,
+set `dom.webgpu.enabled` to `true`, and reload the page. Firefox's WebGPU
+lacks a shader feature and limits how much buffer memory can be mapped, so
+the port reads vertex data from textures there and uploads each frame with
+`writeBuffer`; it runs at full speed on a desktop.
 
 ## URL options
 

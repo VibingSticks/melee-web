@@ -4,7 +4,7 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { loadNaga } from '../../web/js/naga/naga.js';
 
-const require = createRequire('/home/ralsei/.npm/_npx/9833c18b2d85bc59/node_modules/');
+const require = createRequire(import.meta.url); // playwright-core: installed here or found through NODE_PATH
 const { chromium } = require('playwright-core');
 
 const print = process.argv.includes('--print');

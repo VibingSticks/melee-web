@@ -7,7 +7,7 @@ import { createRequire } from 'node:module';
 import { spawn } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-const require = createRequire('/home/ralsei/.npm/_npx/9833c18b2d85bc59/node_modules/');
+const require = createRequire(import.meta.url); // playwright-core: installed here or found through NODE_PATH
 const playwright = require('playwright-core');
 
 const browserName = process.argv.find(a => a.startsWith('--browser='))?.slice(10) ?? 'chromium';

@@ -1,7 +1,7 @@
 // Drive the spike page in headless Chrome with WebGPU, capture console + screenshot.
 // Usage: node run_pw.mjs [url] [seconds]
 import { createRequire } from 'node:module';
-const require = createRequire('/home/ralsei/.npm/_npx/9833c18b2d85bc59/node_modules/');
+const require = createRequire(import.meta.url); // playwright-core: installed here or found through NODE_PATH
 const { chromium } = require('playwright-core');
 
 const url = process.argv[2] ?? 'http://localhost:8765/simple.html';

@@ -6,7 +6,7 @@
 // to evict its own earlier blocks while fetching its later ones used to
 // assemble from the cache afterwards and silently return zeros for whatever
 // had been pushed out.
-import { DiscSource } from '/home/ralsei/projects/melee/port/web/js/disc_source.js';
+import { DiscSource } from '../../web/js/disc_source.js';
 
 const SIZE = 300 * 1024 * 1024 + 12345;        // not a block multiple, on purpose
 const byteAt = (i) => (i * 31 + (i >> 11)) & 0xff;

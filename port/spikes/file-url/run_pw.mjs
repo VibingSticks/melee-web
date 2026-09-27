@@ -3,7 +3,7 @@
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
-const require = createRequire('/home/ralsei/.npm/_npx/9833c18b2d85bc59/node_modules/');
+const require = createRequire(import.meta.url); // playwright-core: installed here or found through NODE_PATH
 const pw = require('playwright-core');
 
 const which = process.argv[2] ?? 'chrome';

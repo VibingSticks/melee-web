@@ -30,12 +30,14 @@ Both play the same disc:
 
 # Dependencies
 
+**To play**, you only need a current Chrome or Firefox and your disc image.
+Everything below is for building the port yourself.
+
 The port is built and tested on **Linux**. The build scripts are Bash; Windows
 (through WSL) and macOS have not been tried.
 
 - [Git](https://git-scm.com/), [CMake](https://cmake.org/) 3.25 or newer,
-  [Ninja](https://ninja-build.org/), a C/C++ compiler for the host tests, and
-  Python 3.
+  [Ninja](https://ninja-build.org/) and Python 3.
 - The Python packages `libclang` (the schema generator reads the game's headers
   with it) and `pyyaml`:
   ```sh
@@ -50,8 +52,12 @@ The port is built and tested on **Linux**. The build scripts are Bash; Windows
   ```
 - Emscripten is **not** a separate install: `port/tools/setup.sh` downloads the
   pinned version (emsdk 6.0.9) into `port/extern`.
-- Optional, for the browser tests: [Node.js](https://nodejs.org/) and
-  [Playwright](https://playwright.dev/) (`playwright-core`).
+
+Not needed to build or play: [Node.js](https://nodejs.org/) and
+[Playwright](https://playwright.dev/) (`playwright-core`) run the automated
+browser tests. They are for development, and for AI coding agents that test and
+debug the game by driving a browser (see [Testing](#testing)). The host unit
+tests also need a native C/C++ compiler (GCC or Clang).
 
 # Building
 
@@ -147,9 +153,11 @@ Add these to the address, for example `melee-offline.html?res=640x480`.
   cmake --build --preset host-tests
   ctest --preset host-tests
   ```
-- Browser tests live in `port/tests/browser` and drive the game with
-  Playwright. Point `NODE_PATH` at a `node_modules` that has `playwright-core`,
-  for example:
+- Automated browser tests live in `port/tests/browser`. They drive the game
+  through Playwright: boot it, press buttons, read its state and screenshots.
+  They are meant for development and for AI coding agents debugging the port;
+  players and people who only build it can skip them. Point `NODE_PATH` at a
+  `node_modules` that has `playwright-core`, for example:
   ```sh
   NODE_PATH=/path/to/node_modules node port/tests/browser/boot_probe.mjs port/build/web-release /path/to/GALE01.iso 20 --headed
   ```
@@ -210,7 +218,7 @@ This port stands on the work of these projects:
 | [naga](https://github.com/gfx-rs/wgpu/tree/trunk/naga) (wgpu) | Translates the shaders from WGSL to GLSL for the WebGL2 renderer | naga 30 |
 | [Abseil](https://github.com/abseil/abseil-cpp), [{fmt}](https://github.com/fmtlib/fmt), [xxHash](https://github.com/Cyan4973/xxHash), [FreeType](https://freetype.org/), [zlib](https://zlib.net/), [libpng](http://www.libpng.org/pub/png/libpng.html), [SQLite](https://sqlite.org/), [Dear ImGui](https://github.com/ocornut/imgui), [Tracy](https://github.com/wolfpld/tracy) | Libraries Aurora builds with | as pinned by Aurora |
 | [LLVM / libclang](https://clang.llvm.org/) and [PyYAML](https://pyyaml.org/) | Read the game's C headers to generate the tables that convert disc data | pip packages |
-| [Playwright](https://playwright.dev/) | Drives the browser for the automated tests | `playwright-core` |
+| [Playwright](https://playwright.dev/) | Drives the browser for the automated tests (development and AI-agent debugging, not needed to play or build) | `playwright-core` |
 | [Dolphin](https://dolphin-emu.org/) | Reference for how the game should look and behave, and for GameCube hardware details | Dolphin 2606 |
 
 The port was developed with [Claude Code](https://claude.com/claude-code),

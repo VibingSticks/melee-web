@@ -1,3 +1,151 @@
+# Melee Web
+
+Super Smash Bros. Melee running in a web browser, built from the
+[doldecomp/melee](https://github.com/doldecomp/melee) decompilation and
+compiled to WebAssembly.
+
+This is a fork. The game code is the decompilation project's work; this fork
+adds a port layer (`port/`) that runs it in the browser (tested in Chrome and
+Firefox), either from a web server or from a single offline HTML file.
+
+> [!IMPORTANT]
+> Nothing from the game is included. You need your own disc image of
+> Super Smash Bros. Melee, NTSC-U version 1.02 (game ID `GALE01`), as an
+> `.iso` or `.gcm`. The page reads it from your computer; it is never
+> uploaded anywhere.
+
+## Playing
+
+1. Build `melee-offline.html` (see [Building](#building)), or serve a hosted
+   build.
+2. Open it in a current Chrome or Firefox.
+3. Pick your disc image.
+4. The first time, a loading bar compiles the game's graphics shaders. This
+   takes about 10 to 20 seconds on a desktop and a couple of minutes on a
+   low-end Chromebook. Later boots are quicker on the WebGL2 renderer, which
+   keeps its shader translations, and every session adds the shaders it met to
+   the list the loading bar compiles next time.
+
+The toolbar has **Export save** and **Import save** for the memory card, and
+**Save log**, which downloads a report with frame timings for bug reports.
+**Tab** hides the toolbar and log.
+
+### Keyboard (controller port 1)
+
+| Key | Button | | Key | Button |
+|---|---|---|---|---|
+| Arrow keys | Control stick | | X | A |
+| I J K L | C-stick | | Z | B |
+| Enter | Start | | C | X |
+| Q / W | L / R | | S | Y |
+| D | Z | | T F G H | D-pad |
+
+### Renderers
+
+- **WebGPU** is used when the browser has it (Chrome).
+- **WebGL2** is the fallback, for example Firefox on Linux. It uses a small
+  WebGPU-on-WebGL2 layer in `port/web/js/gpu-gl2.js`.
+
+### URL options
+
+Add these to the address, for example `melee-offline.html?res=640x480`.
+
+| Option | Effect |
+|---|---|
+| `renderer=webgl2` / `renderer=webgpu` | Force a renderer |
+| `res=WxH` | Render size (default 1280x960; 640x480 on small machines) |
+| `frameskip=off` | Draw every frame, even if that means slow motion on a slow machine |
+| `preload=off` | Start without compiling the shaders first |
+| `fx=off` | Play audio without the game's reverb and echo |
+| `audio=sdl` | Use SDL's audio output instead of the AudioWorklet |
+
+## Status
+
+The whole game is compiled in: every unit of the decompilation except three
+debug-only files. Tested and running: the menus, VS matches, Classic mode
+through to Master Hand (bonus stages included), trophies, the intro movie,
+memory card saves, and music and sound effects with the game's reverb and
+echo. The other modes are compiled in but have had less play-testing.
+
+What the port adds on top of the decompilation:
+
+- **Graphics** through [Aurora](https://github.com/encounter/aurora), a
+  reimplementation of the GameCube's graphics API, on WebGPU or WebGL2.
+- **Disc, controllers, memory card, timers and video sync** reimplemented for
+  the browser.
+- **Audio**: a software version of the GameCube's sound chip, played through
+  an AudioWorklet, with the SDK's own reverb and delay code.
+- **Game data**: the disc's files are big-endian GameCube data, converted as
+  they load.
+- **Movies**: decoded with a portable JPEG decoder in place of the original
+  assembly.
+
+The game was written for the GameCube's CPU, which tolerates things the
+browser does not (a divide by zero, a function called with the wrong number
+of arguments). Those turn up as crashes and get fixed one at a time; a crash
+report from the **Save log** button is the most useful thing to send.
+
+Known issues:
+
+- A one-pixel line can appear beside the header in the Data records screens
+  on the WebGL2 renderer at 1280x960.
+- Resampling is linear; the GameCube used a filter whose coefficients live in
+  its sound chip, not on the disc.
+- Slow machines (for example a 2-core Chromebook) draw around 20 frames a
+  second. Frame skip keeps the game itself at full speed.
+
+## Building
+
+The port builds on Linux. It needs CMake 3.25 or newer, Ninja, Python 3 with
+the `libclang` and `pyyaml` packages, and Rust (for the shader translator,
+built by `port/tools/build_naga.sh`); `setup.sh` installs Emscripten.
+
+```sh
+port/tools/setup.sh          # installs emsdk under port/extern and clones Aurora at the pinned revision
+source port/tools/env.sh     # puts emcc on PATH
+cd port
+
+# a hosted build, served by any web server
+cmake --preset web-release && cmake --build --preset web-release
+python3 -m http.server -d build/web-release 8080
+
+# the single offline file
+cmake --preset web-single && cmake --build --preset web-single
+python3 tools/pack_single_html.py build/web-single -o melee-offline.html
+```
+
+Host unit tests: `cmake --preset host-tests && cmake --build --preset host-tests && ctest --preset host-tests`.
+The browser tests in `port/tests/browser` use Playwright; point `NODE_PATH` at a
+`node_modules` that has `playwright-core`.
+
+More detail is in [`port/README.md`](../port/README.md).
+
+## Branches
+
+- `master`: the fork's release branch.
+- `web-port`: development.
+- Upstream decompilation changes are merged in from
+  [doldecomp/melee](https://github.com/doldecomp/melee).
+
+## Credits
+
+- [doldecomp/melee](https://github.com/doldecomp/melee) contributors, for the
+  decompilation this is built on.
+- [Aurora](https://github.com/encounter/aurora), for the GameCube API layer.
+- [Emscripten](https://emscripten.org), [Dawn / emdawnwebgpu](https://dawn.googlesource.com/dawn),
+  [SDL](https://github.com/libsdl-org/SDL) and [naga](https://github.com/gfx-rs/wgpu/tree/trunk/naga).
+
+Super Smash Bros. Melee is a trademark of Nintendo. This project is not
+affiliated with or endorsed by Nintendo or HAL Laboratory.
+
+---
+
+# The decompilation (upstream README)
+
+Everything below is the upstream project's README, kept for the
+decompilation itself: building the matching `main.dol`, tooling and the code
+layout.
+
 Super Smash Bros Melee \
 [![Build Status]][actions]
 [![Discord Badge]][discord]

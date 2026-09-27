@@ -130,6 +130,11 @@ The toolbar has **Export save** and **Import save** for the memory card, and
 - **WebGL2** is the fallback, for example Firefox on Linux. It uses a small
   WebGPU-on-WebGL2 layer in `port/web/js/gpu-gl2.js`.
 
+**Auto** picks WebGPU when it is available. To choose one yourself, use the
+**Renderer** menu in the toolbar before picking the disc: changing it reloads
+the page, and the choice is remembered. The menu locks once the game starts.
+WebGPU is the better choice where it works, including on Chromebooks.
+
 ## URL options
 
 Add these to the address, for example `melee-offline.html?res=640x480`.

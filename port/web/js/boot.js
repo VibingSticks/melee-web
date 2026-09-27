@@ -162,7 +162,7 @@ function crashReport(kind, detail) {
     `when: ${new Date().toISOString()}`,
     `kind: ${kind}`,
     `page: ${location.protocol}//${location.host}${location.pathname}${location.search}`,
-    `renderer: ${$('renderer')?.textContent || '?'}  engine: ${ENGINE}`,
+    `renderer: ${$('renderer')?.textContent || '?'} (menu: ${$('renderer-select')?.value || '?'})  engine: ${ENGINE}`,
     `browser: ${navigator.userAgent}`,
     `cores: ${navigator.hardwareConcurrency ?? '?'}  deviceMemoryGB: ${navigator.deviceMemory ?? '?'}  screen: ${screen.width}x${screen.height}`,
     `game: ${stateLine()}`,
@@ -244,17 +244,31 @@ function startHeartbeat() {
 
 installCrashHandlers();
 
+// The renderer the player asked for: ?renderer= in the address wins, then the
+// choice saved by the toolbar's Renderer menu, else auto. Storage can be
+// missing (a private window, a blocked file:// origin); auto then.
+const RENDERER_KEY = 'melee-renderer';
+const rendererChoice = (() => {
+  const fromUrl = params.get('renderer');
+  if (fromUrl === 'webgpu' || fromUrl === 'webgl2') return { value: fromUrl, fromUrl: true };
+  let saved = null;
+  try { saved = localStorage.getItem(RENDERER_KEY); } catch { saved = null; }
+  return { value: saved === 'webgpu' || saved === 'webgl2' ? saved : 'auto', fromUrl: false };
+})();
+
 // Renderer selection: WebGPU when the browser gives us an adapter, otherwise the WebGL2
-// polyfill (port/web/js/gpu-gl2.js). ?renderer=webgl2|webgpu forces one.
-// See docs/superpowers/specs/2026-09-11-webgl2-fallback-design.md.
+// polyfill (port/web/js/gpu-gl2.js). ?renderer=webgl2|webgpu, or the toolbar menu,
+// forces one. See docs/superpowers/specs/2026-09-11-webgl2-fallback-design.md.
 async function selectRenderer() {
-  const forced = params.get('renderer');
+  const forced = rendererChoice.value === 'auto' ? null : rendererChoice.value;
   let haveWebGPU = false;
   if (forced !== 'webgl2' && navigator.gpu) {
     try { haveWebGPU = !!(await navigator.gpu.requestAdapter()); } catch { haveWebGPU = false; }
   }
   if (haveWebGPU) return 'webgpu';
-  if (forced === 'webgpu') throw new Error('This browser has no usable WebGPU adapter (?renderer=webgpu was requested).');
+  // A saved choice from another session is only a preference: fall back
+  // rather than refuse to start. An explicit ?renderer=webgpu still errors.
+  if (forced === 'webgpu' && rendererChoice.fromUrl) throw new Error('This browser has no usable WebGPU adapter (?renderer=webgpu was requested).');
   const probe = document.createElement('canvas').getContext('webgl2');
   if (!probe) throw new Error('This browser has neither WebGPU nor WebGL2. Use a current Chrome, Edge, Firefox, or Safari.');
   const { loadNaga, installWebGL2Fallback, openGlslCache } = await rendererModules();
@@ -266,8 +280,24 @@ async function selectRenderer() {
   return 'webgl2';
 }
 
+// The toolbar's Renderer menu. The renderer is chosen once, before a disc is
+// picked, so a change saves the choice, puts it in the address and reloads;
+// once a disc is picked the menu is locked until the page is reloaded.
+const rendererSelect = $('renderer-select');
+rendererSelect.value = rendererChoice.value;
+rendererSelect.addEventListener('change', () => {
+  const value = rendererSelect.value;
+  try {
+    if (value === 'auto') localStorage.removeItem(RENDERER_KEY); else localStorage.setItem(RENDERER_KEY, value);
+  } catch { /* the address carries it instead */ }
+  const next = new URLSearchParams(location.search);
+  if (value === 'auto') next.delete('renderer'); else next.set('renderer', value);
+  const query = next.toString();
+  location.href = location.pathname + (query ? `?${query}` : '') + location.hash;
+});
+
 const rendererReady = selectRenderer().then((r) => {
-  $('renderer').textContent = r === 'webgpu' ? 'Renderer: WebGPU' : 'Renderer: WebGL2 (fallback)';
+  $('renderer').textContent = r === 'webgpu' ? '(using WebGPU)' : '(using WebGL2)';
   console.log(`[boot] engine: ${ENGINE === 'jspi' ? 'JSPI' : 'Asyncify'}`);
   return r;
 }, (e) => {
@@ -280,6 +310,7 @@ picker.addEventListener('change', async () => {
   const file = picker.files[0];
   if (!file) return;
   picker.disabled = true;
+  rendererSelect.disabled = true; // the game is about to start on the current renderer
   try {
     await rendererReady;
     const disc = new DiscSource(file);
@@ -290,6 +321,7 @@ picker.addEventListener('change', async () => {
   } catch (e) {
     status(String(e.message || e), true);
     picker.disabled = false;
+    rendererSelect.disabled = false;
   }
 });
 

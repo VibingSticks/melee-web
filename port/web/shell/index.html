@@ -15,7 +15,10 @@
   #bar label { cursor: pointer; }
   #status { flex: 1; opacity: .85; }
   #status.error { color: #ff7b7b; }
-  #renderer { opacity: .6; font-size: 12px; }
+  #renderer-box { font-size: 12px; opacity: .8; display: flex; gap: 6px; align-items: center; }
+  #renderer-box select { font: inherit; color: #ddd; background: #24242c; border: 1px solid #3a3a46; border-radius: 4px; }
+  #renderer-box select[disabled] { opacity: .5; }
+  #renderer { opacity: .75; }
   /* The game renders 4:3. Let the canvas take the space it is given but keep
      its own shape inside it, so a wider window letterboxes instead of
      stretching everything sideways. */
@@ -46,7 +49,15 @@
   <div id="bar">
     <label>Disc image (GALE01 .iso/.gcm): <input id="disc" type="file" accept=".iso,.gcm,.bin"></label>
     <span id="status">Pick your Melee disc image to start.</span>
-    <span id="renderer" title="Add ?renderer=webgl2 or ?renderer=webgpu to the URL to force one"></span>
+    <label id="renderer-box" title="Which graphics API draws the game. Set it before picking the disc; changing it reloads the page.">
+      Renderer
+      <select id="renderer-select">
+        <option value="auto">Auto</option>
+        <option value="webgpu">WebGPU</option>
+        <option value="webgl2">WebGL2</option>
+      </select>
+      <span id="renderer"></span>
+    </label>
     <span id="saves" hidden>
       <button id="export" type="button" disabled title="Download your memory-card save">Export save</button>
       <label class="btn">Import save<input id="import" type="file" accept=".gci,.raw,.bin,.json" hidden></label>

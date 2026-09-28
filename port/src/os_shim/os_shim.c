@@ -1,5 +1,6 @@
 /* OS functions the game calls that Aurora does not provide. Everything here is
  * either a no-op on a flat single-threaded address space or a constant. */
+#include <aurora/gfx.h>
 #include <dolphin/os.h>
 
 #include "../port.h"
@@ -31,10 +32,13 @@ BOOL OSRestoreInterrupts(BOOL level)
 }
 
 /* --- caches: no data/instruction cache to maintain --- */
-void DCFlushRange(void* p, u32 n) { (void) p; (void) n; }
+/* No cache to flush, but a flush is the game saying it wrote this memory:
+ * Aurora re-reads a texture cached from that address (the intro movie's
+ * frames reuse one buffer, and a sampled hash can miss the change). */
+void DCFlushRange(void* p, u32 n) { (void) n; aurora_texture_data_written(p); }
 void DCInvalidateRange(void* p, u32 n) { (void) p; (void) n; }
-void DCStoreRange(void* p, u32 n) { (void) p; (void) n; }
-void DCFlushRangeNoSync(void* p, u32 n) { (void) p; (void) n; }
+void DCStoreRange(void* p, u32 n) { (void) n; aurora_texture_data_written(p); }
+void DCFlushRangeNoSync(void* p, u32 n) { (void) n; aurora_texture_data_written(p); }
 void ICInvalidateRange(void* p, u32 n) { (void) p; (void) n; }
 
 /* --- system --- */

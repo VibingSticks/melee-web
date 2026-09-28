@@ -1,0 +1,100 @@
+diff --git a/include/aurora/gfx.h b/include/aurora/gfx.h
+--- a/include/aurora/gfx.h
++++ b/include/aurora/gfx.h
+@@ -47,6 +47,9 @@ size_t aurora_pipeline_seed_import(const uint8_t* data, size_t size);
+ /* Hold the warm-up (no new compiles start) while the host's frames are late;
+  * aurora_pipeline_seed_pending says how many are left. */
+ void aurora_pipeline_seed_pause(bool paused);
++// The game rewrote texture data starting at `data` (DCFlushRange/DCStoreRange):
++// a texture cached from that address is read again on its next use.
++void aurora_texture_data_written(const void* data);
+ size_t aurora_pipeline_seed_pending(void);
+ // How many seed pipelines may compile at once (2 while the game runs).
+ void aurora_pipeline_seed_set_max_in_flight(size_t n);
+diff --git a/lib/gx/texture.cpp b/lib/gx/texture.cpp
+--- a/lib/gx/texture.cpp
++++ b/lib/gx/texture.cpp
+@@ -164,8 +164,24 @@ struct PointerEntry {
+   gfx::TextureHandle handle;
+   uint64_t sample;
+   uint64_t lastUsedFrame;
++  uint32_t generation = 0;
+ };
+ absl::flat_hash_map<PointerKey, PointerEntry> s_pointerCache;
++// Write generations of cached texture data (aurora_texture_data_written): the
++// sampled hash cannot see a change that misses its three sampled chunks -- a
++// movie's frames at one address whose samples all fall on the same background
++// kept showing the first frame (Melee's intro lost its Nintendo logo). A hit
++// also needs the generation it was cached at.
++absl::flat_hash_map<const void*, uint32_t> s_dataGenerations;
++
++uint32_t data_generation(const void* data) {
++  const auto it = s_dataGenerations.find(data);
++  if (it != s_dataGenerations.end()) {
++    return it->second;
++  }
++  s_dataGenerations.emplace(data, 0);
++  return 0;
++}
+ constexpr uint64_t PointerCacheMaxIdleFrames = 600;
+ 
+ uint64_t sample_texture(const void* data, size_t bytes, const void* tlut, size_t tlutBytes) {
+@@ -188,6 +204,7 @@ uint64_t sample_texture(const void* data, size_t bytes, const void* tlut, size_t
+ void do_clear_static_texture_cache() noexcept {
+   s_textureObjectCaches.clear();
+   s_pointerCache.clear();
++  s_dataGenerations.clear();
+   s_replacementUsers.clear();
+   for (auto& [_, cache] : s_tlutObjectCaches) {
+     cache.staticTextureUsers.clear();
+@@ -659,7 +676,8 @@ gfx::TextureHandle resolve_static_texture(const GXTexObj_& obj) {
+   const uint64_t pointerSample = sample_texture(
+       obj.data, texture_source_size(obj.format(), obj.width(), obj.height(), obj.mip_count()), nullptr, 0);
+   if (const auto it = s_pointerCache.find(pointerKey);
+-      it != s_pointerCache.end() && it->second.handle && it->second.sample == pointerSample) {
++      it != s_pointerCache.end() && it->second.handle && it->second.sample == pointerSample &&
++      it->second.generation == data_generation(pointerKey.data)) {
+     it->second.lastUsedFrame = s_frameCount;
+     ++s_stats.objectHits;
+     return it->second.handle;
+@@ -697,7 +715,7 @@ gfx::TextureHandle resolve_static_texture(const GXTexObj_& obj) {
+   }
+   if (!obj.no_cache()) {
+     store_cached_texture(obj, handle, 0, 0, replacementId);
+-    s_pointerCache[pointerKey] = {handle, pointerSample, s_frameCount};
++    s_pointerCache[pointerKey] = {handle, pointerSample, s_frameCount, data_generation(pointerKey.data)};
+   }
+   return handle;
+ }
+@@ -732,7 +750,8 @@ gfx::TextureHandle resolve_static_palette_texture(const GXTexObj_& obj, const GX
+       sample_texture(obj.data, texture_source_size(obj.format(), obj.width(), obj.height(), obj.mip_count()),
+                      tlut.data, tlut_source_size(tlut.numEntries));
+   if (const auto it = s_pointerCache.find(pointerKey);
+-      it != s_pointerCache.end() && it->second.handle && it->second.sample == pointerSample) {
++      it != s_pointerCache.end() && it->second.handle && it->second.sample == pointerSample &&
++      it->second.generation == data_generation(pointerKey.data)) {
+     it->second.lastUsedFrame = s_frameCount;
+     ++s_stats.objectHits;
+     return it->second.handle;
+@@ -772,7 +791,7 @@ gfx::TextureHandle resolve_static_palette_texture(const GXTexObj_& obj, const GX
+   }
+   if (!obj.no_cache() && !tlut.no_cache()) {
+     store_cached_texture(obj, handle, tlut.tlutObjId, tlut.tlutDataVersion, replacementId);
+-    s_pointerCache[pointerKey] = {handle, pointerSample, s_frameCount};
++    s_pointerCache[pointerKey] = {handle, pointerSample, s_frameCount, data_generation(pointerKey.data)};
+   }
+   return handle;
+ }
+@@ -961,3 +980,12 @@ void resolve_sampled_textures(const ShaderInfo& info) noexcept {
+   }
+ }
+ } // namespace aurora::gx
++
++// DCFlushRange/DCStoreRange: the game wrote texture data at `data` (the start of
++// a texture's image). Cached textures at that address are re-read on next use.
++extern "C" void aurora_texture_data_written(const void* data) {
++  const auto it = aurora::gx::s_dataGenerations.find(data);
++  if (it != aurora::gx::s_dataGenerations.end()) {
++    ++it->second;
++  }
++}

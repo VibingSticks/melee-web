@@ -237,7 +237,9 @@ export function installWebGL2Fallback({ canvas, naga, force = false, glslCache =
   for (const name of Object.keys(limits)) GPUSupportedLimitsImpl.prototype[name] = undefined;
   define('GPUSupportedLimits', GPUSupportedLimitsImpl);
 
-  const features = new Set(extFloat ? ['float32-filterable'] : []);
+  // core-features-and-limits: Aurora gates its depth copies (GXCopyTex to Z8/Z16/Z24X8,
+  // which the Z textures read) on it. WebGL2 samples depth textures with texelFetch.
+  const features = new Set(['core-features-and-limits', ...(extFloat ? ['float32-filterable'] : [])]);
   const info = { vendor: 'webgl2-fallback', architecture: '', device: String(gl.getParameter(gl.RENDERER) || ''), description: 'WebGPU subset on WebGL2 (gpu-gl2.js)' };
 
   // ----- device-wide state -----
@@ -428,8 +430,16 @@ export function installWebGL2Fallback({ canvas, naga, force = false, glslCache =
   // Translations by WGSL text, not by module: the game makes a module per
   // pipeline, and about a third of them repeat another's source.
   const translations = new Map();
+  // naga's GLSL backend refuses textureLoad on a depth texture, but WebGL2 reads a
+  // depth texture through an ordinary sampler2D (the depth arrives in .r). Aurora's
+  // depth copies (tex_copy_conv.cpp) load from a `src` depth texture: read it as a
+  // float texture instead.
+  // The multisampled variant only exists to be created: this layer renders without
+  // MSAA, and GLSL ES 3.0 has no multisampled samplers.
+  const depthAsFloat = (code) => !/texture_depth_(multisampled_)?2d\b/.test(code) ? code
+    : code.replace(/texture_depth_(multisampled_)?2d\b/g, 'texture_2d<f32>').replace(/(textureLoad\(src,[^;]*\));/g, '$1.x;');
   class GPUShaderModuleImpl {
-    constructor(desc) { this.id = uid(); this.label = desc.label ?? ''; this.code = desc.code; this.hash = null; }
+    constructor(desc) { this.id = uid(); this.label = desc.label ?? ''; this.code = depthAsFloat(desc.code); this.hash = null; }
     getCompilationInfo() { return Promise.resolve({ messages: [] }); }
     // Returns [key, translation]; the key names the GLSL for the program cache.
     translate(entryPoint, stage) {

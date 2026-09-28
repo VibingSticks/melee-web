@@ -175,6 +175,15 @@ void onEnterDebugVs(GameModeState* state)
     }
 #endif
     start->rules.item_freq = -1;
+#ifdef TARGET_PC
+    /* ... and items, for testing them (-2 keeps the mode's "none"). */
+    {
+        extern int port_debug_vs_item_freq;
+        if (port_debug_vs_item_freq > -2) {
+            start->rules.item_freq = port_debug_vs_item_freq;
+        }
+    }
+#endif
     start->rules.sd_penalty = -1;
     start->rules.match_kind = MatchKind_Time;
 #ifdef TARGET_PC

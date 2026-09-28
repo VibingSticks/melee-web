@@ -920,6 +920,67 @@ static void foobar3(HSD_GObj* gobj)
     }
 }
 
+#ifdef TARGET_PC
+#include <port.h>
+#include <melee/ft/inlines.h>
+#include <melee/ft/types.h>
+/* "item:" lines in the port's log (and its Save log report), so a player can
+ * say which item did something: the regular items and the Poke Ball's
+ * Pokemon, not the projectiles and effects that are items too. */
+static const char* port_item_name(int kind)
+{
+    static const char* const items[] = {
+        "Capsule",       "Crate",          "Barrel",        "Egg",          "Party Ball",
+        "Barrel Cannon", "Bob-omb",        "Mr. Saturn",    "Heart Container", "Maxim Tomato",
+        "Starman",       "Home-Run Bat",   "Beam Sword",    "Parasol",      "Green Shell",
+        "Red Shell",     "Ray Gun",        "Freezie",       "Food",         "Motion-Sensor Bomb",
+        "Flipper",       "Super Scope",    "Star Rod",      "Lip's Stick",  "Fan",
+        "Fire Flower",   "Super Mushroom", "Poison Mushroom", "Hammer",     "Warp Star",
+        "Screw Attack",  "Bunny Hood",     "Metal Box",     "Cloaking Device", "Poke Ball",
+    };
+    static const char* const pokemon[] = {
+        "Goldeen",  "Chikorita", "Snorlax", "Blastoise", "Weezing", "Charizard", "Moltres", "Zapdos",
+        "Articuno", "Wobbuffet", "Scizor",  "Unown",     "Entei",   "Raikou",    "Suicune", "Bellossom",
+        "Electrode", "Lugia",    "Ho-Oh",   "Ditto",     "Clefairy", "Togepi",   "Mew",     "Celebi",
+        "Staryu",   "Chansey",   "Porygon2", "Cyndaquil", "Marill", "Venusaur",
+    };
+    if (kind >= 0 && kind < (int) ARRAY_SIZE(items)) {
+        return items[kind];
+    }
+    if (kind >= It_PKind_Start && kind < It_PKind_Start + (int) ARRAY_SIZE(pokemon)) {
+        return pokemon[kind - It_PKind_Start];
+    }
+    return NULL;
+}
+
+static void port_log_item_spawn(SpawnItem* spawnItem)
+{
+    const char* name = port_item_name(spawnItem->kind);
+    /* Container contents (itdrop.c it_8026F5C8) leave x0 NULL and name the
+     * container in x4. */
+    HSD_GObj* parent = spawnItem->x0_parent_gobj != NULL ? spawnItem->x0_parent_gobj : spawnItem->x4_parent_gobj2;
+    if (name == NULL) {
+        return;
+    }
+    if (parent != NULL && parent->classifier == HSD_GOBJ_CLASS_ITEM) {
+        const char* from = port_item_name(GET_ITEM(parent)->kind);
+        if (from != NULL) {
+            port_log("item: %s (kind %d) at (%.0f, %.0f) out of a %s", name, (int) spawnItem->kind,
+                     spawnItem->pos.x, spawnItem->pos.y, from);
+        } else {
+            port_log("item: %s (kind %d) at (%.0f, %.0f) out of item kind %d", name, (int) spawnItem->kind,
+                     spawnItem->pos.x, spawnItem->pos.y, (int) GET_ITEM(parent)->kind);
+        }
+    } else if (parent != NULL && parent->classifier == HSD_GOBJ_CLASS_FIGHTER) {
+        port_log("item: %s (kind %d) at (%.0f, %.0f) from player %d", name, (int) spawnItem->kind,
+                 spawnItem->pos.x, spawnItem->pos.y, GET_FIGHTER(parent)->player_idx + 1);
+    } else {
+        port_log("item: %s (kind %d) at (%.0f, %.0f)", name, (int) spawnItem->kind, spawnItem->pos.x,
+                 spawnItem->pos.y);
+    }
+}
+#endif
+
 /// Create Item
 static HSD_GObj* Item_8026862C(SpawnItem* spawnItem)
 {
@@ -930,6 +991,9 @@ static HSD_GObj* Item_8026862C(SpawnItem* spawnItem)
     if (Item_8026784C(spawnItem->hold_kind, spawnItem->kind) != 0) {
         return NULL;
     }
+#ifdef TARGET_PC
+    port_log_item_spawn(spawnItem);
+#endif
     gobj = GObj_Create(HSD_GOBJ_CLASS_ITEM, 9, 0);
     if (gobj == NULL) {
         return NULL;

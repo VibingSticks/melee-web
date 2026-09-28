@@ -69,6 +69,16 @@ EMSCRIPTEN_KEEPALIVE uint8_t* port_debug_pipeline_export(uint32_t* size)
     return out;
 }
 
+/* The debug VS match's item frequency (-1 none, 0 very low .. 4 very high);
+ * -2 keeps the mode's default of none. */
+int port_debug_vs_item_freq = -2;
+
+/*   Module._port_debug_set_vs_items(freq);   // before starting */
+EMSCRIPTEN_KEEPALIVE void port_debug_set_vs_items(int freq)
+{
+    port_debug_vs_item_freq = freq;
+}
+
 /*   Module._port_debug_set_vs_time_limit(seconds);   // before starting */
 EMSCRIPTEN_KEEPALIVE void port_debug_set_vs_time_limit(int seconds)
 {

@@ -2052,8 +2052,22 @@ struct ftData_80085FD4_ret {
     /* +4 */ UNK_T x4;
     /* +8 */ size_t x8;
     /* +C */ UNK_T xC;
+#ifdef TARGET_PC
+    /* The animation entry's flag word (Fighter_WaitAnimData::x10_animCurrFlags,
+     * the value Fighter::x594 is filled from), read as PowerPC bitfields: b0 and
+     * b1 are its top two bits. clang packs bitfields LSB-first, so the plain
+     * declarations below read bits 0 and 1 of the low byte instead -- the
+     * FigaTree's fighter kind -- and Jigglypuff (kind 15) got every
+     * animation's loop flag: the hair joint's partial animation never ended and
+     * item throws never finished. Mirror the PowerPC positions (see x594). */
+    /* +10 */ u8 x10_pad_lo[3];
+    /* +13 */ u8 x10_pad_bits : 6;
+    /* +13 */ u8 x10_b1 : 1;
+    /* +13 */ u8 x10_b0 : 1;
+#else
     /* +10:0 */ u8 x10_b0 : 1;
     /* +10:1 */ u8 x10_b1 : 1;
+#endif
     /* +14 */ uintptr_t x14;
 };
 

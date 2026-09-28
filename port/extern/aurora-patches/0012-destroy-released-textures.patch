@@ -1,0 +1,62 @@
+diff --git a/lib/gfx/texture.hpp b/lib/gfx/texture.hpp
+--- a/lib/gfx/texture.hpp
++++ b/lib/gfx/texture.hpp
+@@ -37,6 +37,15 @@ bool is_block_aligned(wgpu::TextureFormat format, uint32_t width, uint32_t heigh
+ constexpr u32 InvalidTextureFormat = -1;
+ // Bytes held by live TextureRefs, for the port's memory log.
+ inline std::atomic<uint64_t> g_liveTextureBytes{0};
++#ifdef __EMSCRIPTEN__
++// Textures whose last TextureRef went away, destroyed after the frame is
++// submitted (frame.cpp after_submit). Dropping the handle alone leaves the
++// memory to the browser's garbage collector, which cannot see GPU memory: a
++// movie makes a texture per frame, and on the WebGL2 fallback, whose
++// textures are only freed by destroy(), that was 50 MB a second until the
++// context was lost.
++void destroy_after_submit(wgpu::Texture texture) noexcept;
++#endif
+ struct TextureRef {
+   wgpu::Texture texture;
+   wgpu::TextureView sampleTextureView;
+@@ -61,6 +70,11 @@ struct TextureRef {
+   }
+   ~TextureRef() {
+     g_liveTextureBytes -= calc_texture_size(format, size.width, size.height, mipCount) * size.depthOrArrayLayers;
++#ifdef __EMSCRIPTEN__
++    if (texture) {
++      destroy_after_submit(std::move(texture));
++    }
++#endif
+   }
+   TextureRef(const TextureRef&) = delete;
+   TextureRef& operator=(const TextureRef&) = delete;
+diff --git a/lib/gfx/frame.cpp b/lib/gfx/frame.cpp
+--- a/lib/gfx/frame.cpp
++++ b/lib/gfx/frame.cpp
+@@ -860,7 +860,26 @@ void end_frame(EndFrameCallback callback) {
+ 
+ uint32_t current_frame() noexcept { return g_frameIndex; }
+ 
+-void after_submit() noexcept { depth_peek::after_submit(); }
++#ifdef __EMSCRIPTEN__
++namespace {
++std::vector<wgpu::Texture> g_texturesToDestroy;
++} // namespace
++
++void destroy_after_submit(wgpu::Texture texture) noexcept { g_texturesToDestroy.push_back(std::move(texture)); }
++#endif
++
++void after_submit() noexcept {
++  depth_peek::after_submit();
++#ifdef __EMSCRIPTEN__
++  // Nothing can reference these any more, and the last frame that could have
++  // used them is submitted: WebGPU lets a texture be destroyed once the work
++  // using it is queued.
++  for (auto& texture : g_texturesToDestroy) {
++    texture.Destroy();
++  }
++  g_texturesToDestroy.clear();
++#endif
++}
+ 
+ void gpu_synchronize() { render_worker::synchronize(); }
+ 

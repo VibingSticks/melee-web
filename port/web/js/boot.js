@@ -270,7 +270,11 @@ async function selectRenderer() {
   // rather than refuse to start. An explicit ?renderer=webgpu still errors.
   if (forced === 'webgpu' && rendererChoice.fromUrl) throw new Error('This browser has no usable WebGPU adapter (?renderer=webgpu was requested).');
   const probe = document.createElement('canvas').getContext('webgl2');
-  if (!probe) throw new Error('This browser has neither WebGPU nor WebGL2. Use a current Chrome, Edge, Firefox, or Safari.');
+  // Chrome also refuses WebGL to a page whose GPU context was lost (after a
+  // crash) until the browser restarts, which reads the same from here.
+  if (!probe) throw new Error('No WebGPU or WebGL2 is available. If the game just crashed, the browser may be blocking ' +
+                              'graphics until it restarts: close every browser window and open the page again. ' +
+                              'Otherwise use a current Chrome, Edge, Firefox, or Safari.');
   const { loadNaga, installWebGL2Fallback, openGlslCache } = await rendererModules();
   const naga = await loadNaga(nagaSource());
   // Shader translations saved by earlier boots (?noglslcache ignores them).

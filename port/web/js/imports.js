@@ -58,6 +58,10 @@ mergeInto(LibraryManager.library, {
   port_yield_browser__async: 'auto',
   port_yield_browser__deps: ['$portYieldQueue', '$portYieldChannel'],
   port_yield_browser: function () {
+    // After a crash (abort(), a lost GPU device) the game's loop can still be
+    // waiting in here for a frame that will never come, and resuming it every
+    // turn kept the page at 100% CPU, too busy to save the log. Park it.
+    if (ABORT) return new Promise(function () {});
     return new Promise(function (resolve) {
       if (Module.yieldTimer) { // ?yield=timer: the old behaviour, for comparison
         setTimeout(resolve, 0);

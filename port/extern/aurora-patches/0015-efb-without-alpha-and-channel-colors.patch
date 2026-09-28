@@ -1,0 +1,88 @@
+diff --git a/lib/dolphin/gx/GXFrameBuffer.cpp b/lib/dolphin/gx/GXFrameBuffer.cpp
+--- a/lib/dolphin/gx/GXFrameBuffer.cpp
++++ b/lib/dolphin/gx/GXFrameBuffer.cpp
+@@ -37,7 +37,14 @@ namespace aurora::gx {
+ void copy_tex(const void* dest, GXBool clear) noexcept {
+   const auto rect = map_logical_scissor(g_gxState.texCopySrc);
+   const auto [dstWidth, dstHeight] = scale_copy_dst(g_gxState.texCopyDstWidth, g_gxState.texCopyDstHeight);
+-  const auto texCopyFmt = g_gxState.texCopyFmt;
++  // An EFB without an alpha channel (RGB8_Z24, RGB565_Z16) reads back as alpha 1.0. Colour copies
++  // that would otherwise be a plain resolve keep the render target's real alpha, so send them
++  // through the RGB565 conversion, which writes alpha 1.0.
++  const bool efbHasAlpha = g_gxState.pixelFmt != GX_PF_RGB8_Z24 && g_gxState.pixelFmt != GX_PF_RGB565_Z16;
++  const auto texCopyFmt = !efbHasAlpha && !is_depth_format(g_gxState.texCopyFmt) &&
++                                  !gfx::tex_copy_conv::needs_conversion(g_gxState.texCopyFmt)
++                              ? GX_TF_RGB565
++                              : g_gxState.texCopyFmt;
+ 
+   const GXState::CopyTextureKey key{
+       .dest = dest,
+@@ -51,12 +58,7 @@ void copy_tex(const void* dest, GXBool clear) noexcept {
+     if (gfx::tex_copy_conv::needs_conversion(texCopyFmt)) {
+       handle = gfx::new_conv_texture(dstWidth, dstHeight, texCopyFmt, "Copy Conv Texture");
+     } else {
+-      // Configure the texture swizzle to use alpha 1.0 if targeting RGB565 or EFB doesn't have alpha
+-      const auto fmt = texCopyFmt == GX_TF_RGB565 || g_gxState.pixelFmt == GX_PF_RGB8_Z24 ||
+-                               g_gxState.pixelFmt == GX_PF_RGB565_Z16
+-                           ? GX_TF_RGB565
+-                           : GX_TF_RGBA8;
+-      handle = gfx::new_render_texture(dstWidth, dstHeight, fmt, "Resolved Texture");
++      handle = gfx::new_render_texture(dstWidth, dstHeight, GX_TF_RGBA8, "Resolved Texture");
+     }
+     it = g_gxState.copyTextureCache.emplace(key, GXState::CopyTextureRef{.handle = handle, .revision = 0}).first;
+   }
+diff --git a/lib/dolphin/gx/GXLighting.cpp b/lib/dolphin/gx/GXLighting.cpp
+--- a/lib/dolphin/gx/GXLighting.cpp
++++ b/lib/dolphin/gx/GXLighting.cpp
+@@ -182,15 +182,18 @@ void GXSetChanAmbColor(GXChannelID id, GXColor color) {
+   CHECK(id >= GX_COLOR0 && id <= GX_ALPHA1, "bad channel {}", static_cast<int>(id));
+ 
+   // XF ambient color registers: 0x100A (chan 0), 0x100B (chan 1)
+-  u32 packed = (static_cast<u32>(color.r) << 24) | (static_cast<u32>(color.g) << 16) |
+-               (static_cast<u32>(color.b) << 8) | static_cast<u32>(color.a);
+-  if (id == GX_COLOR0 || id == GX_ALPHA0) {
+-    __gx->ambColor[0] = packed;
+-    GX_WRITE_XF_REG(0xA, packed);
++  // GX_COLORn sets only the RGB bytes and GX_ALPHAn only the alpha byte; the other part keeps its value.
++  const u32 rgb = (static_cast<u32>(color.r) << 24) | (static_cast<u32>(color.g) << 16) |
++                  (static_cast<u32>(color.b) << 8);
++  const int n = id == GX_COLOR0 || id == GX_ALPHA0 ? 0 : 1;
++  u32 packed = __gx->ambColor[n];
++  if (id == GX_COLOR0 || id == GX_COLOR1) {
++    packed = (packed & 0xFFu) | rgb;
+   } else {
+-    __gx->ambColor[1] = packed;
+-    GX_WRITE_XF_REG(0xB, packed);
++    packed = (packed & ~0xFFu) | color.a;
+   }
++  __gx->ambColor[n] = packed;
++  GX_WRITE_XF_REG(n == 0 ? 0xA : 0xB, packed);
+   __gx->bpSent = 0;
+ }
+ 
+@@ -207,15 +210,18 @@ void GXSetChanMatColor(GXChannelID id, GXColor color) {
+   CHECK(id >= GX_COLOR0 && id <= GX_ALPHA1, "bad channel {}", static_cast<int>(id));
+ 
+   // XF material color registers: 0x100C (chan 0), 0x100D (chan 1)
+-  u32 packed = (static_cast<u32>(color.r) << 24) | (static_cast<u32>(color.g) << 16) |
+-               (static_cast<u32>(color.b) << 8) | static_cast<u32>(color.a);
+-  if (id == GX_COLOR0 || id == GX_ALPHA0) {
+-    __gx->matColor[0] = packed;
+-    GX_WRITE_XF_REG(0xC, packed);
++  // GX_COLORn sets only the RGB bytes and GX_ALPHAn only the alpha byte; the other part keeps its value.
++  const u32 rgb = (static_cast<u32>(color.r) << 24) | (static_cast<u32>(color.g) << 16) |
++                  (static_cast<u32>(color.b) << 8);
++  const int n = id == GX_COLOR0 || id == GX_ALPHA0 ? 0 : 1;
++  u32 packed = __gx->matColor[n];
++  if (id == GX_COLOR0 || id == GX_COLOR1) {
++    packed = (packed & 0xFFu) | rgb;
+   } else {
+-    __gx->matColor[1] = packed;
+-    GX_WRITE_XF_REG(0xD, packed);
++    packed = (packed & ~0xFFu) | color.a;
+   }
++  __gx->matColor[n] = packed;
++  GX_WRITE_XF_REG(n == 0 ? 0xC : 0xD, packed);
+   __gx->bpSent = 0;
+ }
+ 

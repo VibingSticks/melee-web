@@ -720,6 +720,11 @@ HSD_GObj* lb_800138EC(HSD_ImageDesc* img, GObj_RenderFunc render_func,
     } else {
         GObj_SetupGXLinkMax(gobj, render_func, prio);
     }
+#ifdef TARGET_PC
+    /* On the GameCube r3 still held gobj here; the stage-clear bonus
+     * screen attaches its EFB-copy callback to the returned object. */
+    return gobj;
+#endif
 }
 
 HSD_CObj* lb_80013B14(HSD_CameraDescPerspective* desc)

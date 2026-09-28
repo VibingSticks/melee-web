@@ -213,3 +213,16 @@ EMSCRIPTEN_KEEPALIVE int port_debug_warp_to_point(int slot, int id)
     port_log("debug: slot %d warped to point %d (%.1f, %.1f)", slot, id, pos.x, pos.y);
     return 1;
 }
+
+/*   Module._port_debug_drop_fighter(slot)   // below the blast zone: a quick KO
+ * For reaching the screens after a match (Classic's stage clear) in a test. */
+EMSCRIPTEN_KEEPALIVE void port_debug_drop_fighter(int slot)
+{
+    HSD_GObj* g = Player_GetEntity(slot);
+    if (g != NULL) {
+        Fighter* fp = GET_FIGHTER(g);
+        fp->cur_pos.y = -1000.0f;
+        fp->prev_pos.y = -1000.0f;
+        port_log("debug: slot %d dropped below the stage", slot);
+    }
+}

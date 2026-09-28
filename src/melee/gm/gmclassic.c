@@ -1095,6 +1095,17 @@ void gmClassic_801B3E44(GameModeState* scene)
     temp_r31->x0.x0.stocks = temp_r29->stocks;
     temp_r31->x0.x0.nametag = temp_r29->nametag;
     gmClassic_801B2D54(r4);
+#ifdef TARGET_PC
+    /* A test can start Classic at a later stage (port/src/game_hooks/debug_vs.c). */
+    {
+        extern int port_debug_classic_stage;
+        if (port_debug_classic_stage >= 0) {
+            gm_SetNextGameModeStateId(port_debug_classic_stage << 3);
+            gm_80168F88();
+            return;
+        }
+    }
+#endif
     gm_SetNextGameModeStateId(temp_r29->x5 << 3);
     gm_80168F88();
 }

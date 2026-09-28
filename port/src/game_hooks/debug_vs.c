@@ -79,6 +79,16 @@ EMSCRIPTEN_KEEPALIVE void port_debug_set_vs_items(int freq)
     port_debug_vs_item_freq = freq;
 }
 
+/* The Classic stage (0..10, gmclassic.c's stage table) to start at after
+ * the character select; -1 starts at the first as the game does. */
+int port_debug_classic_stage = -1;
+
+/*   Module._port_debug_set_classic_stage(n);   // before pressing START */
+EMSCRIPTEN_KEEPALIVE void port_debug_set_classic_stage(int n)
+{
+    port_debug_classic_stage = n;
+}
+
 /*   Module._port_debug_set_vs_time_limit(seconds);   // before starting */
 EMSCRIPTEN_KEEPALIVE void port_debug_set_vs_time_limit(int seconds)
 {

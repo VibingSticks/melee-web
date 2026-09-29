@@ -3,9 +3,6 @@
 
 #include "hsd_3B34.h"
 
-jmp_buf hsd_804D2E70;
-u8 hsd_804D2F68[0x70C];
-
 typedef struct JpegWorkData {
     s32 luma[0x100];
     s32 cb[0x40];
@@ -18,6 +15,18 @@ typedef struct JpegState {
     jmp_buf jmp;
     JpegWorkData work;
 } JpegState;
+
+#ifdef TARGET_PC
+/* The decoder reads hsd_804D2E70 as a JpegState: on the GameCube the jmp_buf
+ * is followed by hsd_804D2F68, which holds the work arrays. wasm's jmp_buf is
+ * smaller and the two are not kept together, so decoding a snapshot wrote
+ * its work arrays over whatever followed. One real JpegState instead. */
+static JpegState port_jpeg_state;
+#define hsd_804D2E70 (port_jpeg_state.jmp)
+#else
+jmp_buf hsd_804D2E70;
+u8 hsd_804D2F68[0x70C];
+#endif
 
 typedef struct JpegQuantTables {
     u8 luma[0x40];
@@ -868,6 +877,27 @@ find_scan:
 s32 hsd_803B6BE4(char* src, s32 size, void* dst)
 {
     PAD_STACK(0x30);
+
+#ifdef TARGET_PC
+    {
+        /* hsd_803B5D70 reads the AC Huffman codes at +0x8C and +0x3BC of
+         * lbl_80431090 as u16; their bytes are big-endian as on the
+         * GameCube, so put them in native order once. */
+        static bool swapped;
+        if (!swapped) {
+            static const s32 ranges[2][2] = { { 0x8C, 0x1D0 }, { 0x3BC, 0x500 } };
+            s32 r, i;
+            for (r = 0; r < 2; r++) {
+                for (i = ranges[r][0]; i < ranges[r][1]; i += 2) {
+                    u8 hi = lbl_80431090[i];
+                    lbl_80431090[i] = lbl_80431090[i + 1];
+                    lbl_80431090[i + 1] = hi;
+                }
+            }
+            swapped = true;
+        }
+    }
+#endif
 
     return hsd_803B6BE4_inline(src, size, dst);
 }

@@ -429,6 +429,38 @@ typedef struct JpegEncodeTables {
     u8 pad_44E[2];
 } JpegEncodeTables;
 
+/* The encoder reads lbl_80430C40 and lbl_80430C80 as one JpegEncodeTables.
+ * That holds on the GameCube, where they sit together and the Huffman codes'
+ * big-endian bytes read as u16 as written. The web build builds the struct
+ * once from the same bytes, with the codes in native order. */
+static JpegEncodeTables* hsd_JpegEncodeTables(void)
+{
+#ifdef TARGET_PC
+    static JpegEncodeTables tables;
+    static bool ready;
+    if (!ready) {
+        const u8* src = lbl_80430C80;
+        s32 i;
+        memcpy(tables.quant_luma, lbl_80430C40, sizeof(tables.quant_luma));
+        memcpy(tables.quant_chroma, src, sizeof(tables.quant_chroma));
+        src += sizeof(tables.quant_chroma);
+        for (i = 0; i < 0xA2; i++, src += 2) {
+            tables.ac_code_luma[i] = (u16) ((src[0] << 8) | src[1]);
+        }
+        memcpy(tables.ac_length_luma, src, sizeof(tables.ac_length_luma));
+        src += sizeof(tables.ac_length_luma) + sizeof(tables.pad_266);
+        for (i = 0; i < 0xA2; i++, src += 2) {
+            tables.ac_code_chroma[i] = (u16) ((src[0] << 8) | src[1]);
+        }
+        memcpy(tables.ac_length_chroma, src, sizeof(tables.ac_length_chroma));
+        ready = true;
+    }
+    return &tables;
+#else
+    return (JpegEncodeTables*) lbl_80430C40;
+#endif
+}
+
 static inline s32 bitLength(s32 value)
 {
     s32 bit;
@@ -477,7 +509,7 @@ static inline void writeBits(s32 value, s32 length)
 void hsd_803B3CD8(s32 component)
 {
     JpegWork* work = &hsd_804D2648;
-    JpegEncodeTables* tables = (JpegEncodeTables*) lbl_80430C40;
+    JpegEncodeTables* tables = hsd_JpegEncodeTables();
     u16* dc_code;
     u8* dc_length;
     u16* ac_code;

@@ -49,6 +49,21 @@ struct ftKb_Init_803CB4EC_t ftKb_Init_803CB4EC = {
     { 0.0F, 1.0F, 0.0F },
 };
 
+/* Stone reads its resting "up" vector at +0x74 of ftKb_Init_803CB490, past
+ * the end of that table: on the GameCube that is ftKb_Init_803CB4EC.vec.
+ * wasm places the two apart, so the web build reads a copy laid out as the
+ * code expects (neither table is written). */
+static inline struct ftKb_Init_803CB490_layout* ftKb_SpecialLw_Layout(void)
+{
+#ifdef TARGET_PC
+    static struct ftKb_Init_803CB490_layout layout;
+    layout.vec = ftKb_Init_803CB4EC.vec;
+    return &layout;
+#else
+    return (struct ftKb_Init_803CB490_layout*) ftKb_Init_803CB490;
+#endif
+}
+
 static inline bool fbKb_SpecialLw_IASA_Inline(Fighter_GObj* gobj)
 {
     Fighter* fp = GET_FIGHTER(gobj);
@@ -147,7 +162,7 @@ void ftKb_SpecialHi_800F3570(Fighter_GObj* gobj)
     f32 normal_y_slide;
     Fighter* fp = GET_FIGHTER(gobj);
     struct ftKb_Init_803CB490_layout* p =
-        (struct ftKb_Init_803CB490_layout*) ftKb_Init_803CB490;
+        ftKb_SpecialLw_Layout();
     ftKb_DatAttrs* dat_attr = fp->dat_attrs;
     {
         UNUSED u8 pad2[12];
@@ -193,7 +208,7 @@ void ftKb_SpecialHi_800F36DC(Fighter_GObj* gobj)
 {
     Fighter* fp = GET_FIGHTER(gobj);
     struct ftKb_Init_803CB490_layout* p =
-        (struct ftKb_Init_803CB490_layout*) ftKb_Init_803CB490;
+        ftKb_SpecialLw_Layout();
     fp->mv.kb.speciallw.x24[0] = p->vec;
     fp->mv.kb.speciallw.x54[0] = fp->mv.kb.speciallw.x24[0];
     fp->mv.kb.speciallw.x88[0] = 0.0f;
@@ -593,7 +608,7 @@ void ftKb_SpecialLw1_Coll(Fighter_GObj* gobj)
     Fighter* fp3;
     s32 temp;
     struct ftKb_Init_803CB490_layout* p =
-        (struct ftKb_Init_803CB490_layout*) ftKb_Init_803CB490;
+        ftKb_SpecialLw_Layout();
     PAD_STACK(16);
 
     if (ft_80082708(gobj) == GA_Ground) {
@@ -639,7 +654,7 @@ void ftKb_SpecialLw_Coll(Fighter_GObj* gobj)
     Fighter* fp3;
     s32 temp;
     struct ftKb_Init_803CB490_layout* p =
-        (struct ftKb_Init_803CB490_layout*) ftKb_Init_803CB490;
+        ftKb_SpecialLw_Layout();
     PAD_STACK(16);
 
     if (ft_80082708(gobj) == GA_Ground) {
@@ -684,7 +699,7 @@ void ftKb_SpecialLwEnd_Coll(Fighter_GObj* gobj)
     Fighter* fp = GET_FIGHTER(gobj);
     Fighter* fp2;
     struct ftKb_Init_803CB490_layout* p =
-        (struct ftKb_Init_803CB490_layout*) ftKb_Init_803CB490;
+        ftKb_SpecialLw_Layout();
     PAD_STACK(8);
     ft_80081D0C(gobj);
     fp2 = GET_FIGHTER(gobj);
@@ -756,7 +771,7 @@ void ftKb_SpecialAirLwStart_Coll(Fighter_GObj* gobj)
     s32 temp;
     ftKb_DatAttrs* da = fp->dat_attrs;
     struct ftKb_Init_803CB490_layout* p =
-        (struct ftKb_Init_803CB490_layout*) ftKb_Init_803CB490;
+        ftKb_SpecialLw_Layout();
     PAD_STACK(16);
 
     if (ft_80081D0C(gobj) == GA_Air) {
@@ -806,7 +821,7 @@ void ftKb_SpecialAirLw_Coll(Fighter_GObj* gobj)
     Fighter* fp2;
     s32 temp;
     struct ftKb_Init_803CB490_layout* p =
-        (struct ftKb_Init_803CB490_layout*) ftKb_Init_803CB490;
+        ftKb_SpecialLw_Layout();
     PAD_STACK(16);
 
     if (ft_80081D0C(gobj) == GA_Air) {
@@ -855,7 +870,7 @@ void ftKb_SpecialAirLwEnd_Coll(Fighter_GObj* gobj)
     Fighter* fp = GET_FIGHTER(gobj);
     Fighter* fp2;
     struct ftKb_Init_803CB490_layout* p =
-        (struct ftKb_Init_803CB490_layout*) ftKb_Init_803CB490;
+        ftKb_SpecialLw_Layout();
     PAD_STACK(8);
     ft_80081D0C(gobj);
     fp2 = GET_FIGHTER(gobj);

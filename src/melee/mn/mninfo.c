@@ -142,6 +142,27 @@ void mnInfo_80251AFC(void)
     }
 }
 
+#ifdef TARGET_PC
+/* The GameCube keeps this menu's animation range, text ids, format strings
+ * and model names in one block that the decomp spells as floats. Stored as
+ * floats on a little-endian host, every string in it reads byte-reversed per
+ * word ("MenMainConCo_Top_joint" was not found), so the web build spells the
+ * same bytes out as the MnInfoDataLayout the code reads it as. */
+static MnInfoDataLayout mnInfo_Layout = {
+    { 0.0f, 199.0f, 0.0f },
+    { 0x505, 0x506, 0x507, 0x508 },
+    "%s.%s.%s",
+    "%s:%s:%s",
+    "Can't get user_data.\n",
+    "mninfo.c",
+    "user_data",
+    "MenMainConCo_Top_joint",
+    "MenMainConCo_Top_animjoint",
+    "MenMainConCo_Top_matanim_joint",
+    "MenMainConCo_Top_shapeanim_joint",
+};
+#define mnInfo_803EFC08 (&mnInfo_Layout.anim)
+#else
 static AnimLoopSettings mnInfo_803EFC08[0x12] = {
     { 0.0f, 199.0f, 0.0f },
     { 1.8e-42f, 1.802e-42f, 1.803e-42f },
@@ -162,6 +183,7 @@ static AnimLoopSettings mnInfo_803EFC08[0x12] = {
     { 7.3738955e28f, 1.5307577e19f, 1.7539375e19f },
     { 2.8395941e29f, 1.7935375e25f, 7.2243537e28f },
 };
+#endif
 #ifdef MUST_MATCH
 #pragma push
 #pragma force_active on

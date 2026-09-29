@@ -84,9 +84,19 @@ static u16 mnDataDel_803EF8C8[] = {
     0xC0, 0xC1, 0xC2, 0xC3, 0xC4, 0xC6,
 };
 static Vec3 lbl_803EF8D4 = { -5.5F, -2.8F, 23 };
+#ifdef TARGET_PC
+/* The screen setup loads all three through &mnDataDel_804A0918 as an array
+ * (assets[1] and assets[2] are the next two), which relies on the GameCube
+ * placing them together; the web build makes them one array. */
+static StaticModelDesc mnDataDel_Models[3];
+#define mnDataDel_804A0918 (mnDataDel_Models[0])
+#define mnDataDel_804A0928 (mnDataDel_Models[1])
+#define mnDataDel_804A0938 (mnDataDel_Models[2])
+#else
 static StaticModelDesc mnDataDel_804A0918;
 static StaticModelDesc mnDataDel_804A0928;
 static StaticModelDesc mnDataDel_804A0938;
+#endif
 
 HSD_Text* mnDataDel_804D6C6C;
 HSD_GObj* mnDataDel_804D6C68;

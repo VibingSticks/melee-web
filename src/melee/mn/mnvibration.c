@@ -1,5 +1,7 @@
 #include "mnvibration.h"
 
+#include <string.h>
+
 #include <dolphin/pad.h>
 #include <sysdolphin/baselib/debug.h>
 #undef HSD_ASSERT
@@ -157,6 +159,44 @@ static char mnVibration_803EEEB8[0x20] = "MenMainCursorVi_Top_joint";
 #pragma pop
 #endif
 
+/// The menu reads mnVibration_803EECE0 and the data after it as one
+/// MnVibrationDataLayout, which holds on the GameCube, where they sit
+/// together. The web build does not keep them together, so it reads a copy
+/// of them laid out as that struct (they are never written).
+static MnVibrationDataLayout* mnVibration_GetLayout(void)
+{
+#ifdef TARGET_PC
+    static MnVibrationDataLayout layout;
+    static bool ready;
+    if (!ready) {
+        layout.intro_anim = mnVibration_803EECE0;
+        layout.main_anim = mnVibration_803EECEC;
+        layout.cursor_anim = mnVibration_803EECF8;
+        layout.name_pos = mnVibration_803EED04;
+        memcpy(layout.user_data_error, mnVibration_803EED10, sizeof(layout.user_data_error));
+        memcpy(layout.file_name, mnVibration_803EED28, sizeof(layout.file_name));
+        memcpy(layout.user_data_name, mnVibration_803EED38, sizeof(layout.user_data_name));
+        memcpy(layout.convi_top_joint, mnVibration_803EED44, sizeof(layout.convi_top_joint));
+        memcpy(layout.convi_top_animjoint, mnVibration_803EED5C, sizeof(layout.convi_top_animjoint));
+        memcpy(layout.convi_top_matanim_joint, mnVibration_803EED78, sizeof(layout.convi_top_matanim_joint));
+        memcpy(layout.convi_top_shapeanim_joint, mnVibration_803EED98, sizeof(layout.convi_top_shapeanim_joint));
+        memcpy(layout.ctlvi_top_joint, mnVibration_803EEDBC, sizeof(layout.ctlvi_top_joint));
+        memcpy(layout.ctlvi_top_animjoint, mnVibration_803EEDD4, sizeof(layout.ctlvi_top_animjoint));
+        memcpy(layout.ctlvi_top_matanim_joint, mnVibration_803EEDF0, sizeof(layout.ctlvi_top_matanim_joint));
+        memcpy(layout.ctlvi_top_shapeanim_joint, mnVibration_803EEE10, sizeof(layout.ctlvi_top_shapeanim_joint));
+        memcpy(layout.onoffvi_top_joint, mnVibration_803EEE34, sizeof(layout.onoffvi_top_joint));
+        memcpy(layout.onoffvi_top_animjoint, mnVibration_803EEE50, sizeof(layout.onoffvi_top_animjoint));
+        memcpy(layout.onoffvi_top_matanim_joint, mnVibration_803EEE70, sizeof(layout.onoffvi_top_matanim_joint));
+        memcpy(layout.onoffvi_top_shapeanim_joint, mnVibration_803EEE94, sizeof(layout.onoffvi_top_shapeanim_joint));
+        memcpy(layout.cursorvi_top_joint, mnVibration_803EEEB8, sizeof(layout.cursorvi_top_joint));
+        ready = true;
+    }
+    return &layout;
+#else
+    return (MnVibrationDataLayout*) &mnVibration_803EECE0;
+#endif
+}
+
 // --- Globals ---
 HSD_GObj* mnVibration_804D6C28;
 
@@ -185,10 +225,21 @@ typedef struct MnVibrationData {
 } MnVibrationData;
 
 // The asset blocks are also addressed as a contiguous array in Init.
+#ifdef TARGET_PC
+/* mnVibration_CreateScreen loads all four through &mnVibration_804A0868 as
+ * an array (assets[1..3] are the next three), which relies on the GameCube
+ * placing them together; the web build makes them one array. */
+static MnVibrationJointAssets mnVibration_JointAssets[4];
+#define mnVibration_804A0868 (mnVibration_JointAssets[0])
+#define mnVibration_804A0878 (mnVibration_JointAssets[1])
+#define mnVibration_804A0888 (mnVibration_JointAssets[2])
+#define mnVibration_804A0898 (mnVibration_JointAssets[3])
+#else
 static MnVibrationJointAssets mnVibration_804A0868;
 static MnVibrationJointAssets mnVibration_804A0878;
 static MnVibrationJointAssets mnVibration_804A0888;
 static MnVibrationJointAssets mnVibration_804A0898;
+#endif
 
 /// --- Function Implementation ---
 
@@ -628,7 +679,7 @@ void mnVibration_UpdatePortPanel(HSD_JObj* arg0, u8 arg1, u8 arg2)
     HSD_JObj* sp10;
     u8 temp_ret;
     MnVibrationDataLayout* floats =
-        (MnVibrationDataLayout*) &mnVibration_803EECE0;
+        mnVibration_GetLayout();
 
     lb_80011E24(arg0, &sp14, 1, -1);
     if (arg2 != 0) {
@@ -1069,7 +1120,7 @@ void mnVibration_CreateScreen(s32 arg0)
     s32 i;
     MnVibrationData* data;
     MnVibrationDataLayout* layout =
-        (MnVibrationDataLayout*) &mnVibration_803EECE0;
+        mnVibration_GetLayout();
 
     (void) arg0;
     PAD_STACK(24);
@@ -1134,7 +1185,7 @@ void mnVibration_Init(int arg0)
     MnVibrationJointAssets* assets;
     MnVibrationDataLayout* strings;
 
-    strings = (MnVibrationDataLayout*) &mnVibration_803EECE0;
+    strings = mnVibration_GetLayout();
     assets = (&mnVibration_804A0868);
     mn_804D6BC8.cooldown = 5;
     mn_804A04F0.prev_menu = mn_804A04F0.cur_menu;

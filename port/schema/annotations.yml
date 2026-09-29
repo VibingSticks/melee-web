@@ -261,8 +261,13 @@ HeartContainerAttr:
 
 it_804D6D20_t:
   # x8: monsters and Poke Ball entries, indexed by kind - It_Kind_Kuriboh up to
-  # It_PKind_Random (118 slots, mostly NULL); xC: the 47 Pokemon. Their special
-  # attribute blocks are not typed yet, so the Article's x4 is left alone.
+  # It_PKind_Random (118 slots, mostly NULL); xC: the 47 Pokemon.
+  # A kind left out (~) keeps its special attributes big-endian, so an empty
+  # slot is only right when the Article has no block (Porygon2) or nothing
+  # reads it. The rest of the blocks here are bare 4-byte words (floats and
+  # counts), converted as a word run: left big-endian, an egg read its "drop
+  # 1 item" as 16 million and spawned items until the item limit, stalling
+  # the game for seconds per egg.
   x8: { ptr_array: "Article*", len_const: 118 }
   xC: { ptr_array: "Article*", len_const: 47 }
   x4:
@@ -270,13 +275,13 @@ it_804D6D20_t:
     len_const: 43
     elem_field: x4_specialAttributes
     elem_types: [
-      ItCapsuleAttr, itBoxAttributes, itTaruAttributes, ~, itKusudamaAttributes,
-      itTaruCann_DatAttrs, ~, itDoseiAttributes, HeartContainerAttr, MaximTomatoSpecialAttr,
+      ItCapsuleAttr, itBoxAttributes, itTaruAttributes, port_F32Run, itKusudamaAttributes,
+      itTaruCann_DatAttrs, port_F32Run, itDoseiAttributes, HeartContainerAttr, MaximTomatoSpecialAttr,
       itStar_ItemVars, itBatAttributes, itSword_UnkArticle1, port_F32Run, port_itGShell_Attrs,
       port_itRShell_Attrs, ItLGunAttr, itUnkAttributes, { x4_specialAttributes: port_itFoodsAttrs, x10_modelDesc: port_ItemModelDescJoints }, port_itMsBomb_Attrs,
       itFlipper_DatAttrs, itSScopeAttributes, port_StarRodAttributes, itLipstickAttributes,
       itHarisen_DatAttrs, FFlowerAttr, port_KinokoAttrs, port_KinokoAttrs, port_itHammerData,
-      { x4_specialAttributes: itWstarAttributes, x10_modelDesc: port_ItemModelDescAnims }, ~, ~, ~, ~, itPokemonSpawn_DatAttrs, ItLGunRayAttr, port_StarRodStarAttrs,
+      { x4_specialAttributes: itWstarAttributes, x10_modelDesc: port_ItemModelDescAnims }, port_F32Run, port_F32Run, port_F32Run, port_F32Run, itPokemonSpawn_DatAttrs, ItLGunRayAttr, port_StarRodStarAttrs,
       itLipstickSporeAttributes, ScopeBeamAttrs, ItLGunBeamAttr, itHammerheadAttributes,
       port_F32Run, itEvYoshiEgg_DatAttrs ]
   x8:
@@ -320,11 +325,11 @@ it_804D6D20_t:
     elem_types: [
       itTosakinto_Attrs, itChicoritaLeafAttr, itKabigonAttributes, itKamexAttributes,
       itMatadogasAttributes, itLizardonAttributes, itFireAttributes, itThunderPokemonAttributes,
-      itFreezerAttributes, itsonansAttributes, ~, { x4_specialAttributes: itUnknownAttributes, x10_modelDesc: port_ItemModelDescJoints }, ~, ~, ~,
-      itkireihanaAttributes, ~, itLugiaAttributes, itHououAttr, ~, itPokemonAttributes,
-      itPokemonAttributes, MewVars, port_F32Run, itHitodemanAttributes, itLuckyAttributes, ~, ~,
-      itMarilAttributes, itFushigibanaAttributes, ~, ~, ~, ~, ~, ~, ~, ~, itUnknownAttributes,
-      port_F32Run, port_F32Run, port_F32Run, ~, ~, ~, ~, ~ ]
+      itFreezerAttributes, itsonansAttributes, port_F32Run, { x4_specialAttributes: itUnknownAttributes, x10_modelDesc: port_ItemModelDescJoints }, port_F32Run, port_F32Run, port_F32Run,
+      itkireihanaAttributes, port_F32Run, itLugiaAttributes, itHououAttr, port_F32Run, itPokemonAttributes,
+      itPokemonAttributes, MewVars, port_F32Run, itHitodemanAttributes, itLuckyAttributes, ~, port_F32Run,
+      itMarilAttributes, itFushigibanaAttributes, port_F32Run, port_F32Run, port_F32Run, port_F32Run, port_F32Run, port_F32Run, port_F32Run, port_F32Run, itUnknownAttributes,
+      port_F32Run, port_F32Run, port_F32Run, port_F32Run, port_F32Run, port_F32Run, port_F32Run, port_F32Run ]
   # colour-animation table (lb_013B.c): {script, priority, enable} rows indexed
   # by colanim id; the scripts are a third bytecode, left big-endian for now.
   x14: { ptr_array: Fighter_804D653C_t, object_run: true }

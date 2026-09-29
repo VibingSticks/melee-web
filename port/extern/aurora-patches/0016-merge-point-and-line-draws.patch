@@ -1,0 +1,35 @@
+diff --git a/lib/gx/command_processor.cpp b/lib/gx/command_processor.cpp
+--- a/lib/gx/command_processor.cpp
++++ b/lib/gx/command_processor.cpp
+@@ -466,6 +466,31 @@ static void draw_prim(GXPrimitive prim, GXVtxFmt fmt, u16 vtxCount, Reader& read
+   auto* lastDraw = cleanState ? gfx::get_last_draw_command<DrawData>() : nullptr;
+   const bool canMerge = lastDraw != nullptr && lastDraw->instanceCount == 1;
+ 
++  // Points and separate lines are drawn as one instanced quad per point or segment, fetching their
++  // vertices by instance index from the draw's first vertex. A run of them in the same state (Fountain
++  // of Dreams sends hundreds a frame) can therefore become one draw with more instances, as long as
++  // the vertices stay contiguous. Line strips join their neighbours, so they are left alone.
++  if (!canMerge && (prim == GX_POINTS || prim == GX_LINES) && g_gxState.dirty == 0 &&
++      fmt == sDrawCache.lastDrawFmt && sDrawCache.lineMode == line_mode_for_prim(prim) &&
++      (prim == GX_POINTS || vtxCount % 2 == 0)) {
++    auto* lastLineDraw = gfx::get_last_draw_command<DrawData>();
++    if (lastLineDraw != nullptr && lastLineDraw->idxRange.size != 0 &&
++        (prim == GX_POINTS || lastLineDraw->vtxCount % 2 == 0)) {
++      const auto vertexData = reader.take(totalVtxBytes);
++      const gfx::Range vertRange = gfx::push_verts(vertexData.data(), vertexData.size(), 0);
++      if (lastLineDraw->vertRange.offset + lastLineDraw->vertRange.size == vertRange.offset) {
++        lastLineDraw->vertRange.size += vertRange.size;
++        lastLineDraw->vtxCount += vtxCount;
++        lastLineDraw->instanceCount += prim == GX_POINTS ? vtxCount : vtxCount / 2;
++        gfx::detail::increment_merged_draw_count();
++        return;
++      }
++      // Not contiguous after all: draw it on its own, from an aligned copy.
++      handle_draw_unmerged(prim, fmt, vtxCount, gfx::push_verts(vertexData.data(), vertexData.size(), 4));
++      return;
++    }
++  }
++
+   // Push raw vertex data to buffer. Merged draws must remain contiguous with the previous range.
+   const auto vertexData = reader.take(totalVtxBytes);
+   gfx::Range vertRange = gfx::push_verts(vertexData.data(), vertexData.size(), canMerge ? 0 : 4);

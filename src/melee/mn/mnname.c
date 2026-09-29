@@ -863,6 +863,43 @@ static inline f32 mnName_80238964_noinline(u8 index, u8 target, u8 flag)
     return mnName_80238964(index, target, flag);
 }
 
+#ifdef TARGET_PC
+/* mnName_80238964 indexes mnName_803ED538 up to [9]: past its four entries
+ * are the windows defined after it, which the GameCube keeps in that order.
+ * The web build lists them. */
+static AnimLoopSettings* const mnName_Loops[10] = {
+    &mnName_803ED538[0], &mnName_803ED538[1], &mnName_803ED538[2],
+    &mnName_803ED538[3], &mnName_803ED568,    &mnName_803ED574,
+    &mnName_803ED580,    &mnName_803ED58C,    &mnName_803ED598,
+    (AnimLoopSettings*) mnName_803ED5A4,
+};
+#define MNNAME_LOOP(base, i) (*mnName_Loops[i])
+/* The address of byte `off` of the GameCube's 0x803ED538..0x803ED62F block,
+ * which some functions read by offset from mnName_803ED538. */
+static u8* mnName_BlockAddr(u32 off)
+{
+    static const struct {
+        u32 start;
+        void* obj;
+    } parts[] = {
+        { 0x00, mnName_803ED538 },  { 0x30, &mnName_803ED568 },
+        { 0x3C, &mnName_803ED574 }, { 0x48, &mnName_803ED580 },
+        { 0x54, &mnName_803ED58C }, { 0x60, &mnName_803ED598 },
+        { 0x6C, mnName_803ED5A4 },  { 0xC8, mnName_803ED600 },
+        { 0xE0, mnName_803ED618 },
+    };
+    int i = (int) (sizeof(parts) / sizeof(parts[0])) - 1;
+    while (i > 0 && off < parts[i].start) {
+        i--;
+    }
+    return (u8*) parts[i].obj + (off - parts[i].start);
+}
+#define MNNAME_AT(base, off) mnName_BlockAddr(off)
+#else
+#define MNNAME_LOOP(base, i) ((base)[i])
+#define MNNAME_AT(base, off) ((u8*) (base) + (off))
+#endif
+
 f32 mnName_80238964(u8 index, u8 target, u8 flag)
 {
     s32 idx;
@@ -870,24 +907,24 @@ f32 mnName_80238964(u8 index, u8 target, u8 flag)
 
     if (target == 0x18) {
         if (flag) {
-            return base[5].start_frame;
+            return MNNAME_LOOP(base, 5).start_frame;
         }
-        return base[4].start_frame;
+        return MNNAME_LOOP(base, 4).start_frame;
     }
 
     idx = index;
     switch (idx) {
     case 0x18:
         if (flag) {
-            return base[8].start_frame;
+            return MNNAME_LOOP(base, 8).start_frame;
         }
-        return base[6].start_frame;
+        return MNNAME_LOOP(base, 6).start_frame;
     case 0x19:
     case 0x1A:
         if (flag) {
-            return base[8 + (index == target)].start_frame;
+            return MNNAME_LOOP(base, 8 + (index == target)).start_frame;
         }
-        return base[6 + (index == target)].start_frame;
+        return MNNAME_LOOP(base, 6 + (index == target)).start_frame;
     }
 }
 
@@ -908,15 +945,15 @@ void mnName_80238A04(HSD_GObj* gobj, u8 target, u8 flag)
 
     if (target == 0x18) {
         if (flag) {
-            HSD_JObjReqAnimAll(jobj2, base[5].start_frame);
+            HSD_JObjReqAnimAll(jobj2, MNNAME_LOOP(base, 5).start_frame);
         } else {
-            HSD_JObjReqAnimAll(jobj2, base[4].start_frame);
+            HSD_JObjReqAnimAll(jobj2, MNNAME_LOOP(base, 4).start_frame);
         }
     } else {
         if (flag) {
-            HSD_JObjReqAnimAll(jobj2, base[8].start_frame);
+            HSD_JObjReqAnimAll(jobj2, MNNAME_LOOP(base, 8).start_frame);
         } else {
-            HSD_JObjReqAnimAll(jobj2, base[6].start_frame);
+            HSD_JObjReqAnimAll(jobj2, MNNAME_LOOP(base, 6).start_frame);
         }
     }
     HSD_JObjAnimAll(jobj2);
@@ -1031,8 +1068,8 @@ void mnName_80238C34(HSD_GObj* arg0, u8 arg1, u8 arg2)
         result = mn_8022ED6C(
             jobj, mnName_FindAnimLoop(mnName_803B8510, mn_8022F298(jobj)));
 
-        if (mnName_FindAnimLoop(tableBase, result) == base + 5) {
-            if (result >= mnName_80238C34_inline(&base[5])) {
+        if (mnName_FindAnimLoop(tableBase, result) == &MNNAME_LOOP(base, 5)) {
+            if (result >= mnName_80238C34_inline(&MNNAME_LOOP(base, 5))) {
                 HSD_GObjFree(arg0);
             }
         }
@@ -1437,19 +1474,19 @@ void fn_8023A0BC(HSD_GObj* gobj)
     }
 
     frame = mn_8022F298(sp2C);
-    if (*(f32*) (base + 0xC8) <= frame) {
-        end_frame = (f32*) (base + 0xCC);
-        if (frame < (*(new_var = (f32*) (base + 0xCC)))) {
-            frame2 = mn_8022EFD8(sp2C, (AnimLoopSettings*) (base + 0xC8));
+    if (*(f32*) MNNAME_AT(base, 0xC8) <= frame) {
+        end_frame = (f32*) MNNAME_AT(base, 0xCC);
+        if (frame < (*(new_var = (f32*) MNNAME_AT(base, 0xCC)))) {
+            frame2 = mn_8022EFD8(sp2C, (AnimLoopSettings*) MNNAME_AT(base, 0xC8));
             lb_80011E24(jobj, &sp28, 8, -1);
-            mn_8022EFD8(sp28, (AnimLoopSettings*) (base + 0xC8));
+            mn_8022EFD8(sp28, (AnimLoopSettings*) MNNAME_AT(base, 0xC8));
             if (frame2 >= *end_frame) {
                 if (mnName_804D6BFC != NULL) {
                     HSD_SisLib_803A5CC4(mnName_804D6BFC);
                 }
                 text = HSD_SisLib_803A5ACC(
-                    0, 1, *(f32*) (base + 0xEC), *(f32*) (base + 0xF0),
-                    *(f32*) (base + 0xF4), 416.6667f, 33.333336f);
+                    0, 1, *(f32*) MNNAME_AT(base, 0xEC), *(f32*) MNNAME_AT(base, 0xF0),
+                    *(f32*) MNNAME_AT(base, 0xF4), 416.6667f, 33.333336f);
                 mnName_804D6BFC = text;
                 text->font_size.x = 0.03f;
                 text->font_size.y = 0.03f;
@@ -1771,6 +1808,20 @@ s32 mnName_8023AC40(void)
         &mnNameNew_804A0720[0].shapeanim_joint,
         "MenMainSbaseEtNw_Top_shapeanim_joint", 0);
 
+#ifdef TARGET_PC
+    /* The GameCube reads these symbol names from the string data that
+     * follows mnName_803ED538 (+0x4D0..+0x508); the web build does not keep
+     * that data behind it, so it names them. */
+    if (lbLang_IsSavedLanguageUS()) {
+        lbArchive_LoadSections(archive, (void**) &AutoNamesList,
+                               "mnNameAutoNameUs", (void**) &NotAllowedNamesList,
+                               "mnNameRefuseNameUs", 0);
+    } else {
+        lbArchive_LoadSections(archive, (void**) &AutoNamesList,
+                               "mnNameAutoName", (void**) &NotAllowedNamesList,
+                               "mnNameRefuseName", 0);
+    }
+#else
     if (lbLang_IsSavedLanguageUS()) {
         lbArchive_LoadSections(
             archive, (void**) &AutoNamesList, (char*) mnName_803ED538 + 0x4D0,
@@ -1780,6 +1831,7 @@ s32 mnName_8023AC40(void)
             archive, (void**) &AutoNamesList, (char*) mnName_803ED538 + 0x4F8,
             (void**) &NotAllowedNamesList, (char*) mnName_803ED538 + 0x508, 0);
     }
+#endif
 
     mn_804A04F0.prev_menu = mn_804A04F0.cur_menu;
     mn_804A04F0.cur_menu = 0x12;

@@ -28,6 +28,8 @@
 #include <sysdolphin/baselib/random.h>
 #include <sysdolphin/baselib/sislib.h>
 
+#include <string.h>
+
 typedef char* GlyphRow[4];
 
 typedef volatile char GlyphChar;
@@ -222,6 +224,35 @@ static MnNameNewGlyphTable mnNameNew_GlyphTable = {
 Vec3 unk_vec = { -0.8f, 0.4f, 0.0f };
 static Vec3 mnNameNew_803EE330 = { -0.7f, 0.7f, 0.0f };
 
+/// The keyboard code reads mnNameNew_803EDA58 and the tables after it as one
+/// MnNameNewDataLayout, which holds on the GameCube, where they sit together.
+/// The web build does not keep them together, so it reads a copy of them laid
+/// out as that struct (they are never written).
+static inline MnNameNewDataLayout* mnNameNew_GetLayout(void)
+{
+#ifdef TARGET_PC
+    static MnNameNewDataLayout layout;
+    static bool ready;
+    _Static_assert(offsetof(MnNameNewDataLayout, lower_glyphs) - offsetof(MnNameNewDataLayout, key_jobj_ids) ==
+                       sizeof(MnNameNewKeyMap),
+                   "key map does not fill its part of the layout");
+    _Static_assert(offsetof(MnNameNewDataLayout, x8CC) - offsetof(MnNameNewDataLayout, lower_glyphs) ==
+                       sizeof(MnNameNewGlyphTable),
+                   "glyph table does not fill its part of the layout");
+    if (!ready) {
+        memcpy(layout.anim, mnNameNew_803EDA58, sizeof(layout.anim));
+        memcpy(layout.key_jobj_ids, &mnNameNew_KeyMap, sizeof(mnNameNew_KeyMap));
+        memcpy(layout.lower_glyphs, &mnNameNew_GlyphTable, sizeof(mnNameNew_GlyphTable));
+        layout.x8CC = unk_vec;
+        layout.x8D8 = mnNameNew_803EE330;
+        ready = true;
+    }
+    return &layout;
+#else
+    return (MnNameNewDataLayout*) mnNameNew_803EDA58;
+#endif
+}
+
 void mnNameNew_8023B0F8(HSD_GObj* arg0, u8 arg1)
 {
     HSD_JObj* jobj;
@@ -377,7 +408,7 @@ HSD_Text* mnNameNew_KeySetup(NameNewEntry* arg0, u8 arg1)
 
     PAD_STACK(16);
 
-    layout = (MnNameNewDataLayout*) mnNameNew_803EDA58;
+    layout = mnNameNew_GetLayout();
     key_color = mnNameNew_804DBF44;
     selected_key_color = mnNameNew_804DBF48;
 
@@ -727,7 +758,7 @@ char* AddCharacterToName(char* arg0, u8 arg1, u8 arg2, u8 arg3)
     char** table;
     MnNameNewDataLayout* layout;
 
-    layout = (MnNameNewDataLayout*) mnNameNew_803EDA58;
+    layout = mnNameNew_GetLayout();
     switch (arg3) {
     case 0:
     case 1: {
@@ -959,7 +990,7 @@ void mnNameNew_MainInput(HSD_GObj* arg0)
         NameNewEntry* entry = mnNameNew_804D6C08->user_data;
         data = entry;
     }
-    layout = (MnNameNewDataLayout*) mnNameNew_803EDA58;
+    layout = mnNameNew_GetLayout();
 
     if (data->variant_gobj != NULL) {
         mnNameNew_GlyphVariantInput(arg0);
@@ -1348,7 +1379,7 @@ HSD_Text* mnNameNew_8023D130(GlyphVariantEntry* arg0, u16 arg1, u8 arg2,
     Vec3 text_pos;
     GXColor glyph_color;
 
-    layout = (MnNameNewDataLayout*) mnNameNew_803EDA58;
+    layout = mnNameNew_GetLayout();
     text = HSD_SisLib_803A6754(0, (s32) mn_804D6BB4);
     jobj14 = arg0->jobjs[4];
     jobj18 = arg0->jobjs[5];
@@ -1556,7 +1587,7 @@ void fn_8023DAEC(HSD_GObj* arg0)
 
     PAD_STACK(8);
 
-    layout = (MnNameNewDataLayout*) mnNameNew_803EDA58;
+    layout = mnNameNew_GetLayout();
     if ((data = arg0->user_data)->key_text != NULL) {
         HSD_SisLib_803A5CC4(data->key_text);
         data->key_text = NULL;
@@ -1706,7 +1737,7 @@ void mnNameNew_8023E0D8(NameNewEntry* arg0)
     u16* jobj_ids;
     s32 i;
 
-    layout = (MnNameNewDataLayout*) mnNameNew_803EDA58;
+    layout = mnNameNew_GetLayout();
     anim = layout->anim;
     jobj = arg0->jobjs[12];
     HSD_JObjReqAnim(jobj, anim[2].start_frame);

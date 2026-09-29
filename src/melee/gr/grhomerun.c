@@ -44,7 +44,15 @@ static int grHr_804D6ADC;
 static f32 grHr_804D6AE0;
 static f32 grHr_804D6AE4;
 static void* yakumono_param;
+#ifdef TARGET_PC
+/* Read below as one GrJoint of three s16. The GameCube spells it as two
+ * big-endian words, { 0xA, 0 }, whose bytes give x = 0, y = 10, z = 0:
+ * collision joint 0 follows map part 10. Read little-endian the same words
+ * gave x = 10, y = 0. */
+static GrJoint grHr_804D4998[1] = { { 0, 10, 0 } };
+#else
 static int grHr_804D4998[2] = { 0xA, 0 };
+#endif
 static char grHr_804D49A0[] = "/GrHr";
 
 StageCallbacks grHr_StageCallbacks[11] = {

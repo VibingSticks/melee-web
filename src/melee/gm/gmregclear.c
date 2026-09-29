@@ -106,7 +106,15 @@ typedef struct RegClearEv {
     /* 0x20 */ f32 x20;
 } RegClearEv;
 
+#ifdef TARGET_PC
+/* Shares a block with gm_17EB.c's lbl_80472CB0, as on the GameCube, where
+ * All-Star's data runs into the first bytes of this one (see there). */
+extern u8 port_gm_1p_block[];
+_Static_assert(sizeof(struct lbl_80472D28_t) == 0x120, "stage clear state size");
+#define lbl_80472D28 (*(struct lbl_80472D28_t*) (port_gm_1p_block + 0x78))
+#else
 static struct lbl_80472D28_t lbl_80472D28;
+#endif
 
 u16 lbl_803D8B88[] = { 0x18, 0x16, 0x12, 0x3, 0x5, 0x4, 0x6, 0x1a, 0x19, 0x7 };
 

@@ -23,7 +23,17 @@ typedef struct {
     u8 b7 : 1, b6 : 1, b5 : 1, b4 : 1, b3 : 1, b2 : 1, b1 : 1, b0 : 1;
 } u8_bits;
 
+#ifdef TARGET_PC
+/* All-Star reads this through UnkAllstarData, which is 0xA0 bytes: on the
+ * GameCube its last 0x28 bytes are the start of gmregclear.c's
+ * lbl_80472D28, the next object. wasm places globals apart, so the web build
+ * keeps both in one block at their GameCube offsets instead of letting those
+ * writes land on whatever global comes next. */
+u8 port_gm_1p_block[0x78 + 0x120] ATTRIBUTE_ALIGN(8);
+#define lbl_80472CB0 port_gm_1p_block
+#else
 static u8 lbl_80472CB0[0x78];
+#endif
 
 AllstarStageEntry lbl_803D85F0[55] = {
     { 4, 0, 0x3c, 0xaf, { 0, 0, 9 } },

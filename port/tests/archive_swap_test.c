@@ -137,6 +137,38 @@ static void run(void)
         port_archive_note_parse(NULL, 0, 1, NULL);         /* an empty archive is not a buffer */
         CHECK_EQ_U32(port_archive_take_fresh(b), 0);
     }
+
+    /* A note lives as long as its buffer: however many other archives are
+     * parsed in between (a long session parses thousands), a live one keeps
+     * its answer. The notes used to sit in a ring of 256, and the fighter
+     * archive the preload cache handed back after the ring wrapped was
+     * converted a second time (the results-screen crash in convert_stream). */
+    {
+        static uint8_t live[64], other[8192 * 16];
+        port_archive_note_parse(live, sizeof live, 1, NULL);
+        CHECK_EQ_U32(port_archive_take_fresh(live), 1);
+        for (unsigned i = 0; i < 8192; i++) {
+            port_archive_note_parse(other + i * 16, 16, 1, NULL);
+        }
+        CHECK_EQ_U32(port_archive_take_fresh(live + 5), 0);
+        CHECK_EQ_U32(port_archive_take_fresh(other + 100 * 16 + 3), 1);
+        CHECK_EQ_U32(port_archive_take_fresh(other + 100 * 16), 0);
+    }
+
+    /* Memory that is reused retires every note it overlaps, not just the
+     * first found: a stale one must not answer for the new archive. */
+    {
+        static uint8_t m[300];
+        port_archive_note_parse(m, 100, 1, NULL);         /* old archive X, never asked about */
+        port_archive_note_parse(m + 100, 200, 1, NULL);   /* old archive Y, never asked about */
+        port_archive_note_parse(m + 50, 200, 1, NULL);    /* new archive F over both */
+        CHECK_EQ_U32(port_archive_take_fresh(m + 240), 1); /* F's own answer ... */
+        CHECK_EQ_U32(port_archive_take_fresh(m + 240), 0); /* ... consumed, with no stale Y to say 1 again */
+        CHECK_EQ_U32(port_archive_take_fresh(m + 60), 0);
+        CHECK_EQ_U32(port_archive_take_fresh(m + 260), 1); /* past F: Y is gone, so unknown */
+        port_archive_note_parse(m + 50, 200, 0, NULL);    /* F parsed again, native */
+        CHECK_EQ_U32(port_archive_take_fresh(m + 60), 0);
+    }
 }
 
 TEST_MAIN(run)

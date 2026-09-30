@@ -160,14 +160,30 @@ static void keep_free(port_archive_keep* k)
     }
 }
 
-/* Notes are never retired (nothing says when a buffer is freed), so a slot is
- * reused only when its memory is reused (below) or the ring wraps. The ring
- * is sized so that wrapping over a live note -- a preloaded fighter archive
- * that has not yet been handed back -- takes more distinct buffers than a
- * scene change parses. */
-#define PORT_PARSE_NOTES 256
-static parse_note g_parse_notes[PORT_PARSE_NOTES];
-static unsigned g_parse_next;
+/* Notes are retired by their memory being used again: nothing says when a
+ * buffer is freed, but a parse over memory a note covers means that note's
+ * archive is gone. So the notes are kept pairwise disjoint, and a live
+ * buffer's note stays for as long as the buffer does, however many other
+ * archives are parsed meanwhile. (They used to sit in a ring of 256 that
+ * replaced only the first overlapping note: a long session wrapped the ring
+ * over live fighter archives, and the next hand-back by the preload cache
+ * converted their scripts a second time -- the results screen crashing in
+ * convert_stream after "ft_script: unknown opcode" lines -- or lost the
+ * context their item Articles are converted with.) */
+static parse_note* g_parse_notes;
+static unsigned g_parse_count, g_parse_cap;
+
+static parse_note* note_containing(const void* p)
+{
+    const uint8_t* q = p;
+    for (unsigned i = 0; i < g_parse_count; i++) {
+        parse_note* n = &g_parse_notes[i];
+        if (q >= n->data && q < n->data + n->size) {
+            return n;
+        }
+    }
+    return NULL;
+}
 
 void port_archive_note_parse(const void* data, uint32_t size, int fresh, port_archive_keep* keep)
 {
@@ -176,33 +192,46 @@ void port_archive_note_parse(const void* data, uint32_t size, int fresh, port_ar
         keep_free(keep);
         return;
     }
-    for (unsigned i = 0; i < PORT_PARSE_NOTES; i++) {
+    int same = -1;
+    for (unsigned i = 0; i < g_parse_count;) {
         parse_note* n = &g_parse_notes[i];
-        if (n->data != NULL && d < n->data + n->size && n->data < d + size) {
-            n->data = d; /* the same buffer, or one reusing its memory */
-            n->size = size;
-            /* A converting parse's context replaces whatever the slot kept
-             * (the memory holds new data); a parse that found the buffer
-             * native brings none and the old one still describes it. */
-            if (fresh || keep != NULL) {
-                keep_free(n->keep);
-                n->keep = keep;
+        if (d < n->data + n->size && n->data < d + size) {
+            /* A parse that found the buffer native already did not touch
+             * its tables: it is the archive this note describes, handed
+             * back, and whether the tables still await the game's own
+             * conversion is what the note says. */
+            if (!fresh && n->data == d && same < 0) {
+                same = (int) i++;
+                continue;
             }
-            /* A converting parse leaves big-endian tables behind, whatever the
-             * memory held before (the file was read from the disc again, or the
-             * memory was reused). A parse that found the buffer native already
-             * did not touch the tables: whether they still await the game's own
-             * conversion is what the note says, so it is left alone. Resetting
-             * it here would make a preloaded archive that is parsed again
-             * before its first hand-back look converted when it is not. */
-            if (fresh) {
-                n->fresh = 1;
-            }
+            /* Anything else over this memory replaces what the note knew:
+             * the file was read from the disc again, or another one was. */
+            keep_free(n->keep);
+            *n = g_parse_notes[--g_parse_count];
+            continue;
+        }
+        i++;
+    }
+    if (same >= 0) {
+        parse_note* n = &g_parse_notes[same];
+        n->size = size;
+        if (keep != NULL) {
+            keep_free(n->keep);
+            n->keep = keep;
+        }
+        return;
+    }
+    if (g_parse_count == g_parse_cap) {
+        unsigned cap = g_parse_cap != 0 ? g_parse_cap * 2 : 256;
+        parse_note* grown = realloc(g_parse_notes, cap * sizeof *grown);
+        if (grown == NULL) {
+            keep_free(keep);
             return;
         }
+        g_parse_notes = grown;
+        g_parse_cap = cap;
     }
-    parse_note* n = &g_parse_notes[g_parse_next++ % PORT_PARSE_NOTES];
-    keep_free(n->keep);
+    parse_note* n = &g_parse_notes[g_parse_count++];
     n->data = d;
     n->size = size;
     n->fresh = fresh;
@@ -211,14 +240,11 @@ void port_archive_note_parse(const void* data, uint32_t size, int fresh, port_ar
 
 int port_archive_take_fresh(const void* p)
 {
-    const uint8_t* q = p;
-    for (unsigned i = 0; i < PORT_PARSE_NOTES; i++) {
-        parse_note* n = &g_parse_notes[i];
-        if (n->data != NULL && q >= n->data && q < n->data + n->size) {
-            int fresh = n->fresh;
-            n->fresh = 0; /* the caller converts its tables now; a later load of this buffer must not */
-            return fresh;
-        }
+    parse_note* n = note_containing(p);
+    if (n != NULL) {
+        int fresh = n->fresh;
+        n->fresh = 0; /* the caller converts its tables now; a later load of this buffer must not */
+        return fresh;
     }
     return 1; /* not a parsed archive we know of: convert, as before */
 }
@@ -570,21 +596,17 @@ port_archive_keep* port_archive_swap_roots(HSD_Archive* ar, uint32_t* reloc_set,
 
 int port_archive_fill_gaps(void* obj, const port_type* run_type, const char* what)
 {
-    for (unsigned i = 0; i < PORT_PARSE_NOTES; i++) {
-        parse_note* m = &g_parse_notes[i];
-        if (m->data != NULL && m->keep != NULL && (const uint8_t*) obj >= m->data &&
-            (const uint8_t*) obj < m->data + m->size)
-        {
-            port_walk_ctx* c = &m->keep->c;
-            c->fill_gaps = 1;
-            c->error = NULL;
-            port_walk(c, run_type, obj);
-            c->fill_gaps = 0;
-            if (c->error != NULL) {
-                port_log("hsd_endian: filling gaps of %s in %s: %s", what, m->keep->name, c->error);
-            }
-            return 0;
+    parse_note* m = note_containing(obj);
+    if (m != NULL && m->keep != NULL) {
+        port_walk_ctx* c = &m->keep->c;
+        c->fill_gaps = 1;
+        c->error = NULL;
+        port_walk(c, run_type, obj);
+        c->fill_gaps = 0;
+        if (c->error != NULL) {
+            port_log("hsd_endian: filling gaps of %s in %s: %s", what, m->keep->name, c->error);
         }
+        return 0;
     }
     return -1;
 }
@@ -592,14 +614,7 @@ int port_archive_fill_gaps(void* obj, const port_type* run_type, const char* wha
 int port_archive_swap_object(void* obj, const port_type* type, const char* what)
 {
     static unsigned logged;
-    parse_note* n = NULL;
-    for (unsigned i = 0; i < PORT_PARSE_NOTES; i++) {
-        parse_note* m = &g_parse_notes[i];
-        if (m->data != NULL && (const uint8_t*) obj >= m->data && (const uint8_t*) obj < m->data + m->size) {
-            n = m;
-            break;
-        }
-    }
+    parse_note* n = note_containing(obj);
     if (n == NULL || n->keep == NULL) {
         if (logged++ < 8) {
             port_log("hsd_endian: %s %p is in no archive whose context was kept; left as is", what, obj);

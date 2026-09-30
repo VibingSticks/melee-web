@@ -1,3 +1,6 @@
+#ifdef TARGET_PC
+#include <port_game.h>
+#endif
 #include "ftseak.h"
 
 #include "forward.h"
@@ -339,6 +342,13 @@ void ftSk_Init_OnLoad(HSD_GObj* gobj)
     it_8026B3F8(item_list[1], It_Kind_Seak_NeedleHeld);
     it_8026B3F8(item_list[2], It_Kind_Seak_Vanish);
     it_8026B3F8(item_list[3], It_Kind_Seak_Chain);
+#ifdef TARGET_PC
+    /* item_list[4] and [5] are joint trees: the poses the chain moves blend
+     * the body towards (ftSk_SpecialS_80110610 hands their child joint to
+     * ftAnim). Nothing else reaches them, so they stayed big-endian. */
+    port_swap_ft_model(item_list[4], PORT_FT_JOINT);
+    port_swap_ft_model(item_list[5], PORT_FT_JOINT);
+#endif
 }
 
 void ftSk_Init_80110198(HSD_GObj* gobj)

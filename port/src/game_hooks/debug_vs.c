@@ -40,6 +40,17 @@ int port_debug_vs_requested = 0;
  * -1 keeps its defaults, Link and Mario. */
 int port_debug_vs_ckind[2] = { -1, -1 };
 
+/* Their costumes (the colour index the character select would give); -1
+ * keeps the default costume. */
+int port_debug_vs_color[2] = { -1, -1 };
+
+/*   Module._port_debug_set_vs_colors(p1_color, p2_color);   // before starting */
+EMSCRIPTEN_KEEPALIVE void port_debug_set_vs_colors(int p1, int p2)
+{
+    port_debug_vs_color[0] = p1;
+    port_debug_vs_color[1] = p2;
+}
+
 /* Player 2 as a CPU of this level (1..9); -1 keeps it a second human. */
 int port_debug_vs_cpu_level = -1;
 

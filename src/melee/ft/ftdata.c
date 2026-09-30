@@ -1602,6 +1602,20 @@ void ftData_8008572C(FighterKind kind)
              * read its counts big-endian and ran off the model. */
             port_swap_ft_parts_vis_extra(fd->x8, costumes,
                                          kind == Ft_Kind_GameWatch ? ((void**) fd->x48_items)[10] : NULL);
+            /* Jigglypuff's hats (ftPr_Init_8013C360) have a parts block of
+             * their own behind x48[1]: a word, then an FtPartsDesc with a
+             * row per costume. No schema reaches it, so it stayed
+             * big-endian: a model count of 0x01000000 ("fighter parts model
+             * num over!") and a walk off the hat's tables, in every match
+             * where Jigglypuff wore anything but the default costume. It
+             * shares no table with the body's. */
+            if (kind == Ft_Kind_Purin) {
+                u32* hat = ((u32**) fd->x48_items)[1];
+                if (hat != NULL) {
+                    port_swap_u32_array(&hat[1], 1); /* FtPartsDesc::model_num */
+                    port_swap_ft_parts_vis(&hat[1], costumes);
+                }
+            }
             /* The two animation tables (their lengths are the count tables
              * below, not anything in the archive) and the subaction scripts
              * they point at. The scripts of both tables go in one call, so

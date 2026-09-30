@@ -211,9 +211,13 @@ void onEnterDebugVs(GameModeState* state)
     /* ... and for particular fighters (port/src/game_hooks/debug_vs.c). */
     {
         extern int port_debug_vs_ckind[2];
+        extern int port_debug_vs_color[2];
         for (i = 0; i < 2; i++) {
             if (port_debug_vs_ckind[i] >= 0) {
                 start->players[i].ckind = port_debug_vs_ckind[i];
+            }
+            if (port_debug_vs_color[i] >= 0) {
+                start->players[i].color = port_debug_vs_color[i];
             }
         }
     }

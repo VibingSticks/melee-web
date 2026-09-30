@@ -369,8 +369,13 @@ FigaTree:
   # so the run ends at the first word that is not one.
   tracks: { ptr_array: FigaTrack, object_run: true }
 # ftdynamics.c reads dynamicsNum rows of ftDynamicBones; the header's
-# ArticleDynamicBones declares the maximum (10), and the rows past the count
-# are whatever the archive packed next.
+# ArticleDynamicBones declares the maximum (10). For every fighter but one
+# the block holds exactly dynamicsNum rows. Jigglypuff's holds five with a
+# count of one: her hair, then two rows each for the bow and the headband
+# costumes, which ftCo_8009DC54 reads by index (rows 1..4). So the rows run
+# to the next object rather than to the count: counted, those four stayed
+# big-endian and a bone index of 0x03000000 walked the hat's joint tree
+# forever (the match froze while loading).
 ftDynamics:
   # Physics-bone animations: undescribed, Mewtwo's tail animation stayed
   # big-endian, its root bone was translated to 1e25 when he was hit, and the
@@ -382,7 +387,7 @@ ftDynamics:
 port_DynFigaSlot:
   trees: { ptr_array: port_FigaTreeRef, object_run: true }
 ftDynamics__anon0:
-  ftDynamicBones: { ptr_array: BoneDynamicsDesc, len_field: dynamicsNum }
+  ftDynamicBones: { ptr_array: BoneDynamicsDesc, object_run: true }
 itWstarAttributes:
   x28_entries: { object_run: true }   # x24_count rows, declared [1]
 port_itFoodsAttrs:

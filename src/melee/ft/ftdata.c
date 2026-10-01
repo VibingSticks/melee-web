@@ -1359,7 +1359,7 @@ ftData_UnkModelStruct ftData_UnkIntBoolFunc0 = {
     },
 };
 
-struct {
+struct ftdata_ftData_UnkCallbackPairs0_t {
     HSD_GObjEvent x0;
     void (*x4)(Fighter_GObj*, int, float frame);
 } ftData_UnkCallbackPairs0[Ft_Kind_Max] = {
@@ -1655,15 +1655,16 @@ void ftData_80085820(FighterKind kind, int costume_id)
         if (ftData_803C2360[kind][costume_id].matanim_joint_name != NULL) {
             lbArchive_80017040(
                 &temp_r5->x14_archive,
-                ftData_803C2360[kind][costume_id].dat_filename, temp_r5,
-                ftData_803C2360[kind][costume_id].joint_name, &temp_r5->x4,
+                ftData_803C2360[kind][costume_id].dat_filename,
+                &temp_r5->joint, ftData_803C2360[kind][costume_id].joint_name,
+                &temp_r5->x4,
                 ftData_803C2360[kind][costume_id].matanim_joint_name, 0);
         } else {
             lbArchive_80017040(
                 &temp_r5->x14_archive,
-                ftData_803C2360[kind][costume_id].dat_filename, temp_r5,
-                ftData_803C2360[kind][costume_id].joint_name, 0,
-                ftData_803C2360[kind][costume_id].matanim_joint_name);
+                ftData_803C2360[kind][costume_id].dat_filename,
+                &temp_r5->joint, ftData_803C2360[kind][costume_id].joint_name,
+                0, ftData_803C2360[kind][costume_id].matanim_joint_name);
             CostumeListsForeachCharacter[kind].costume_list[costume_id].x4 =
                 NULL;
         }
@@ -1678,15 +1679,16 @@ void ftData_800858E4(FighterKind kind, int costume_id)
         if (ftData_803C2360[kind][costume_id].matanim_joint_name != NULL) {
             lbArchive_80017040(
                 &temp_r5->x14_archive,
-                ftData_803C2360[kind][costume_id].dat_filename, temp_r5,
-                ftData_803C2360[kind][costume_id].joint_name, &temp_r5->x4,
+                ftData_803C2360[kind][costume_id].dat_filename,
+                &temp_r5->joint, ftData_803C2360[kind][costume_id].joint_name,
+                &temp_r5->x4,
                 ftData_803C2360[kind][costume_id].matanim_joint_name, 0);
         } else {
             lbArchive_80017040(
                 &temp_r5->x14_archive,
-                ftData_803C2360[kind][costume_id].dat_filename, temp_r5,
-                ftData_803C2360[kind][costume_id].joint_name, 0,
-                ftData_803C2360[kind][costume_id].matanim_joint_name);
+                ftData_803C2360[kind][costume_id].dat_filename,
+                &temp_r5->joint, ftData_803C2360[kind][costume_id].joint_name,
+                0, ftData_803C2360[kind][costume_id].matanim_joint_name);
             CostumeListsForeachCharacter[kind].costume_list[costume_id].x4 =
                 NULL;
         }
@@ -1832,7 +1834,8 @@ void ftData_80085CD8(Fighter* fp, Fighter* arg1, int msid)
                                          "HSD_ArchiveParse error! %x\n", msid);
                     }
                 }
-                fp->x590 = HSD_ArchiveGetPublicAddress(&sp14, temp_r3->x0);
+                fp->x590 =
+                    HSD_ArchiveGetPublicAs(FigaTree, &sp14, temp_r3->x0);
             } else {
                 fp->x590 = NULL;
             }
@@ -1887,7 +1890,8 @@ FigaTree* ftData_80085E50(Fighter* arg0, int msid)
                                          "HSD_ArchiveParse error! %x\n", msid);
                     }
                 }
-                arg0->x598 = HSD_ArchiveGetPublicAddress(&sp10, temp_r3->x0);
+                arg0->x598 =
+                    HSD_ArchiveGetPublicAs(FigaTree, &sp10, temp_r3->x0);
             } else {
                 arg0->x598 = 0;
             }

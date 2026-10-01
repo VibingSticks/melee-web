@@ -24,7 +24,7 @@ if (EMSCRIPTEN)
             --header ${CMAKE_CURRENT_SOURCE_DIR}/schema/all_headers.h
             --annotations ${CMAKE_CURRENT_SOURCE_DIR}/schema/annotations.yml
             --roots ${CMAKE_CURRENT_SOURCE_DIR}/schema/roots.yml
-            --clang-arg=-I${GAME_ROOT}/src --clang-arg=-isystem${CMAKE_CURRENT_SOURCE_DIR}/extern/aurora/include
+            --clang-arg=-I${GAME_ROOT}/src --clang-arg=-I${GAME_ROOT}/libs/doldecomp/include --clang-arg=-isystem${CMAKE_CURRENT_SOURCE_DIR}/extern/aurora/include
             --clang-arg=-I${PORT_SRC_DIR}/compat --clang-arg=-I${PORT_SRC_DIR} --clang-arg=-I${CMAKE_CURRENT_SOURCE_DIR}/schema
             --clang-arg=-DVERSION_GALE01 --clang-arg=-DBUILD_VERSION=0 --clang-arg=--sysroot=${EMSCRIPTEN_SYSROOT}
             ${SCHEMA_TABLES}

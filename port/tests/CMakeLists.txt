@@ -24,7 +24,7 @@ add_test(NAME pack_test COMMAND python3 ${CMAKE_CURRENT_SOURCE_DIR}/pack_test.py
 function(port_add_game_test name)
     add_executable(${name} ${ARGN} port_host_stubs.c)
     target_include_directories(${name} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}
-                               ${PORT_SRC_DIR}/compat ${PORT_SRC_DIR} ${GAME_ROOT}/src ${AURORA_INC})
+                               ${PORT_SRC_DIR}/compat ${PORT_SRC_DIR} ${GAME_ROOT}/src ${GAME_ROOT}/libs/doldecomp/include ${AURORA_INC})
     target_compile_definitions(${name} PRIVATE TARGET_PC VERSION_GALE01 BUILD_VERSION=0)
     target_compile_options(${name} PRIVATE -Wall -Wextra -std=gnu99 -Wno-unused-parameter)
     add_test(NAME ${name} COMMAND ${name})
@@ -53,7 +53,7 @@ add_custom_command(OUTPUT ${HOST_SCHEMA_TABLES}
         --header ${CMAKE_SOURCE_DIR}/schema/all_headers.h
         --annotations ${CMAKE_SOURCE_DIR}/schema/annotations.yml
         --roots ${CMAKE_SOURCE_DIR}/schema/roots.yml --quiet
-        --clang-arg=-I${GAME_ROOT}/src --clang-arg=-isystem${AURORA_INC}
+        --clang-arg=-I${GAME_ROOT}/src --clang-arg=-I${GAME_ROOT}/libs/doldecomp/include --clang-arg=-isystem${AURORA_INC}
         --clang-arg=-I${PORT_SRC_DIR}/compat --clang-arg=-I${PORT_SRC_DIR} --clang-arg=-I${CMAKE_SOURCE_DIR}/schema
         --clang-arg=-DVERSION_GALE01 --clang-arg=-DBUILD_VERSION=0 --clang-arg=--sysroot=${EMSDK_SYSROOT}
         ${HOST_SCHEMA_TABLES}
@@ -66,6 +66,6 @@ add_executable(archive_coverage ${CMAKE_SOURCE_DIR}/tools/archive_coverage.c ${H
                ${PORT_SRC_DIR}/hsd_endian/formats.c
                ${PORT_SRC_DIR}/dvd_web/fst.c port_host_stubs.c)
 target_include_directories(archive_coverage PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}
-                           ${PORT_SRC_DIR}/compat ${PORT_SRC_DIR} ${GAME_ROOT}/src ${AURORA_INC})
+                           ${PORT_SRC_DIR}/compat ${PORT_SRC_DIR} ${GAME_ROOT}/src ${GAME_ROOT}/libs/doldecomp/include ${AURORA_INC})
 target_compile_definitions(archive_coverage PRIVATE TARGET_PC VERSION_GALE01 BUILD_VERSION=0)
 target_compile_options(archive_coverage PRIVATE -Wall -Wextra -std=gnu99 -Wno-unused-parameter)

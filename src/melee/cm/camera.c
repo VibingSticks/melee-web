@@ -901,6 +901,13 @@ void Camera_80029CF8(CameraBounds* bounds, CameraTransformState* transform)
     transform->target_position.z = transform->target_interest.z + cam_dist;
 }
 
+struct CameraStaticData {
+    CameraModeCallbacks callbacks;
+    HSD_WObjDesc interest;
+    HSD_WObjDesc eyepos;
+    HSD_CameraDescPerspective desc;
+};
+
 void Camera_ApplyQuake(CameraBounds* bounds, CameraTransformState* state)
 {
     f32 viewport_x_scale;
@@ -920,12 +927,7 @@ void Camera_ApplyQuake(CameraBounds* bounds, CameraTransformState* state)
      * descriptor instead. */
     HSD_CameraDescPerspective* const desc = &cm_803BCB64;
 #else
-    struct CameraStaticData {
-        CameraModeCallbacks callbacks;
-        HSD_WObjDesc interest;
-        HSD_WObjDesc eyepos;
-        HSD_CameraDescPerspective desc;
-    }* data = (struct CameraStaticData*) &cm_803BCB18;
+    struct CameraStaticData* data = (struct CameraStaticData*) &cm_803BCB18;
     HSD_CameraDescPerspective* const desc = &data->desc;
 #endif
 

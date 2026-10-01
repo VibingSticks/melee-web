@@ -5,6 +5,8 @@
 
 #include <sysdolphin/baselib/forward.h> // IWYU pragma: export
 
+#include <dat_macros.h>
+
 #include <dolphin/gx/GXEnum.h>
 #include <dolphin/mtx.h>
 #include <sysdolphin/baselib/aobj.h>
@@ -35,17 +37,21 @@ struct HSD_PObj {
 #endif
 };
 
+/// Envelopes of one vertex matrix, up to one with a null joint.
+typedef HSD_EnvelopeDesc* HSD_EnvelopeList DAT_TERMINATED(0);
+
 struct HSD_PObjDesc {
     char* class_name;
     HSD_PObjDesc* next;
-    HSD_VtxDescList* verts;
+    HSD_VtxDescList* verts DAT_TERMINATED(GX_VA_NULL);
     u16 flags;
     u16 n_display;
     u8* display;
-    union {
-        HSD_Joint* joint;
-        HSD_ShapeSetDesc* shape_set;
-        HSD_EnvelopeDesc** envelope_p;
+    union HSD_PObjDesc_u {
+        HSD_Joint* joint DAT_IF((flags & 0x3000) == POBJ_SKIN);
+        HSD_ShapeSetDesc* shape_set DAT_IF((flags & 0x3000) == POBJ_SHAPEANIM);
+        HSD_EnvelopeList* envelope_p DAT_TERMINATED(0)
+            DAT_IF((flags & 0x3000) == POBJ_ENVELOPE);
     } u;
 };
 
@@ -79,7 +85,7 @@ struct HSD_ShapeSet {
     s32 nb_normal_index;
     HSD_VtxDescList* normal_desc;
     u8** normal_idx_list;
-    union {
+    union HSD_ShapeSet_blend {
         f32* bp;
         f32 bl;
     } blend;

@@ -5,6 +5,7 @@
 #include <stddef.h>  // IWYU pragma: export
 
 #include <dolphin/types.h> // IWYU pragma: export
+#include <sys/types.h>     // IWYU pragma: export
 
 /// @typedef bool
 /// @note Dolphin's #BOOL macro is not supported.
@@ -26,13 +27,6 @@
 
 /// The underlying type of an @c enum, used as a placeholder
 typedef int enum_t;
-
-/// Signed variant of ::size_t
-#ifdef TARGET_PC
-#include <sys/types.h> // the host libc defines ssize_t
-#else
-typedef signed int ssize_t;
-#endif
 
 /// A @c void callback with no arguments.
 typedef void (*Event)(void);
@@ -150,8 +144,10 @@ static inline int port_divw(int a, int b)
     struct {                                                                  \
         int x[1 - 2 * !(cond)];                                               \
     };
-#else
+#elif defined(LINT)
 #define STATIC_ASSERT(cond) _Static_assert((cond), "(" #cond ") failed")
+#else
+#define STATIC_ASSERT(cond)
 #endif
 
 #if defined(MUST_MATCH) || defined(LINT)
@@ -187,6 +183,9 @@ static inline int port_divw(int a, int b)
 #define SECTION_DTORS
 #define ATTRIBUTE_RESTRICT
 #endif
+
+#define M_PI 3.14159265358979323846
+#define M_PI_2 (M_PI / 2)
 
 #define M_TAU 6.283185307179586
 #define M_PI_3 (M_PI / 3)

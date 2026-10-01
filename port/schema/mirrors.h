@@ -838,11 +838,13 @@ typedef struct {
 typedef struct { port_ftCo_AttackEntry* list; } port_CpuAttackList;
 
 /* ftdynamics.c: ftDynamics::x10 is indexed by an animation's blend slot
- * (fp->x28[anim][1]), each entry an array of one FigaTree per physics bone
- * (ftCo_8009E4A8 reads tree[i] for i < dynamics_num). Neither length is in
- * the archive, so both run to the next object. */
-typedef struct { struct FigaTree* tree; } port_FigaTreeRef;
-typedef struct { port_FigaTreeRef* trees; } port_DynFigaSlot;
+ * (fp->x28[anim][1]), each entry an array of one s32 per physics bone: how
+ * many links of that bone's chain the animation drives (0x100 for none;
+ * ftCo_8009CB40's arg3). Neither length is in the archive, so both run to
+ * the next object. (Until 2026-09-30 the port read these as FigaTree
+ * pointers, which left the counts big-endian: 0x02000000 drove every link.) */
+typedef struct { s32 v[1]; } port_S32Run;
+typedef struct { port_S32Run* counts; } port_DynBoneCountSlot;
 
 /* Yoshi's attribute block (ftData ext_attr, 0x138 bytes). The code reads it
  * through two structs: ftYoshiAttributes names 0x00-0xE8 and 0x114-0x128,

@@ -71,6 +71,7 @@ target_include_directories(melee_game PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/extern/aurora/include
     ${PORT_SRC_DIR}/compat    # <printf.h> stand-in, 4-byte bool
     ${PORT_SRC_DIR}           # <hsd_port/...>
+    ${GAME_ROOT}/libs/doldecomp/include   # <dat_macros.h>: empty annotations here
     # Last: this tree carries a whole SDK dolphin/ that would otherwise shadow
     # Aurora's headers. Only the THP decoder's own header is wanted from it.
     ${GAME_ROOT}/libs/dolphin/include)

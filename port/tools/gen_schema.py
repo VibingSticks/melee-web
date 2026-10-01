@@ -213,6 +213,16 @@ class Gen:
         # get_fields() rather than get_children(): a C11 anonymous struct or
         # union member appears only in the former, as an unnamed field.
         kids = list(decl.type.get_fields())
+        # An annotation naming a field the record no longer has would be
+        # silently ignored, and the table it described left big-endian
+        # (upstream renamed UnkStageDat_x8_t's lists and every stage lost
+        # its animations). Make that loud.
+        if "__union__" not in a:
+            have = {k.spelling for k in kids}
+            for key in a:
+                if not key.startswith("__") and key not in have:
+                    raise SystemExit(f"gen_schema: annotation {name}.{key} names no field of {name} "
+                                     f"(fields: {', '.join(sorted(x for x in have if x))})")
         if "__union__" in a:
             u = a["__union__"]
             fields = [self.union_desc(name, 0, int(u["disc_offset"]), int(u.get("disc_size", 4)), 1, u.get("mask", 0), u["cases"])]
